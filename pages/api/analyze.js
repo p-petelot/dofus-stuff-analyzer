@@ -206,15 +206,28 @@ export default async function handler(req,res){
   const evidences = gatherEvidences(assembled, 24);
 
   // 4) items par texte (sans OCR)
-  const directHits = scanKnownItemsBySubstring(assembled);
-  const textCandidates = extractItemCandidates(assembled);
-  let matched = normalizeItems(textCandidates);
-  matched = dedupeByName([...directHits, ...matched]);
+ // 4) items par texte (sans OCR) — alias + substrings + motifs slot+nom
+  const aliasHits   = scanAliases(assembled);
+  const directHits  = scanKnownItemsBySubstring(assembled);
+  const textCand    = extractItemCandidates(assembled);   // (garde ta fonction existante)
+  let   matchedText = normalizeItems(textCand);
+  const slotCapHits = scanSlotNamePatterns(assembled);
+
+  // priorité : slotCap > alias > direct > fuzzy
+  let matched = dedupeByName([
+    ...slotCapHits, 
+    ...aliasHits, 
+    ...directHits, 
+    ...matchedText
+  ]);
 
   // 5) exos + éléments sur TOUT le texte (pas juste le titre)
   const exos = detectExos(assembled);
+    // éléments basés sur TOUT le texte (et non le titre seul)
   const elements = inferElementsFromText(assembled);
-  const klass = /\bcr[âa]\b|cra\b/i.test(assembled) ? "Cra" : null; // classe uniquement si mentionnée
+
+  // classe uniquement si mention EXPRESSE (cra/crâ)
+  const klass = /\bcr[âa]\b|(?:^|\s)cra(?:\s|$)/i.test(assembled) ? "Cra" : null;
 
   // 6) OCR best-effort (non bloquant, et seulement si on a des formats)
   let tmpDir=null, usedFormat=null, ocr=[], ocrCandidates=[], ocrMatches=[];
@@ -257,9 +270,12 @@ export default async function handler(req,res){
     class: klass,                          // NULL si non trouvée
     element_build: elements,               // liste exacte depuis le texte (ex: ["Terre","Eau"])
     level: null,
-    items: items.map(m=>({
-      slot: m.slot, name: m.name, confidence: m.confidence, source: m.source || "text+fuzzy", raw: m.raw
-    })),                                    // peut être vide si rien trouvé
+    items: matched.map(m=>({
+      slot: m.slot, name: m.name, confidence: m.confidence,
+      source: m.source || "text+fuzzy",
+      raw: m.raw,
+      proof: m.proof || null
+    })),                                  // peut être vide si rien trouvé
     exos,                                   // peut être vide
     stats_synthese: {},
     evidences,                              // lignes pertinentes pour que tu voies la preuve
