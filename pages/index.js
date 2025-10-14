@@ -32,6 +32,22 @@ const CLASS_ICON = {
   Forgelance: "🪓",
 };
 
+const EQUIPMENT_LAYOUT = [
+  { id: "head", label: "Coiffe", slots: ["Coiffe"] },
+  { id: "amulet", label: "Amulette", slots: ["Amulette"] },
+  { id: "ring-left", label: "Anneau gauche", slots: ["Anneau 1", "Anneau"] },
+  { id: "ring-right", label: "Anneau droite", slots: ["Anneau 2"] },
+  { id: "cape", label: "Cape", slots: ["Cape"] },
+  { id: "shield", label: "Bouclier", slots: ["Bouclier"] },
+  { id: "weapon", label: "Arme", slots: ["Arme"] },
+  { id: "belt", label: "Ceinture", slots: ["Ceinture"] },
+  { id: "boots", label: "Bottes", slots: ["Bottes"] },
+  { id: "pet", label: "Familier", slots: ["Familier"] },
+  { id: "mount", label: "Monture", slots: ["Monture"] },
+  { id: "dofus", label: "Dofus & trophées", slots: ["Dofus", "Dofus/Trophées", "Trophée"] },
+  { id: "extras", label: "Autres", slots: ["Autre"] },
+];
+
 function groupBySlot(items = []) {
   const m = new Map();
   for (const it of items) {
@@ -81,17 +97,12 @@ function SourceBadges({ sources }) {
   if (!sources) return null;
   const {
     piped,
-    piped_host,
     piped_note,
-    piped_attempts = 0,
-    invidious,
-    invidious_host,
-    invidious_note,
-    invidious_attempts = 0,
     readable,
     readable_status,
     readable_note,
-    readable_url,
+    invidious,
+    invidious_note,
     transcript_source,
     transcript_lang,
     transcript_has_timing,
@@ -100,122 +111,180 @@ function SourceBadges({ sources }) {
     speech_provider,
     speech_model,
   } = sources;
-  const speechTone =
-    speech_status === "ok"
-      ? "success"
-      : speech_status === "error"
-      ? "warning"
-      : speech_status === "not_configured"
-      ? "warning"
-      : speech_status === "configured"
-      ? "info"
-      : speech_status === "empty"
-      ? "muted"
-      : "muted";
-  const speechLabel = (() => {
-    switch (speech_status) {
-      case "ok":
-        return `ASR ${speech_provider || "audio"}`;
-      case "configured":
-        return "ASR prêt";
-      case "empty":
-        return "ASR sans texte";
-      case "error":
-        return "ASR erreur";
-      case "not_configured":
-        return "ASR à configurer";
-      default:
-        return "ASR inactif";
-    }
-  })();
-  const hostLabel = (value) => {
+
+  const compact = (value) => {
     if (!value) return null;
-    try {
-      const u = new URL(value);
-      return u.host;
-    } catch {
-      return value.replace(/^https?:\/\//, "");
-    }
-  };
-  const attemptsLabel = (count) => {
-    if (!count || count <= 1) return "";
-    return ` (+${count - 1} tentative${count - 1 > 1 ? "s" : ""})`;
-  };
-  const firstDetail = (note, attemptsCount = 0) => {
-    if (!note) return null;
-    const [first] = note.split('|');
+    const [first] = value.split("|");
     if (!first) return null;
-    const colon = first.indexOf(':');
-    if (colon !== -1) {
-      const base = first.slice(colon + 1).trim();
-      return base ? `${base}${attemptsLabel(attemptsCount)}` : null;
-    }
-    const base = first.trim();
-    return base ? `${base}${attemptsLabel(attemptsCount)}` : null;
+    const parts = first.split(":");
+    const base = parts.length > 1 ? parts.slice(1).join(":").trim() : first.trim();
+    return base || null;
   };
-  const readableTone = readable ? "success" : readable_status === "failed" ? "warning" : "muted";
-  const pipedTone = piped ? "success" : piped_note ? "warning" : "muted";
-  const invidTone = invidious ? "success" : invidious_note ? "warning" : "muted";
-  const readableHost = hostLabel(readable_url);
-  const pipedHost = hostLabel(piped_host);
-  const invidHost = hostLabel(invidious_host);
+
+  const badges = [
+    {
+      key: "readable",
+      icon: "📰",
+      label: "Page lisible",
+      ok: !!readable,
+      warning: readable_status === "failed",
+      message: readable ? "Disponible" : "Indisponible",
+      detail: compact(readable_note),
+    },
+    {
+      key: "piped",
+      icon: "🚰",
+      label: "Flux Piped",
+      ok: !!piped,
+      warning: !!piped_note,
+      message: piped ? "OK" : "Hors service",
+      detail: compact(piped_note),
+    },
+    {
+      key: "invidious",
+      icon: "🌀",
+      label: "Flux Invidious",
+      ok: !!invidious,
+      warning: !!invidious_note,
+      message: invidious ? "OK" : "Hors service",
+      detail: compact(invidious_note),
+    },
+    {
+      key: "captions",
+      icon: "💬",
+      label: "Sous-titres",
+      ok: !!transcript_source,
+      warning: !transcript_source,
+      message: transcript_source ? (transcript_lang ? transcript_lang : "Présents") : "Absents",
+      detail: transcript_is_translation
+        ? "Traduction automatique"
+        : transcript_has_timing
+        ? "Horodatage détecté"
+        : null,
+    },
+    {
+      key: "asr",
+      icon: "🎙️",
+      label: "Analyse audio",
+      ok: speech_status === "ok",
+      warning: speech_status === "error" || speech_status === "empty",
+      message:
+        speech_status === "ok"
+          ? speech_provider || "ASR"
+          : speech_status === "configured"
+          ? "Prêt"
+          : speech_status === "empty"
+          ? "Aucun texte"
+          : speech_status === "error"
+          ? "Erreur"
+          : "Inactif",
+      detail: speech_model || null,
+    },
+  ];
+
   return (
-    <div className="tagrow tagrow--wrap">
-      <Tag tone={readableTone} icon="📰" title={readable_note || undefined}>
-        {readable ? "Readable mirror OK" : "Readable indisponible"}
-        {readableHost ? (
-          <>
-            {" "}
-            <span className="tag__meta tag__meta--soft">{readableHost}</span>
-          </>
-        ) : null}
-        {!readable && readable_note ? (
-          <span className="tag__meta">{firstDetail(readable_note)}</span>
-        ) : null}
-      </Tag>
-      <Tag tone={pipedTone} icon="🚰" title={piped_note || undefined}>
-        {piped ? "Piped OK" : "Piped KO"}
-        {pipedHost ? (
-          <>
-            {" "}
-            <span className="tag__meta tag__meta--soft">{pipedHost}</span>
-          </>
-        ) : null}
-        {!piped && piped_note ? (
-          <span className="tag__meta">{firstDetail(piped_note, piped_attempts)}</span>
-        ) : null}
-      </Tag>
-      <Tag tone={invidTone} icon="🌀" title={invidious_note || undefined}>
-        {invidious ? "Invidious OK" : "Invidious KO"}
-        {invidHost ? (
-          <>
-            {" "}
-            <span className="tag__meta tag__meta--soft">{invidHost}</span>
-          </>
-        ) : null}
-        {!invidious && invidious_note ? (
-          <span className="tag__meta">{firstDetail(invidious_note, invidious_attempts)}</span>
-        ) : null}
-      </Tag>
-      <Tag tone={transcript_source ? "info" : "warning"} icon="💬" title={transcript_source || undefined}>
-        {transcript_source
-          ? `Captions ${transcript_lang || ""}`.trim()
-          : "Captions manquantes"}
-      </Tag>
-      {transcript_has_timing ? (
-        <Tag tone="success" subtle icon="⏱️">
-          Horodatage ok
-        </Tag>
-      ) : null}
-      {transcript_is_translation ? (
-        <Tag tone="warning" subtle icon="🌍">
-          Traduction auto
-        </Tag>
-      ) : null}
-      <Tag tone={speechTone} icon="🎙️">
-        {speechLabel}
-        {speech_model ? <span className="tag__meta tag__meta--soft">{speech_model}</span> : null}
-      </Tag>
+    <div className="status-grid">
+      {badges.map((badge) => {
+        const tone = badge.ok ? "ok" : badge.warning ? "warn" : "idle";
+        return (
+          <div key={badge.key} className={`status-card status-card--${tone}`}>
+            <span className="status-card__icon" aria-hidden="true">
+              {badge.icon}
+            </span>
+            <div className="status-card__body">
+              <span className="status-card__label">{badge.label}</span>
+              <span className="status-card__value">{badge.message}</span>
+              {badge.detail ? <span className="status-card__note">{badge.detail}</span> : null}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function EquipmentBoard({ items, preview }) {
+  const areaMap = new Map(EQUIPMENT_LAYOUT.map((area) => [area.id, []]));
+
+  const normalise = (value) => (value || "").toLowerCase();
+
+  const assign = (areaId, item) => {
+    if (!areaMap.has(areaId)) {
+      areaMap.set(areaId, []);
+    }
+    areaMap.get(areaId).push(item);
+  };
+
+  const ringsBuffer = [];
+
+  for (const item of items || []) {
+    const slot = normalise(item.slot);
+    if (!slot) {
+      assign("extras", item);
+      continue;
+    }
+    let placed = false;
+    for (const area of EQUIPMENT_LAYOUT) {
+      if (area.slots.some((candidate) => normalise(candidate) === slot)) {
+        assign(area.id, item);
+        placed = true;
+        break;
+      }
+    }
+    if (placed) continue;
+    if (slot.includes("anneau")) {
+      ringsBuffer.push(item);
+      continue;
+    }
+    assign("extras", item);
+  }
+
+  if (ringsBuffer.length) {
+    assign("ring-left", ringsBuffer[0]);
+    if (ringsBuffer[1]) assign("ring-right", ringsBuffer[1]);
+    for (let i = 2; i < ringsBuffer.length; i += 1) {
+      assign("extras", ringsBuffer[i]);
+    }
+  }
+
+  const renderItems = (bucket = []) => {
+    if (!bucket.length) {
+      return <span className="equip-slot__empty">—</span>;
+    }
+    return bucket.map((item, idx) => (
+      <div key={`${item.name}-${idx}`} className="equip-item">
+        <span className="equip-item__name">{item.name}</span>
+        <ConfidenceBar value={item.confidence} />
+        <div className="equip-item__meta">
+          <span className="equip-item__source">{item.source}</span>
+          {item.proof ? (
+            <span className="equip-item__proof" title={item.proof}>
+              Preuve
+            </span>
+          ) : null}
+        </div>
+      </div>
+    ));
+  };
+
+  return (
+    <div className="equipment-board">
+      <div className="equipment-board__preview">
+        {preview?.thumbnail ? (
+          <div className="equipment-preview" style={{ backgroundImage: `url(${preview.thumbnail})` }} aria-hidden="true" />
+        ) : (
+          <div className="equipment-preview equipment-preview--placeholder" aria-hidden="true">
+            <span>{preview?.icon || "🧙"}</span>
+          </div>
+        )}
+        <span className="equipment-preview__caption">{preview?.label || "Aperçu"}</span>
+      </div>
+      {EQUIPMENT_LAYOUT.map((area) => (
+        <div key={area.id} className={`equip-slot equip-slot--${area.id}`}>
+          <span className="equip-slot__label">{area.label}</span>
+          <div className="equip-slot__items">{renderItems(areaMap.get(area.id))}</div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -261,13 +330,9 @@ function ElementBadges({ elements, signals }) {
     <div className="tagrow tagrow--wrap">
       {base.map((el) => {
         const info = ELEMENT_INFO[el] || { tone: "accent" };
-        const signal = signals?.[el];
-        const ratio = signal?.weight ? Math.round(signal.weight * 100) : null;
         return (
           <Tag key={el} tone={info.tone} icon={info.icon}>
             {el}
-            {signal?.count ? <span className="tag__meta">×{signal.count}</span> : null}
-            {ratio ? <span className="tag__meta tag__meta--soft">{ratio}%</span> : null}
           </Tag>
         );
       })}
@@ -794,45 +859,54 @@ export default function Home() {
 
             <section className="card card--items">
               <div className="card-heading">
-                <h2>🧩 Items détectés</h2>
+                <h2>🧩 Stuff détecté</h2>
                 <span className="caption">{out.items?.length || 0} résultats distincts</span>
               </div>
               {out.items?.length ? (
-                <div className="table-wrap">
-                  {grouped.map(([slot, items]) => (
-                    <div key={slot} className="slot-block">
-                      <div className="slot-heading">{slot}</div>
-                      <table className="table">
-                        <thead>
-                          <tr>
-                            <th>Nom</th>
-                            <th>Confiance</th>
-                            <th>Source</th>
-                            <th>Preuve</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {items.map((it, i) => (
-                            <tr key={slot + i}>
-                              <td>{it.name}</td>
-                              <td>
-                                <ConfidenceBar value={it.confidence} />
-                              </td>
-                              <td>
-                                <Tag tone="info" subtle>
-                                  {it.source}
-                                </Tag>
-                              </td>
-                              <td className="caption" title={it.proof || ""}>
-                                {it.proof ? (it.proof.length > 80 ? `${it.proof.slice(0, 80)}…` : it.proof) : "—"}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                <>
+                  <EquipmentBoard
+                    items={out.items}
+                    preview={{ thumbnail: out.video?.thumbnail, icon: classIcon, label: className }}
+                  />
+                  <details className="items-details">
+                    <summary>Voir la liste détaillée</summary>
+                    <div className="table-wrap">
+                      {grouped.map(([slot, items]) => (
+                        <div key={slot} className="slot-block">
+                          <div className="slot-heading">{slot}</div>
+                          <table className="table">
+                            <thead>
+                              <tr>
+                                <th>Nom</th>
+                                <th>Confiance</th>
+                                <th>Source</th>
+                                <th>Preuve</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {items.map((it, i) => (
+                                <tr key={slot + i}>
+                                  <td>{it.name}</td>
+                                  <td>
+                                    <ConfidenceBar value={it.confidence} />
+                                  </td>
+                                  <td>
+                                    <Tag tone="info" subtle>
+                                      {it.source}
+                                    </Tag>
+                                  </td>
+                                  <td className="caption" title={it.proof || ""}>
+                                    {it.proof ? (it.proof.length > 80 ? `${it.proof.slice(0, 80)}…` : it.proof) : "—"}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </details>
+                </>
               ) : (
                 <p>
                   Aucun item probant pour cette vidéo {out.sources?.transcript_source ? "(captions dispo)" : "(captions indisponibles)"}. Essaie

@@ -590,62 +590,107 @@ async function transcribeAudioWithConfig(audioFile, config, warns) {
   if (!url) return null;
 
   try {
-    const form = new FormData();
-    form.append("file", fs.createReadStream(audioFile), path.basename(audioFile));
-    if (config.model) form.append("model", config.model);
-    form.append("response_format", "verbose_json");
-    form.append("temperature", "0");
-    if (process.env.ASR_PROMPT) form.append("prompt", process.env.ASR_PROMPT);
-
-    const headers = { Authorization: `Bearer ${config.key}` };
-    for (const [key, value] of Object.entries(config.headers || {})) {
-      headers[key] = value;
-    }
-
-    const res = await fetch(url, { method: "POST", headers, body: form });
-    if (!res.ok) {
-      const text = await res.text();
-      warns.push(`ASR ${config.provider} HTTP ${res.status}: ${text.slice(0, 180)}`);
-      return null;
-    }
-    const data = await res.json();
-    const segments = Array.isArray(data.segments) ? data.segments : [];
-    const cues = segments
-      .map((seg) => ({
-        start: typeof seg.start === "number" ? seg.start : null,
-        end: typeof seg.end === "number" ? seg.end : null,
-        text: normalize(seg.text || seg.transcript || ""),
-        confidence: typeof seg.confidence === "number"
-          ? seg.confidence
-          : typeof seg.avg_logprob === "number"
-            ? Number((1 + seg.avg_logprob / 5).toFixed(3))
-            : typeof seg.no_speech_prob === "number"
-              ? Number((1 - seg.no_speech_prob).toFixed(3))
-              : null,
-      }))
-      .filter((cue) => cue.text);
-
-    const text = cues.length
-      ? cues.map((c) => c.text).join("\n")
-      : normalize(data.text || "");
-
-    const confidenceValues = cues
-      .map((c) => (typeof c.confidence === "number" ? c.confidence : null))
-      .filter((v) => v != null && !Number.isNaN(v));
-    const avgConfidence = confidenceValues.length
-      ? Number((confidenceValues.reduce((acc, val) => acc + val, 0) / confidenceValues.length).toFixed(3))
-      : null;
-
-    return {
-      text,
-      cues,
-      lang: data.language || null,
-      duration: typeof data.duration === "number" ? data.duration : null,
-      avg_confidence: avgConfidence,
+    const pickModels = () => {
+      if (config.provider !== "openai") {
+        return config.model ? [config.model] : [null];
+      }
+      const chain = [config.model, "gpt-4o-transcribe", "whisper-1"];
+      const seen = new Set();
+      return chain
+        .filter(Boolean)
+        .filter((model) => {
+          const key = model.toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
     };
+
+    const models = pickModels();
+    const attempts = models.length ? models : [null];
+    let lastError = null;
+
+    for (const modelName of attempts) {
+      const form = new FormData();
+      form.append("file", fs.createReadStream(audioFile), path.basename(audioFile));
+      if (modelName) form.append("model", modelName);
+      form.append("response_format", "verbose_json");
+      form.append("temperature", "0");
+      if (process.env.ASR_PROMPT) form.append("prompt", process.env.ASR_PROMPT);
+
+      const headers = { Authorization: `Bearer ${config.key}` };
+      for (const [key, value] of Object.entries(config.headers || {})) {
+        headers[key] = value;
+      }
+
+      const res = await fetch(url, { method: "POST", headers, body: form });
+      if (!res.ok) {
+        const text = await res.text();
+        const detail = text ? `: ${text.slice(0, 160)}` : "";
+        lastError = `HTTP ${res.status}${detail}`;
+        const retriable = config.provider === "openai" && [404, 410, 422].includes(res.status);
+        if (retriable && modelName !== attempts[attempts.length - 1]) {
+          warns.push(`ASR OpenAI modèle ${modelName} indisponible (${res.status}). Nouveau modèle…`);
+          continue;
+        }
+        warns.push(`ASR ${config.provider} HTTP ${res.status}${detail}`);
+        return { error: true, status: res.status, model: modelName || config.model || null, message: detail.trim() };
+      }
+
+      const data = await res.json();
+      if (!data) {
+        lastError = "réponse vide";
+        continue;
+      }
+
+      if (config.provider === "openai" && modelName && modelName !== config.model) {
+        warns.push(`ASR OpenAI fallback sur ${modelName}`);
+      }
+
+      const segments = Array.isArray(data.segments) ? data.segments : [];
+      const cues = segments
+        .map((seg) => ({
+          start: typeof seg.start === "number" ? seg.start : null,
+          end: typeof seg.end === "number" ? seg.end : null,
+          text: normalize(seg.text || seg.transcript || ""),
+          confidence: typeof seg.confidence === "number"
+            ? seg.confidence
+            : typeof seg.avg_logprob === "number"
+              ? Number((1 + seg.avg_logprob / 5).toFixed(3))
+              : typeof seg.no_speech_prob === "number"
+                ? Number((1 - seg.no_speech_prob).toFixed(3))
+                : null,
+        }))
+        .filter((cue) => cue.text);
+
+      const text = cues.length
+        ? cues.map((c) => c.text).join("\n")
+        : normalize(data.text || "");
+
+      const confidenceValues = cues
+        .map((c) => (typeof c.confidence === "number" ? c.confidence : null))
+        .filter((v) => v != null && !Number.isNaN(v));
+      const avgConfidence = confidenceValues.length
+        ? Number((confidenceValues.reduce((acc, val) => acc + val, 0) / confidenceValues.length).toFixed(3))
+        : null;
+
+      return {
+        text,
+        cues,
+        lang: data.language || data.lang || null,
+        duration: typeof data.duration === "number" ? data.duration : null,
+        avg_confidence: avgConfidence,
+        model: modelName || config.model || null,
+      };
+    }
+
+    if (lastError) {
+      warns.push(`ASR ${config.provider} sans réponse exploitable (${lastError})`);
+    }
+    return { error: true, model: config.model || null, message: lastError };
   } catch (err) {
     warns.push(`ASR ${config.provider} fetch fail: ${String(err).slice(0, 180)}`);
-    return null;
+    return { error: true, model: config.model || null, message: String(err) };
   }
 }
 
@@ -717,13 +762,16 @@ async function transcribeAudioFromVideo({ config, url, maxSeconds, warns }) {
     download = await downloadWithYtdlToTemp(url);
     audioFile = await convertVideoToAudio(download.tmpFile, { maxSeconds });
     const asr = await transcribeAudioWithConfig(audioFile, config, warns);
-    if (!asr || !asr.text) {
+    if (!asr || asr.error || !asr.text) {
+      const baseNote = asr?.message
+        ? `ASR indisponible ${asr.message}`
+        : "Aucun texte renvoyé par le service ASR.";
       return {
-        status: "empty",
+        status: asr?.error ? "error" : "empty",
         provider: config.provider,
         provider_label: config.provider_label,
-        model: config.model,
-        notes: ["Aucun texte renvoyé par le service ASR."],
+        model: asr?.model || config.model,
+        notes: [baseNote],
       };
     }
 
@@ -744,7 +792,7 @@ async function transcribeAudioFromVideo({ config, url, maxSeconds, warns }) {
       status: "ok",
       provider: config.provider,
       provider_label: config.provider_label,
-      model: config.model,
+      model: asr.model || config.model,
       text: asr.text,
       cues,
       lang: asr.lang,

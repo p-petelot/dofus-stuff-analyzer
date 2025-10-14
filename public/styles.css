@@ -319,6 +319,54 @@ input:focus {
   gap: 8px;
 }
 
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.status-card {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  padding: 12px 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.status-card--ok { border-color: rgba(34, 197, 94, 0.45); box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.25); }
+.status-card--warn { border-color: rgba(234, 179, 8, 0.4); box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.18); }
+.status-card--idle { opacity: 0.72; }
+
+.status-card__icon {
+  font-size: 24px;
+}
+
+.status-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.status-card__label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.status-card__value {
+  font-weight: 600;
+}
+
+.status-card__note {
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .player-toggle {
   margin-top: 18px;
   padding-top: 12px;
@@ -330,6 +378,168 @@ input:focus {
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 20px 40px -28px rgba(14, 116, 144, 0.6);
+}
+
+.equipment-board {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-areas:
+    ". head head cape cape"
+    "ring-left amulet center center ring-right"
+    "shield weapon center center pet"
+    "belt belt center center mount"
+    "boots boots dofus dofus extras";
+}
+
+.equipment-board__preview {
+  grid-area: center;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.equipment-preview {
+  width: 160px;
+  height: 160px;
+  border-radius: 18px;
+  background-size: cover;
+  background-position: center;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 18px 38px -26px rgba(59, 130, 246, 0.55);
+}
+
+.equipment-preview--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 56px;
+  color: rgba(241, 245, 249, 0.8);
+  background: radial-gradient(circle at top, rgba(148, 163, 184, 0.22), transparent 60%), rgba(15, 23, 42, 0.7);
+}
+
+.equipment-preview__caption {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.equip-slot {
+  position: relative;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 120px;
+}
+
+.equip-slot__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.equip-slot__items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.equip-slot__empty {
+  font-style: italic;
+  color: var(--muted);
+}
+
+.equip-item {
+  background: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.equip-item__name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.equip-item__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.equip-item__source {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.equip-item__proof {
+  text-decoration: underline;
+  cursor: help;
+}
+
+.equip-slot--head { grid-area: head; }
+.equip-slot--amulet { grid-area: amulet; }
+.equip-slot--ring-left { grid-area: ring-left; }
+.equip-slot--ring-right { grid-area: ring-right; }
+.equip-slot--cape { grid-area: cape; }
+.equip-slot--shield { grid-area: shield; }
+.equip-slot--weapon { grid-area: weapon; }
+.equip-slot--belt { grid-area: belt; }
+.equip-slot--boots { grid-area: boots; }
+.equip-slot--pet { grid-area: pet; }
+.equip-slot--mount { grid-area: mount; }
+.equip-slot--dofus { grid-area: dofus; }
+.equip-slot--extras { grid-area: extras; }
+
+.items-details {
+  margin-top: 18px;
+}
+
+.items-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 900px) {
+  .equipment-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "center center"
+      "head cape"
+      "amulet weapon"
+      "ring-left ring-right"
+      "shield pet"
+      "belt mount"
+      "boots boots"
+      "dofus dofus"
+      "extras extras";
+  }
+
+  .equipment-preview {
+    width: 100%;
+    max-width: 220px;
+    height: 180px;
+  }
 }
 
 .table-wrap {
