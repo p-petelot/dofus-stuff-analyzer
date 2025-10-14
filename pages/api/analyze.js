@@ -770,6 +770,8 @@ export default async function handler(req, res) {
 
     // 2) Sources textuelles + streams alternatifs
     const readable = await getReadableWatchPage(id);
+    const piped = await getPipedVideo(id);
+    const invid = await getInvidiousVideo(id);
     const pipedSummary = summarizeAttempts(piped.attempts) || null;
     const invidSummary = summarizeAttempts(invid.attempts) || null;
     const readableSummary = readable.ok
@@ -788,9 +790,6 @@ export default async function handler(req, res) {
     if (!readable.ok && readableSummary) {
       warns.push(`Readable KO: ${readableSummary}`);
     }
-    const piped    = await getPipedVideo(id);
-    const invid    = await getInvidiousVideo(id);
-
     // 3) Captions — multi-voies (lib, ytdl, timedtext, piped, invidious)
     let transcript = { text: "", lang: null, source: null, cues: [] };
 
