@@ -1,6 +1,5 @@
 import { useState } from "react";
 import Head from "next/head";
-import "../public/styles.css";
 
 export default function Home() {
   const [url, setUrl] = useState("https://youtu.be/eYhkAQ8qOiA");

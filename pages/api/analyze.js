@@ -5,13 +5,21 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 
-const { createWorker } = require("tesseract.js");
+//const { createWorker } = require("tesseract.js");
 const { cleanOCRText, looksLikeItemLine, fuzzyMatchItem, dedupeByName } = require("../../lib/util");
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 // Node runtime only (ytdl + ffmpeg)
 export const config = { runtime: "nodejs", api: { bodyParser: false } };
+
+let _tess = null;
+async function getTesseract() {
+  if (_tess) return _tess;
+  const mod = await import("tesseract.js");
+  _tess = mod; // contient createWorker
+  return _tess;
+}
 
 // OCR worker (singleton across invocations if warm)
 let workerPromise = null;
@@ -25,7 +33,10 @@ function getWorker() {
 }
 
 async function ensureOCR(lang = "eng+fra") {
-  const worker = await getWorker();
+  const { createWorker } = await getTesseract();
+  const worker = await createWorker({
+    logger: m => { if (process.env.DEBUG_OCR) console.log("[tess]", m); }
+  });
   await worker.load();
   await worker.loadLanguage(lang);
   await worker.initialize(lang);
@@ -68,7 +79,7 @@ async function ocrFiles(files) {
     const text = cleanOCRText(data.text);
     results.push({ file: path.basename(f), text });
   }
-  await (await getWorker()).terminate(); // pour Vercel “froid” on ferme; supprime si tu veux réutiliser en warm
+  await worker.terminate(); // ferme proprement
   return results;
 }
 
