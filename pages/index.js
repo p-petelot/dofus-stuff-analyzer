@@ -9,13 +9,30 @@ export default function Home(){
 
   async function run(){
     setLoading(true); setErr(""); setOut(null);
-    try{
-      const res = await fetch(`/api/analyze?url=${encodeURIComponent(url)}`);
-      const json = await res.json();
-      if(!res.ok) throw new Error(json.error||"Unknown error");
-      setOut(json);
-    }catch(e){ setErr(String(e.message||e)); }
-    finally{ setLoading(false); }
+  try {
+    const res = await fetch(`/api/analyze?url=${encodeURIComponent(url)}`, {
+      headers: { "Accept": "application/json" }
+    });
+
+    const ct = res.headers.get("content-type") || "";
+    const body = await res.text(); // on lit en texte d'abord
+    let json;
+    try {
+      // si c'est bien du JSON → parse
+      if (ct.includes("application/json")) json = JSON.parse(body);
+      else json = JSON.parse(body); // certains proxies oublient le content-type
+    } catch {
+      // c'est de l'HTML → on propage une erreur utile
+      throw new Error(`API returned non-JSON (${res.status}). First bytes: ${body.slice(0,150)}`);
+    }
+
+    if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+    setOut(json);
+  } catch (e) {
+    setErr(String(e.message || e));
+  } finally {
+    setLoading(false);
+  }
   }
 
   return (
