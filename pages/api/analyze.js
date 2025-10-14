@@ -1,4 +1,4 @@
-// pages/api/analyze.js — V7 (captions YouTube réels + OCR sur flux Piped/Invidious quand dispo)
+// pages/api/analyze.js — V7.2 (captions TimedText ++, fallback ytdl→fichier pour OCR)
 import ytdl from "ytdl-core";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
@@ -101,19 +101,31 @@ function vttToPlain(vtt) {
 }
 function xmlToPlain(xml) {
   if (!xml) return "";
-  // Youtube timedtext XML: <text start="..." dur="...">content</text>
-  // Décodage entités HTML de base
   const unescape = (s) =>
     s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
   const parts = Array.from(xml.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)).map(m => unescape(m[1]).replace(/\n+/g, " ").trim());
   return parts.join("\n");
+}
+function json3ToPlain(jsonStr) {
+  try {
+    const obj = JSON.parse(jsonStr);
+    const events = obj.events || [];
+    const lines = [];
+    for (const ev of events) {
+      const segs = ev.segs || [];
+      const txt = segs.map(s => s.utf8 || "").join("");
+      if (txt.trim()) lines.push(txt.trim());
+    }
+    return lines.join("\n");
+  } catch {
+    return "";
+  }
 }
 
 // 1) Captions via youtube-transcript
 async function getCaptionsViaLib(id) {
   try {
     const { YoutubeTranscript } = await import("youtube-transcript");
-    // on tente FR puis EN
     let cues = [];
     try { cues = await YoutubeTranscript.fetchTranscript(id, { lang: "fr" }); } catch {}
     if (!cues?.length) { try { cues = await YoutubeTranscript.fetchTranscript(id); } catch {} }
@@ -128,8 +140,7 @@ async function getCaptionsViaYtdlInfo(info) {
     const pr = info?.player_response || info?.playerResponse || {};
     const tracks = pr?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
     if (!tracks?.length) return { text: "", lang: null, source: null };
-    // priorité FR > EN > première piste
-    const order = ["fr", "fr-FR", "fr-CA", "fr-FR", "en", "en-US"];
+    const order = ["fr", "fr-FR", "fr-CA", "en", "en-US"];
     let chosen = null;
     for (const code of order) {
       chosen = tracks.find(t => (t.languageCode || "").toLowerCase() === code.toLowerCase());
@@ -138,32 +149,53 @@ async function getCaptionsViaYtdlInfo(info) {
     if (!chosen) chosen = tracks[0];
     if (!chosen?.baseUrl) return { text: "", lang: null, source: null };
     const raw = await fetchTEXT(chosen.baseUrl);
-    const text = raw.startsWith("WEBVTT") ? vttToPlain(raw) : xmlToPlain(raw);
+    let text = "";
+    if (raw.startsWith("WEBVTT")) text = vttToPlain(raw);
+    else if (raw.trim().startsWith("{")) text = json3ToPlain(raw);
+    else text = xmlToPlain(raw);
     return { text, lang: chosen.languageCode || null, source: "ytdl-captions" };
   } catch { return { text: "", lang: null, source: null }; }
 }
 
-// 3) Captions via TimedText officiel (sans clé)
-const TIMEDTEXT_TRIES = [
-  { lang: "fr" }, { lang: "fr-FR" }, { lang: "fr-CA" },
-  { lang: "en" }, { lang: "en-US" }, { lang: "en-GB" }
-];
+// 3) TimedText officiel — ESSAIS MULTIPLES (fmt/lang/tlang/kind)
+const LANGS = ["fr","fr-FR","fr-CA","en","en-US","en-GB"];
+const FMTS  = ["vtt","json3","ttml"];
 async function getCaptionsViaTimedText(id) {
-  for (const t of TIMEDTEXT_TRIES) {
-    const url = `https://www.youtube.com/api/timedtext?lang=${encodeURIComponent(t.lang)}&v=${id}&fmt=vtt`;
-    const vtt = await fetchTEXT(url);
-    if (vtt && vtt.length > 50) return { text: vttToPlain(vtt), lang: t.lang, source: "timedtext" };
+  // a) sous-titres “normaux”
+  for (const lang of LANGS) {
+    for (const fmt of FMTS) {
+      const url = `https://www.youtube.com/api/timedtext?lang=${encodeURIComponent(lang)}&v=${id}&fmt=${fmt}`;
+      const raw = await fetchTEXT(url);
+      const txt = parseTimedTextRaw(raw, fmt);
+      if (txt && txt.length > 50) return { text: txt, lang, source: `timedtext:${fmt}` };
+    }
   }
-  // Essai auto-gen: caps=asr
-  for (const t of TIMEDTEXT_TRIES) {
-    const url = `https://www.youtube.com/api/timedtext?caps=asr&lang=${encodeURIComponent(t.lang)}&v=${id}&fmt=vtt`;
-    const vtt = await fetchTEXT(url);
-    if (vtt && vtt.length > 50) return { text: vttToPlain(vtt), lang: t.lang + " (asr)", source: "timedtext-asr" };
+  // b) auto (ASR)
+  for (const lang of LANGS) {
+    for (const fmt of FMTS) {
+      const url = `https://www.youtube.com/api/timedtext?caps=asr&lang=${encodeURIComponent(lang)}&v=${id}&fmt=${fmt}`;
+      const raw = await fetchTEXT(url);
+      const txt = parseTimedTextRaw(raw, fmt);
+      if (txt && txt.length > 50) return { text: txt, lang: `${lang} (asr)`, source: `timedtext-asr:${fmt}` };
+    }
+  }
+  // c) traduction (tlang)
+  for (const tlang of LANGS) {
+    const url = `https://www.youtube.com/api/timedtext?lang=en&v=${id}&fmt=vtt&tlang=${encodeURIComponent(tlang)}`;
+    const raw = await fetchTEXT(url);
+    const txt = vttToPlain(raw);
+    if (txt && txt.length > 50) return { text: txt, lang: `tlang:${tlang}`, source: `timedtext-tlang:vtt` };
   }
   return { text: "", lang: null, source: null };
 }
+function parseTimedTextRaw(raw, fmt) {
+  if (!raw) return "";
+  if (fmt === "vtt") return vttToPlain(raw);
+  if (fmt === "json3") return json3ToPlain(raw);
+  return xmlToPlain(raw); // ttml
+}
 
-// ---------- Frames + OCR (avec flux Piped/Invidious en plus de YouTube) ----------
+// ---------- Streams pour OCR ----------
 function pickPreferredFormats(formats) {
   if (!Array.isArray(formats)) return [];
   const mp4Low = formats.filter(f => f.hasVideo && f.hasAudio && f.container === "mp4" && (f.qualityLabel === "360p" || f.qualityLabel === "480p"));
@@ -176,19 +208,16 @@ function pickPreferredFormats(formats) {
     if (seen.has(k)) return false; seen.add(k); return true;
   }).slice(0, 6);
 }
-
 function pickStreamsFromPiped(pipedData) {
   const vs = pipedData?.videoStreams || [];
-  // choisir mp4 360/480 si possible
-  const cand = vs.filter(s => /mp4/i.test(s.container) && /360|480/i.test(s.qualityLabel || s.quality)).concat(
-    vs.filter(s => /mp4/i.test(s.container))
-  );
+  const cand = vs.filter(s => /mp4/i.test(s.container) && /360|480/i.test(s.qualityLabel || s.quality))
+                 .concat(vs.filter(s => /mp4/i.test(s.container)));
   return cand.map(s => s.url);
 }
 function pickStreamsFromInvidious(invData) {
-  const fs = invData?.formatStreams || [];
-  const cand = fs.filter(s => /mp4/i.test(s.type) && /360|480/.test(s.qualityLabel || s.quality))
-                 .concat(fs.filter(s => /mp4/i.test(s.type)));
+  const fs_ = invData?.formatStreams || [];
+  const cand = fs_.filter(s => /mp4/i.test(s.type) && /360|480/.test(s.qualityLabel || s.quality))
+                  .concat(fs_.filter(s => /mp4/i.test(s.type)));
   return cand.map(s => s.url);
 }
 
@@ -199,7 +228,8 @@ async function extractFramesFromUrl(formatUrl, { maxSeconds, fps }) {
     ffmpeg(formatUrl)
       .inputOptions([
         "-reconnect","1","-reconnect_streamed","1","-reconnect_delay_max","2",
-        "-headers","User-Agent: Mozilla/5.0\r\nAccept-Language: fr-FR,fr;q=0.9\r\n"
+        "-user_agent","Mozilla/5.0",
+        "-headers","Referer: https://www.youtube.com/\r\nAccept-Language: fr-FR,fr;q=0.9\r\n"
       ])
       .outputOptions([`-t ${maxSeconds}`, `-vf fps=${fps}`])
       .on("error", reject).on("end", resolve).save(outPattern);
@@ -208,31 +238,77 @@ async function extractFramesFromUrl(formatUrl, { maxSeconds, fps }) {
   return { tmpDir, files };
 }
 
-async function tryFramesAnySource({ ytFormats, piped, invid, opts, warns }) {
+// ⚠️ NOUVEAU : fallback “télécharger en local” via ytdl, puis ffmpeg lit un fichier local
+async function downloadWithYtdlToTemp(urlOrId) {
+  const url = /^https?:/.test(urlOrId) ? urlOrId : `https://www.youtube.com/watch?v=${urlOrId}`;
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ytvid-"));
+  const tmpFile = path.join(tmpDir, "video.mp4");
+  await new Promise((resolve, reject) => {
+    const stream = ytdl(url, {
+      quality: 18,               // MP4 360p muxed
+      filter: "audioandvideo",
+      highWaterMark: 1 << 25     // 32MB buffer
+    })
+    .on("error", reject)
+    .pipe(fs.createWriteStream(tmpFile))
+    .on("error", reject)
+    .on("finish", resolve);
+  });
+  return { tmpDir, tmpFile };
+}
+
+async function extractFramesLocalFile(tmpFile, { maxSeconds, fps }) {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "frames-"));
+  const outPattern = path.join(tmpDir, "frame-%03d.jpg");
+  await new Promise((resolve, reject) => {
+    ffmpeg(tmpFile)
+      .outputOptions([`-t ${maxSeconds}`, `-vf fps=${fps}`])
+      .on("error", reject).on("end", resolve).save(outPattern);
+  });
+  const files = fs.readdirSync(tmpDir).filter(f => f.endsWith(".jpg")).map(f => path.join(tmpDir, f)).sort();
+  return { tmpDir, files };
+}
+
+async function tryFramesAnySource({ id, ytFormats, piped, invid, opts, warns }) {
   const tries = [];
 
   // 1) Piped direct streams
   const pipedUrls = pickStreamsFromPiped(piped?.data);
-  for (const u of pipedUrls) tries.push({ src: "piped", url: u });
+  for (const u of pipedUrls) tries.push({ src: "piped", url: u, mode: "url" });
 
   // 2) Invidious direct streams
   const invUrls = pickStreamsFromInvidious(invid?.data);
-  for (const u of invUrls) tries.push({ src: "invidious", url: u });
+  for (const u of invUrls) tries.push({ src: "invidious", url: u, mode: "url" });
 
-  // 3) YouTube formats (ytdl)
+  // 3) YouTube formats (ytdl info)
   for (const f of pickPreferredFormats(ytFormats || [])) {
-    tries.push({ src: `youtube ${f.container} ${f.qualityLabel || ""}`.trim(), url: f.url });
+    tries.push({ src: `youtube ${f.container} ${f.qualityLabel || ""}`.trim(), url: f.url, mode: "url" });
   }
+
+  // 4) Fallback fort : télécharger en local via ytdl (itag 18), puis extraire
+  tries.push({ src: "ytdl-local-itag18", url: `https://www.youtube.com/watch?v=${id}`, mode: "local" });
 
   let lastErr = null;
   for (const t of tries) {
     try {
-      const r = await extractFramesFromUrl(t.url, opts);
-      if (r.files.length > 0) return { ...r, tried: t.src };
-      lastErr = new Error("No frames produced");
+      if (t.mode === "url") {
+        const r = await extractFramesFromUrl(t.url, opts);
+        if (r.files.length > 0) return { ...r, tried: t.src, cleanup: null };
+        lastErr = new Error("No frames produced");
+      } else {
+        const dl = await downloadWithYtdlToTemp(t.url);
+        const r = await extractFramesLocalFile(dl.tmpFile, opts);
+        // cleanup downloader dir
+        try {
+          fs.unlinkSync(dl.tmpFile);
+          fs.rmdirSync(dl.tmpDir);
+        } catch {}
+        if (r.files.length > 0) return { ...r, tried: t.src, cleanup: null };
+        lastErr = new Error("No frames produced (local)");
+      }
     } catch (e) {
       lastErr = e;
-      warns.push(`extract fail ${t.src}: ${String(e).slice(0, 160)}`);
+      warns.push(`extract fail ${t.src}: ${String(e).slice(0, 200)}`);
     }
   }
   if (lastErr) throw lastErr;
@@ -295,15 +371,12 @@ export default async function handler(req, res) {
     const piped    = await getPipedVideo(id);
     const invid    = await getInvidiousVideo(id);
 
-    // 3) Captions prioritaires (YouTube)
+    // 3) Captions — multi-voies (lib, ytdl, timedtext, piped, invidious)
     let transcript = { text: "", lang: null, source: null };
-    // a) youtube-transcript
+
     transcript = await getCaptionsViaLib(id);
-    // b) ytdl player_response
     if (!transcript.text) transcript = await getCaptionsViaYtdlInfo(meta.rawInfo);
-    // c) timedtext officiel
     if (!transcript.text) transcript = await getCaptionsViaTimedText(id);
-    // d) Piped/Invidious
     if (!transcript.text && piped.data?.captions?.length) {
       const pref = piped.data.captions.find(c => /french/i.test(c.label)) || piped.data.captions[0];
       if (pref) transcript = { text: await getPipedCaptions(piped.host, id, pref.label), lang: pref.label, source: "piped" };
@@ -336,14 +409,14 @@ export default async function handler(req, res) {
 
     // 7) Exos + éléments (sur TOUT le texte)
     const exos     = detectExos(assembled);
-    const elements = inferElementsFromText(assembled); // ex: ["Terre","Eau"]
+    const elements = inferElementsFromText(assembled);
     const klass    = (/\bcr[âa]\b|(?:^|\s)cra(?:\s|$)/i.test(assembled)) ? "Cra" : null;
 
-    // 8) OCR best-effort (sur flux Piped/Invidious/YouTube)
+    // 8) OCR best-effort (sur flux Piped/Invidious/YouTube + fallback local ytdl)
     let tmpDir = null, usedFormat = null, ocr = [], ocrCandidates = [], ocrMatches = [];
     try {
       const { tmpDir: dir, files, tried } = await tryFramesAnySource({
-        ytFormats: meta.formats, piped, invid,
+        id, ytFormats: meta.formats, piped, invid,
         opts: { maxSeconds, fps },
         warns
       });
@@ -388,15 +461,15 @@ export default async function handler(req, res) {
         transcript_source: transcript.source, transcript_lang: transcript.lang
       },
       dofusbook_url: dofusbooks[0] || null,
-      class: klass,                      // null si non vu
-      element_build: elements,           // [] si non vu
+      class: klass,
+      element_build: elements,
       level: null,
-      items,                             // [] si rien de probant
+      items,
       exos,
       stats_synthese: {},
       evidences,
       transcript: {
-        text: transcript.text,           // ⟵ le texte complet
+        text: transcript.text,
         length_chars: transcript.text ? transcript.text.length : 0
       },
       explanation: null,
