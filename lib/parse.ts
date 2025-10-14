@@ -3,78 +3,51 @@ const SLOT_KEYWORDS = [
   "familier","monture","dofus","trophée","ivoire","ébène","pourpre","turquoise","dokoko","nomade","remueur"
 ];
 
-export function findDofusbookLinks(text: string): string[] {
+export function findDofusbookLinks(text) {
   if (!text) return [];
   const re = /https?:\/\/(?:www\.)?dofusbook\.net\/[^\s)]+/gi;
   return Array.from(text.matchAll(re)).map(m => m[0]);
 }
 
-export function normalizeTextPool(title?: string, desc?: string, transcript?: string): string {
+export function normalizeTextPool(title, desc, transcript) {
   return [title || "", desc || "", transcript || ""].join("\n").replace(/\u0000/g, " ").trim();
 }
 
-export function extractCandidates(text: string): string[] {
+export function extractCandidates(text) {
   if (!text) return [];
-  const lines = text
-    .split(/\r?\n/)
-    .map(l => l.trim())
-    .filter(Boolean)
-    .slice(0, 4000); // limite sécurité
-
-  const hits = new Set<string>();
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).slice(0, 4000);
+  const hits = new Set();
   for (const l of lines) {
     const ll = l.toLowerCase();
     if (SLOT_KEYWORDS.some(k => ll.includes(k))) {
-      // coupe sur ":" "-" "•" pour essayer d'isoler un nom
       const parts = l.split(/[:\-–•\u2022]/);
       const candidate = parts[parts.length - 1].trim();
-      if (candidate.length > 2 && candidate.length < 120) {
-        hits.add(candidate);
-      }
+      if (candidate.length > 2 && candidate.length < 120) hits.add(candidate);
     }
   }
-  // bonus: repérer des mots isolés connus (ivoire, ébène, etc.)
-  const bonus = ["Ivoire","Ébène","EbenE".toLowerCase(),"Pourpre","Turquoise","Dokoko","Nomade","Remueur"];
+  const bonus = ["Ivoire","Ébène","Pourpre","Turquoise","Dokoko","Nomade","Remueur"];
   const bag = text.split(/[\s,;()]+/);
   for (const w of bag) {
-    const ww = w.toLowerCase();
-    if (bonus.map(b=>b.toLowerCase()).includes(ww)) {
-      hits.add(capitalize(w));
-    }
+    if (bonus.map(b=>b.toLowerCase()).includes(w.toLowerCase())) hits.add(capitalize(w));
   }
   return Array.from(hits);
 }
 
-export function guessClassAndElements(title?: string, desc?: string): { klass?: string; elements: string[] } {
+export function guessClassAndElements(title, desc) {
   const src = `${title ?? ""} ${desc ?? ""}`.toLowerCase();
-  const classes: Record<string,string[]> = {
-    "cra": ["cra","crâ"],
-    "eniripsa": ["eniripsa","eni"],
-    "iop": ["iop"],
-    "sram": ["sram"],
-    "fecas": ["feca","féca"],
-    "osamodas": ["osa","osamodas"],
-    "sacrieur": ["sacri","sacrieur"],
-    "xelor": ["xelor","xelor"],
-    "pandawa": ["panda","pandawa"],
-    "ecaflip": ["ecaflip","eca"],
-    "huppermage": ["hupper","huppermage"],
-    "sadida": ["sadi","sadida"],
-    "roublard": ["roub","roublard"],
-    "steamer": ["steamer","steam"],
-    "zobal": ["zobal","zob"],
-    "ouginak": ["ougi","ouginak"],
-    "elorat": ["elorat","elorat?"],
-    "forgelance": ["forgelance","forgel."]
+  const classes = {
+    "Cra": ["cra","crâ"], "Eniripsa": ["eniripsa","eni"], "Iop": ["iop"], "Sram": ["sram"],
+    "Feca": ["feca","féca"], "Osamodas": ["osa","osamodas"], "Sacrieur": ["sacri","sacrieur"],
+    "Xelor": ["xelor"], "Pandawa": ["panda","pandawa"], "Ecaflip": ["ecaflip","eca"],
+    "Huppermage": ["hupper","huppermage"], "Sadida": ["sadi","sadida"], "Roublard": ["roub","roublard"],
+    "Steamer": ["steamer","steam"], "Zobal": ["zobal","zob"], "Ouginak": ["ougi","ouginak"],
+    "Forgelance": ["forgelance","forgel."]
   };
-  let klass: string | undefined = undefined;
+  let klass;
   for (const [k, keys] of Object.entries(classes)) {
-    if (keys.some(key => src.includes(key))) {
-      klass = k[0].toUpperCase() + k.slice(1);
-      break;
-    }
+    if (keys.some(key => src.includes(key))) { klass = k; break; }
   }
-  const elems: string[] = [];
+  const elems = [];
   if (/terre/i.test(src)) elems.push("Terre");
   if (/eau/i.test(src)) elems.push("Eau");
   if (/feu/i.test(src)) elems.push("Feu");
@@ -83,6 +56,4 @@ export function guessClassAndElements(title?: string, desc?: string): { klass?: 
   return { klass, elements: elems };
 }
 
-function capitalize(s: string) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
+function capitalize(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
