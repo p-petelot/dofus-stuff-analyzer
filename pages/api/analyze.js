@@ -15,7 +15,7 @@ const {
   normalize, cleanOCRText,
   looksLikeItemLine, fuzzyMatchItem, dedupeByName,
   scanKnownItemsBySubstring, scanAliases, scanSlotNamePatterns,
-  findDofusbookLinks, gatherEvidences, inferElementsFromText, detectExos
+  findDofusbookLinks, gatherEvidences, inferElementsFromText, detectExos, inferClassFromText
 } = require("../../lib/util");
 
 // ---------- Fetch helpers ----------
@@ -408,9 +408,9 @@ export default async function handler(req, res) {
     let   matched     = dedupeByName([ ...slotCapHits, ...aliasHits, ...directHits, ...matchedText ]);
 
     // 7) Exos + éléments (sur TOUT le texte)
-    const exos     = detectExos(assembled);
-    const elements = inferElementsFromText(assembled);
-    const klass    = (/\bcr[âa]\b|(?:^|\s)cra(?:\s|$)/i.test(assembled)) ? "Cra" : null;
+    const exos = detectExos(assembled);
+    const { ordered: elements, signals: elementSignals } = inferElementsFromText(assembled);
+    const klass = inferClassFromText(assembled);
 
     // 8) OCR best-effort (sur flux Piped/Invidious/YouTube + fallback local ytdl)
     let tmpDir = null, usedFormat = null, ocr = [], ocrCandidates = [], ocrMatches = [];
@@ -463,6 +463,7 @@ export default async function handler(req, res) {
       dofusbook_url: dofusbooks[0] || null,
       class: klass,
       element_build: elements,
+      element_signals: elementSignals,
       level: null,
       items,
       exos,
