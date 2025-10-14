@@ -60,11 +60,13 @@ function groupBySlot(items = []) {
   return Array.from(m.entries()).sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
 }
 
-function Tag({ children, tone = "neutral", icon, subtle }) {
+function Tag({ children, tone = "neutral", icon, subtle, title }) {
   const cls = ["tag", `tag--${tone}`];
   if (subtle) cls.push("tag--subtle");
+  const props = {};
+  if (title) props.title = title;
   return (
-    <span className={cls.join(" ")}>
+    <span className={cls.join(" ")} {...props}>
       {icon ? (
         <span className="tag__icon" aria-hidden="true">
           {icon}
@@ -79,8 +81,15 @@ function SourceBadges({ sources }) {
   if (!sources) return null;
   const {
     piped,
+    piped_host,
+    piped_note,
     invidious,
+    invidious_host,
+    invidious_note,
     readable,
+    readable_status,
+    readable_note,
+    readable_url,
     transcript_source,
     transcript_lang,
     transcript_has_timing,
@@ -117,18 +126,50 @@ function SourceBadges({ sources }) {
         return "ASR inactif";
     }
   })();
+  const hostLabel = (value) => {
+    if (!value) return null;
+    try {
+      const u = new URL(value);
+      return u.host;
+    } catch {
+      return value.replace(/^https?:\/\//, "");
+    }
+  };
+  const firstDetail = (note) => {
+    if (!note) return null;
+    const [first] = note.split('|');
+    return first ? first.trim() : null;
+  };
+  const readableTone = readable ? "success" : readable_status === "failed" ? "warning" : "muted";
+  const pipedTone = piped ? "success" : piped_note ? "warning" : "muted";
+  const invidTone = invidious ? "success" : invidious_note ? "warning" : "muted";
+  const readableHost = hostLabel(readable_url);
+  const pipedHost = hostLabel(piped_host);
+  const invidHost = hostLabel(invidious_host);
   return (
     <div className="tagrow tagrow--wrap">
-      <Tag tone={readable ? "success" : "muted"} icon="📰">
+      <Tag tone={readableTone} icon="📰" title={readable_note || undefined}>
         {readable ? "Readable mirror OK" : "Readable indisponible"}
+        {readableHost ? <span className="tag__meta tag__meta--soft">{readableHost}</span> : null}
+        {!readable && readable_note ? (
+          <span className="tag__meta">{firstDetail(readable_note)}</span>
+        ) : null}
       </Tag>
-      <Tag tone={piped ? "success" : "muted"} icon="🚰">
+      <Tag tone={pipedTone} icon="🚰" title={piped_note || undefined}>
         {piped ? "Piped OK" : "Piped KO"}
+        {pipedHost ? <span className="tag__meta tag__meta--soft">{pipedHost}</span> : null}
+        {!piped && piped_note ? (
+          <span className="tag__meta">{firstDetail(piped_note)}</span>
+        ) : null}
       </Tag>
-      <Tag tone={invidious ? "success" : "muted"} icon="🌀">
+      <Tag tone={invidTone} icon="🌀" title={invidious_note || undefined}>
         {invidious ? "Invidious OK" : "Invidious KO"}
+        {invidHost ? <span className="tag__meta tag__meta--soft">{invidHost}</span> : null}
+        {!invidious && invidious_note ? (
+          <span className="tag__meta">{firstDetail(invidious_note)}</span>
+        ) : null}
       </Tag>
-      <Tag tone={transcript_source ? "info" : "warning"} icon="💬">
+      <Tag tone={transcript_source ? "info" : "warning"} icon="💬" title={transcript_source || undefined}>
         {transcript_source
           ? `Captions ${transcript_lang || ""}`.trim()
           : "Captions manquantes"}
@@ -522,6 +563,22 @@ function SpeechInsights({ speech }) {
               ))}
             </ul>
           ) : null}
+          {status === "not_configured" ? (
+            <details className="speech-help">
+              <summary>Configurer l'analyse audio</summary>
+              <p className="caption">
+                Ajoute une clé <code>OPENAI_API_KEY</code>, <code>GROQ_API_KEY</code> ou configure ton propre endpoint via <code>ASR_ENDPOINT</code> et <code>ASR_API_KEY</code>.
+              </p>
+              <pre className="pre speech__text">
+                {`OPENAI_API_KEY=votre_cle
+# ou
+GROQ_API_KEY=votre_cle
+# ou
+ASR_ENDPOINT=https://votre-service.example/transcribe
+ASR_API_KEY=votre_cle`}
+              </pre>
+            </details>
+          ) : null}
         </div>
       )}
     </div>
@@ -731,7 +788,7 @@ export default function Home() {
                 </div>
               ) : (
                 <p>
-                  Aucun item probant pour cette vidéo {out.sources?.captions ? "(captions dispo)" : "(captions indisponibles)"}. Essaie
+                  Aucun item probant pour cette vidéo {out.sources?.transcript_source ? "(captions dispo)" : "(captions indisponibles)"}. Essaie
                   d’enrichir <code>lib/items.json</code> avec plus d’objets méta ou vise un timecode où l’inventaire est affiché pour
                   l’OCR.
                 </p>

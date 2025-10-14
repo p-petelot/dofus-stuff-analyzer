@@ -33,6 +33,25 @@ async function fetchTEXT(url) {
   } catch { return ""; }
 }
 
+function summarizeAttempts(attempts = []) {
+  return attempts
+    .map((attempt) => {
+      if (!attempt) return null;
+      const host = attempt.host || "?";
+      if (attempt.error) return `${host}: ${attempt.error}`;
+      if (attempt.status === "empty") return `${host}: réponse vide`;
+      if (typeof attempt.status === "number") {
+        const suffix = attempt.statusText ? ` ${attempt.statusText}` : "";
+        return `${host}: HTTP ${attempt.status}${suffix}`;
+      }
+      if (attempt.status) return `${host}: ${attempt.status}`;
+      return `${host}: inconnu`;
+    })
+    .filter(Boolean)
+    .join(" | ")
+    .slice(0, 400);
+}
+
 // ---------- Meta YouTube ----------
 async function getMeta(url) {
   try {
@@ -56,13 +75,30 @@ async function getPipedVideo(id) {
     "https://piped.video",
     "https://piped.videoapi.fr",
     "https://piped.minionflo.net",
-    "https://piped.darkness.services"
+    "https://piped.darkness.services",
+    "https://piped.projectsegfau.lt",
+    "https://piped.us.projectsegfau.lt",
+    "https://piped.lunar.icu",
+    "https://piped.privacydev.net"
   ];
+  const attempts = [];
   for (const h of hosts) {
-    const v = await fetchJSON(`${h}/api/v1/video/${id}`);
-    if (v && (v.description || v.captions?.length || v.videoStreams?.length)) return { host: h, data: v };
+    try {
+      const res = await fetch(`${h}/api/v1/video/${id}`, { headers: { "User-Agent": "Mozilla/5.0" } });
+      if (!res.ok) {
+        attempts.push({ host: h, status: res.status, statusText: res.statusText || null });
+        continue;
+      }
+      const v = await res.json();
+      if (v && (v.description || v.captions?.length || v.videoStreams?.length)) {
+        return { host: h, data: v, status: "ok", attempts };
+      }
+      attempts.push({ host: h, status: "empty" });
+    } catch (err) {
+      attempts.push({ host: h, error: String(err) });
+    }
   }
-  return { host: null, data: null };
+  return { host: null, data: null, status: "failed", attempts };
 }
 async function getPipedCaptions(host, id, label) {
   const url = `${host}/api/v1/captions/${id}?label=${encodeURIComponent(label)}`;
@@ -71,12 +107,31 @@ async function getPipedCaptions(host, id, label) {
 }
 
 async function getInvidiousVideo(id) {
-  const hosts = ["https://yewtu.be", "https://invidious.fdn.fr", "https://vid.puffyan.us"];
+  const hosts = [
+    "https://yewtu.be",
+    "https://invidious.fdn.fr",
+    "https://vid.puffyan.us",
+    "https://inv.nadeko.net",
+    "https://invidious.projectsegfau.lt"
+  ];
+  const attempts = [];
   for (const h of hosts) {
-    const v = await fetchJSON(`${h}/api/v1/videos/${id}`);
-    if (v && (v.description || v.captions?.length || v.formatStreams?.length)) return { host: h, data: v };
+    try {
+      const res = await fetch(`${h}/api/v1/videos/${id}`, { headers: { "User-Agent": "Mozilla/5.0" } });
+      if (!res.ok) {
+        attempts.push({ host: h, status: res.status, statusText: res.statusText || null });
+        continue;
+      }
+      const v = await res.json();
+      if (v && (v.description || v.captions?.length || v.formatStreams?.length)) {
+        return { host: h, data: v, status: "ok", attempts };
+      }
+      attempts.push({ host: h, status: "empty" });
+    } catch (err) {
+      attempts.push({ host: h, error: String(err) });
+    }
   }
-  return { host: null, data: null };
+  return { host: null, data: null, status: "failed", attempts };
 }
 async function getInvidiousCaptions(host, id, labelOrLang) {
   const caps = await fetchJSON(`${host}/api/v1/captions/${id}`);
@@ -89,7 +144,17 @@ async function getInvidiousCaptions(host, id, labelOrLang) {
 
 // ---------- Watch page lisible ----------
 async function getReadableWatchPage(id) {
-  return await fetchTEXT(`https://r.jina.ai/http://www.youtube.com/watch?v=${id}`);
+  const url = `https://r.jina.ai/http://www.youtube.com/watch?v=${id}`;
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+    if (!res.ok) {
+      return { ok: false, text: "", status: res.status, statusText: res.statusText || null, url };
+    }
+    const text = await res.text();
+    return { ok: !!text, text, status: "ok", url };
+  } catch (err) {
+    return { ok: false, text: "", error: String(err), url };
+  }
 }
 
 // ---------- Captions helpers ----------
@@ -705,6 +770,24 @@ export default async function handler(req, res) {
 
     // 2) Sources textuelles + streams alternatifs
     const readable = await getReadableWatchPage(id);
+    const pipedSummary = summarizeAttempts(piped.attempts) || null;
+    const invidSummary = summarizeAttempts(invid.attempts) || null;
+    const readableSummary = readable.ok
+      ? null
+      : readable.error
+      ? readable.error
+      : readable.status
+      ? `HTTP ${readable.status}${readable.statusText ? ` ${readable.statusText}` : ""}`
+      : null;
+    if (!piped.data && pipedSummary) {
+      warns.push(`Piped KO: ${pipedSummary}`);
+    }
+    if (!invid.data && invidSummary) {
+      warns.push(`Invidious KO: ${invidSummary}`);
+    }
+    if (!readable.ok && readableSummary) {
+      warns.push(`Readable KO: ${readableSummary}`);
+    }
     const piped    = await getPipedVideo(id);
     const invid    = await getInvidiousVideo(id);
 
@@ -767,8 +850,8 @@ export default async function handler(req, res) {
       const label = `Description (${(invid.host || "invidious").replace(/^https?:\/\//, "")})`;
       textSources.push({ id: "invid-desc", type: "description", label, text: invidDesc, weight: 0.9 });
     }
-    if (readable) {
-      textSources.push({ id: "readable", type: "readable", label: "Page YouTube lisible", text: readable, weight: 0.8 });
+    if (readable.text) {
+      textSources.push({ id: "readable", type: "readable", label: "Page YouTube lisible", text: readable.text, weight: 0.8 });
     }
     if (transcript.text) {
       const langLabel = transcript.lang ? `Transcript (${transcript.lang})` : "Transcript";
@@ -870,7 +953,16 @@ export default async function handler(req, res) {
         embed_url: ytEmbed(id)
       },
       sources: {
-        piped: !!piped.data, invidious: !!invid.data, readable: !!readable,
+        piped: !!piped.data, invidious: !!invid.data, readable: !!readable.text,
+        piped_host: piped.host,
+        piped_status: piped.status || (piped.data ? "ok" : piped.attempts?.length ? "failed" : null),
+        piped_note: pipedSummary,
+        invidious_host: invid.host,
+        invidious_status: invid.status || (invid.data ? "ok" : invid.attempts?.length ? "failed" : null),
+        invidious_note: invidSummary,
+        readable_status: readable.ok ? "ok" : "failed",
+        readable_note: readableSummary,
+        readable_url: readable.url,
         transcript_source: transcript.source, transcript_lang: transcript.lang,
         transcript_has_timing: transcriptPublic.has_timing,
         transcript_is_translation: transcriptPublic.is_translation,
@@ -903,7 +995,15 @@ export default async function handler(req, res) {
         asr_model: speech?.model || (asrConfig?.model ?? null),
         speech_segments: speech?.segment_count ?? 0,
         speech_keywords: speech?.keywords?.length ?? 0,
-        warns
+        warns,
+        piped_attempts: piped.attempts || [],
+        invidious_attempts: invid.attempts || [],
+        readable_status: {
+          ok: readable.ok,
+          status: readable.status || null,
+          statusText: readable.statusText || null,
+          error: readable.error || null
+        }
       }
     };
 

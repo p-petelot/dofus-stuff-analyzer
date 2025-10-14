@@ -746,6 +746,34 @@ input:focus {
   gap: 10px;
 }
 
+.speech-help {
+  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.speech-help summary {
+  cursor: pointer;
+  color: var(--fg);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.speech-help summary::-webkit-details-marker {
+  display: none;
+}
+
+.speech-help pre {
+  margin: 8px 0 0;
+  font-size: 12px;
+  background: rgba(15, 23, 42, 0.55);
+  border-radius: 6px;
+  padding: 8px;
+}
+
 .speech-raw summary {
   cursor: pointer;
   user-select: none;
