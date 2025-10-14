@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import ytdl from "ytdl-core";
 import { YoutubeTranscript } from "youtube-transcript";
-import { extractCandidates, findDofusbookLinks, guessClassAndElements, normalizeTextPool } from "@/lib/parse";
+import { extractCandidates, findDofusbookLinks, guessClassAndElements, normalizeTextPool } from "../../../lib/parse";
+
 
 export const dynamic = "force-dynamic"; // pour Vercel
 
