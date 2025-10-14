@@ -138,7 +138,12 @@ function SourceBadges({ sources }) {
   const firstDetail = (note) => {
     if (!note) return null;
     const [first] = note.split('|');
-    return first ? first.trim() : null;
+    if (!first) return null;
+    const colon = first.indexOf(':');
+    if (colon !== -1) {
+      return first.slice(colon + 1).trim();
+    }
+    return first.trim();
   };
   const readableTone = readable ? "success" : readable_status === "failed" ? "warning" : "muted";
   const pipedTone = piped ? "success" : piped_note ? "warning" : "muted";
@@ -150,21 +155,36 @@ function SourceBadges({ sources }) {
     <div className="tagrow tagrow--wrap">
       <Tag tone={readableTone} icon="📰" title={readable_note || undefined}>
         {readable ? "Readable mirror OK" : "Readable indisponible"}
-        {readableHost ? <span className="tag__meta tag__meta--soft">{readableHost}</span> : null}
+        {readableHost ? (
+          <>
+            {" "}
+            <span className="tag__meta tag__meta--soft">{readableHost}</span>
+          </>
+        ) : null}
         {!readable && readable_note ? (
           <span className="tag__meta">{firstDetail(readable_note)}</span>
         ) : null}
       </Tag>
       <Tag tone={pipedTone} icon="🚰" title={piped_note || undefined}>
         {piped ? "Piped OK" : "Piped KO"}
-        {pipedHost ? <span className="tag__meta tag__meta--soft">{pipedHost}</span> : null}
+        {pipedHost ? (
+          <>
+            {" "}
+            <span className="tag__meta tag__meta--soft">{pipedHost}</span>
+          </>
+        ) : null}
         {!piped && piped_note ? (
           <span className="tag__meta">{firstDetail(piped_note)}</span>
         ) : null}
       </Tag>
       <Tag tone={invidTone} icon="🌀" title={invidious_note || undefined}>
         {invidious ? "Invidious OK" : "Invidious KO"}
-        {invidHost ? <span className="tag__meta tag__meta--soft">{invidHost}</span> : null}
+        {invidHost ? (
+          <>
+            {" "}
+            <span className="tag__meta tag__meta--soft">{invidHost}</span>
+          </>
+        ) : null}
         {!invidious && invidious_note ? (
           <span className="tag__meta">{firstDetail(invidious_note)}</span>
         ) : null}
@@ -566,17 +586,36 @@ function SpeechInsights({ speech }) {
           {status === "not_configured" ? (
             <details className="speech-help">
               <summary>Configurer l'analyse audio</summary>
-              <p className="caption">
-                Ajoute une clé <code>OPENAI_API_KEY</code>, <code>GROQ_API_KEY</code> ou configure ton propre endpoint via <code>ASR_ENDPOINT</code> et <code>ASR_API_KEY</code>.
-              </p>
+              <p className="caption">Pour activer l'ASR&nbsp;:</p>
+              <ol className="speech-help__list">
+                <li>
+                  <strong>Crée un fichier <code>.env.local</code></strong> à la racine du projet (ou utilise les variables d'environnement de ton hébergeur).
+                </li>
+                <li>
+                  <strong>Choisis un fournisseur</strong> et renseigne l'une des configurations ci-dessous.
+                </li>
+                <li>
+                  <strong>Redémarre ton <code>npm run dev</code></strong> pour appliquer les changements.
+                </li>
+              </ol>
+              <p className="caption">Exemples de configuration&nbsp;:</p>
               <pre className="pre speech__text">
-                {`OPENAI_API_KEY=votre_cle
-# ou
+                {`# Whisper officiel OpenAI
+OPENAI_API_KEY=votre_cle
+
+# Whisper Groq (rapide)
 GROQ_API_KEY=votre_cle
-# ou
+ASR_MODEL=whisper-large-v3
+
+# Endpoint personnalisé (Whisper.cpp, OpenAI compatible, etc.)
 ASR_ENDPOINT=https://votre-service.example/transcribe
-ASR_API_KEY=votre_cle`}
+ASR_API_KEY=votre_cle
+ASR_MODEL=whisper-small
+ASR_LABEL=Mon ASR`}
               </pre>
+              <p className="speech-help__hint">
+                Tu peux aussi préciser <code>ASR_PROVIDER</code> pour le nom technique et <code>ASR_EXTRA_HEADERS</code> (JSON) si ton service exige des en-têtes supplémentaires.
+              </p>
             </details>
           ) : null}
         </div>

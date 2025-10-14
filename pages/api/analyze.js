@@ -33,12 +33,26 @@ async function fetchTEXT(url) {
   } catch { return ""; }
 }
 
+function friendlyAttemptError(err) {
+  if (!err) return "erreur inconnue";
+  const str = typeof err === "string" ? err : err.message || String(err);
+  if (/ECONNREFUSED/i.test(str)) return "connexion refusée";
+  if (/(ENOTFOUND|DNS|getaddrinfo)/i.test(str)) return "hôte introuvable";
+  if (/(ETIMEDOUT|timeout)/i.test(str)) return "délai dépassé";
+  if (/fetch failed|Failed to fetch|network/i.test(str)) return "erreur réseau";
+  return str.replace(/^TypeError:\s*/i, "").replace(/^Error:\s*/i, "").replace(/^SyntaxError:\s*/i, "").trim();
+}
+
 function summarizeAttempts(attempts = []) {
   return attempts
     .map((attempt) => {
       if (!attempt) return null;
       const host = attempt.host || "?";
       if (attempt.error) return `${host}: ${attempt.error}`;
+      if (attempt.status === "invalid_json") {
+        const detail = attempt.statusText ? ` (${attempt.statusText})` : "";
+        return `${host}: réponse non JSON${detail}`;
+      }
       if (attempt.status === "empty") return `${host}: réponse vide`;
       if (typeof attempt.status === "number") {
         const suffix = attempt.statusText ? ` ${attempt.statusText}` : "";
@@ -89,13 +103,24 @@ async function getPipedVideo(id) {
         attempts.push({ host: h, status: res.status, statusText: res.statusText || null });
         continue;
       }
-      const v = await res.json();
+      const body = await res.text();
+      let v;
+      try {
+        v = JSON.parse(body);
+      } catch {
+        const contentType = (res.headers.get("content-type") || "").split(";")[0] || null;
+        const reason = contentType && /html/i.test(contentType)
+          ? "réponse HTML inattendue"
+          : "réponse non JSON";
+        attempts.push({ host: h, error: contentType ? `${reason} (${contentType})` : reason, status: "invalid_json", statusText: contentType });
+        continue;
+      }
       if (v && (v.description || v.captions?.length || v.videoStreams?.length)) {
         return { host: h, data: v, status: "ok", attempts };
       }
       attempts.push({ host: h, status: "empty" });
     } catch (err) {
-      attempts.push({ host: h, error: String(err) });
+      attempts.push({ host: h, error: friendlyAttemptError(err) });
     }
   }
   return { host: null, data: null, status: "failed", attempts };
@@ -122,13 +147,24 @@ async function getInvidiousVideo(id) {
         attempts.push({ host: h, status: res.status, statusText: res.statusText || null });
         continue;
       }
-      const v = await res.json();
+      const body = await res.text();
+      let v;
+      try {
+        v = JSON.parse(body);
+      } catch {
+        const contentType = (res.headers.get("content-type") || "").split(";")[0] || null;
+        const reason = contentType && /html/i.test(contentType)
+          ? "réponse HTML inattendue"
+          : "réponse non JSON";
+        attempts.push({ host: h, error: contentType ? `${reason} (${contentType})` : reason, status: "invalid_json", statusText: contentType });
+        continue;
+      }
       if (v && (v.description || v.captions?.length || v.formatStreams?.length)) {
         return { host: h, data: v, status: "ok", attempts };
       }
       attempts.push({ host: h, status: "empty" });
     } catch (err) {
-      attempts.push({ host: h, error: String(err) });
+      attempts.push({ host: h, error: friendlyAttemptError(err) });
     }
   }
   return { host: null, data: null, status: "failed", attempts };
