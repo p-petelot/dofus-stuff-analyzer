@@ -77,7 +77,15 @@ function Tag({ children, tone = "neutral", icon, subtle }) {
 
 function SourceBadges({ sources }) {
   if (!sources) return null;
-  const { piped, invidious, readable, transcript_source, transcript_lang } = sources;
+  const {
+    piped,
+    invidious,
+    readable,
+    transcript_source,
+    transcript_lang,
+    transcript_has_timing,
+    transcript_is_translation,
+  } = sources;
   return (
     <div className="tagrow tagrow--wrap">
       <Tag tone={readable ? "success" : "muted"} icon="📰">
@@ -94,6 +102,44 @@ function SourceBadges({ sources }) {
           ? `Captions ${transcript_lang || ""}`.trim()
           : "Captions manquantes"}
       </Tag>
+      {transcript_has_timing ? (
+        <Tag tone="success" subtle icon="⏱️">
+          Horodatage ok
+        </Tag>
+      ) : null}
+      {transcript_is_translation ? (
+        <Tag tone="warning" subtle icon="🌍">
+          Traduction auto
+        </Tag>
+      ) : null}
+    </div>
+  );
+}
+
+function MomentsList({ moments }) {
+  if (!moments?.length) return null;
+  return (
+    <div className="moments">
+      <span className="caption caption--label">Moments où le stuff est présenté</span>
+      <ul className="moments__list">
+        {moments.map((moment, idx) => (
+          <li key={idx} className="moments__item">
+            <div className="moments__meta">
+              {moment.timestamp ? (
+                <Tag tone="info" icon="⏱️">
+                  {moment.timestamp}
+                </Tag>
+              ) : null}
+              {moment.source ? (
+                <Tag tone="neutral" subtle icon="📄">
+                  {moment.source}
+                </Tag>
+              ) : null}
+            </div>
+            <p className="moments__text">{moment.text}</p>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -135,6 +181,38 @@ function ExoBadges({ exos }) {
         </Tag>
       ))}
     </div>
+  );
+}
+
+function EvidenceList({ evidences }) {
+  if (!evidences?.length) {
+    return <p className="caption">Aucune ligne probante trouvée.</p>;
+  }
+  return (
+    <ul className="evidence-list">
+      {evidences.map((e, i) => (
+        <li key={i} className="evidence">
+          <div className="evidence__meta">
+            {e.timestamp ? (
+              <Tag tone="info" subtle icon="⏱️">
+                {e.timestamp}
+              </Tag>
+            ) : null}
+            {e.source ? (
+              <Tag tone="neutral" subtle icon="🧾">
+                {e.source}
+              </Tag>
+            ) : null}
+            {typeof e.score === "number" ? (
+              <Tag tone="accent" subtle icon="📈">
+                Indice {e.score.toFixed(1)}
+              </Tag>
+            ) : null}
+          </div>
+          <p className="evidence__text">{e.text}</p>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -265,6 +343,7 @@ export default function Home() {
                   </div>
                   <ElementBadges elements={out.element_build} signals={out.element_signals} />
                   <SourceBadges sources={out.sources} />
+                  <MomentsList moments={out.presentation_moments} />
                   <ExoBadges exos={out.exos} />
                   {out.dofusbook_url ? (
                     <a className="btn btn-ghost" href={out.dofusbook_url} target="_blank" rel="noreferrer">
@@ -343,16 +422,8 @@ export default function Home() {
 
             <section className="grid">
               <div className="card">
-                <h2>🔎 Évidences</h2>
-                {out.evidences?.length ? (
-                  <ul className="list">
-                    {out.evidences.map((e, i) => (
-                      <li key={i}>{e}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="caption">Aucune ligne probante trouvée.</p>
-                )}
+                <h2>🔎 Indices textuels</h2>
+                <EvidenceList evidences={out.evidences} />
               </div>
 
               <div className="card">
@@ -362,9 +433,34 @@ export default function Home() {
                     <span className="caption">
                       {out.transcript?.length_chars ? `${out.transcript.length_chars.toLocaleString()} caractères` : "—"}
                     </span>
+                    {out.transcript?.lang ? (
+                      <Tag tone="info" subtle icon="🌐">
+                        {out.transcript.lang}
+                      </Tag>
+                    ) : null}
+                    {out.transcript?.has_timing ? (
+                      <Tag tone="success" subtle icon="⏱️">
+                        Horodatage
+                      </Tag>
+                    ) : null}
+                    {out.transcript?.is_translation ? (
+                      <Tag tone="warning" subtle icon="🌍">
+                        Traduction
+                      </Tag>
+                    ) : null}
+                    {out.transcript?.is_asr ? (
+                      <Tag tone="warning" subtle icon="🗣️">
+                        Reconnaissance vocale
+                      </Tag>
+                    ) : null}
                     <CopyButton text={out.transcript?.text || ""} />
                   </div>
                 </div>
+                {out.transcript?.source ? (
+                  <p className="caption transcript-meta">
+                    Source&nbsp;: {out.transcript.source} · {out.transcript?.cues_count || 0} segments
+                  </p>
+                ) : null}
                 {out.transcript?.text ? (
                   <details className="transcript">
                     <summary>Afficher/Masquer le transcript</summary>

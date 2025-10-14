@@ -15,7 +15,8 @@ const {
   normalize, cleanOCRText,
   looksLikeItemLine, fuzzyMatchItem, dedupeByName,
   scanKnownItemsBySubstring, scanAliases, scanSlotNamePatterns,
-  findDofusbookLinks, gatherEvidences, inferElementsFromText, detectExos, inferClassFromText
+  findDofusbookLinks, gatherEvidences, inferElementsFromText, detectExos, inferClassFromText,
+  detectStuffMoments
 } = require("../../lib/util");
 
 // ---------- Fetch helpers ----------
@@ -66,7 +67,7 @@ async function getPipedVideo(id) {
 async function getPipedCaptions(host, id, label) {
   const url = `${host}/api/v1/captions/${id}?label=${encodeURIComponent(label)}`;
   const vtt = await fetchTEXT(url);
-  return vttToPlain(vtt);
+  return parseCaptionRaw(vtt, "vtt");
 }
 
 async function getInvidiousVideo(id) {
@@ -79,11 +80,11 @@ async function getInvidiousVideo(id) {
 }
 async function getInvidiousCaptions(host, id, labelOrLang) {
   const caps = await fetchJSON(`${host}/api/v1/captions/${id}`);
-  if (!caps || !Array.isArray(caps)) return "";
+  if (!caps || !Array.isArray(caps)) return { text: "", cues: [] };
   const match = caps.find(c => ((c.label || c.language || "").toLowerCase().includes((labelOrLang || "").toLowerCase())));
-  if (!match) return "";
+  if (!match) return { text: "", cues: [] };
   const vtt = await fetchTEXT(match.url || match.src || "");
-  return vttToPlain(vtt);
+  return parseCaptionRaw(vtt, "vtt");
 }
 
 // ---------- Watch page lisible ----------
@@ -92,34 +93,103 @@ async function getReadableWatchPage(id) {
 }
 
 // ---------- Captions helpers ----------
-function vttToPlain(vtt) {
-  if (!vtt) return "";
-  return vtt
-    .split("\n")
-    .filter(line => line && !/^\d+$/.test(line) && !/-->/i.test(line) && !/^WEBVTT/i.test(line))
-    .join("\n");
+function parseTimecode(str) {
+  if (!str) return null;
+  const parts = str.replace(",", ".").split(":");
+  if (!parts.length) return null;
+  let seconds = 0;
+  let factor = 1;
+  while (parts.length) {
+    const value = parseFloat(parts.pop());
+    if (!Number.isNaN(value)) seconds += value * factor;
+    factor *= 60;
+  }
+  return seconds;
 }
-function xmlToPlain(xml) {
-  if (!xml) return "";
-  const unescape = (s) =>
-    s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
-  const parts = Array.from(xml.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)).map(m => unescape(m[1]).replace(/\n+/g, " ").trim());
-  return parts.join("\n");
+
+function parseVtt(raw) {
+  if (!raw) return { text: "", cues: [] };
+  const blocks = raw
+    .replace(/\r/g, "")
+    .split(/\n\n+/)
+    .map((b) => b.trim())
+    .filter(Boolean);
+  const cues = [];
+  for (const block of blocks) {
+    const lines = block.split("\n").filter(Boolean);
+    if (!lines.length) continue;
+    let timeLineIndex = lines.findIndex((line) => /-->/.test(line));
+    if (timeLineIndex === -1 && lines.length >= 2) timeLineIndex = 0;
+    if (timeLineIndex === -1) continue;
+    const timeLine = lines[timeLineIndex];
+    const text = lines.slice(timeLineIndex + 1).join(" ").trim();
+    if (!text) continue;
+    const [startRaw, endRaw] = timeLine.split(/-->/).map((s) => s.trim());
+    const start = parseTimecode(startRaw);
+    const end = parseTimecode(endRaw);
+    cues.push({ start, end, text });
+  }
+  const text = cues.map((c) => c.text).join("\n");
+  return { text, cues };
 }
-function json3ToPlain(jsonStr) {
+
+function parseJson3(raw) {
+  if (!raw) return { text: "", cues: [] };
   try {
-    const obj = JSON.parse(jsonStr);
+    const obj = JSON.parse(raw);
     const events = obj.events || [];
-    const lines = [];
+    const cues = [];
     for (const ev of events) {
       const segs = ev.segs || [];
-      const txt = segs.map(s => s.utf8 || "").join("");
-      if (txt.trim()) lines.push(txt.trim());
+      const txt = segs.map((s) => s.utf8 || "").join("").trim();
+      if (!txt) continue;
+      const start = typeof ev.tStartMs === "number" ? ev.tStartMs / 1000 : null;
+      const end = typeof ev.dDurationMs === "number" && start != null ? start + ev.dDurationMs / 1000 : null;
+      cues.push({ start, end, text: txt });
     }
-    return lines.join("\n");
+    const text = cues.map((c) => c.text).join("\n");
+    return { text, cues };
   } catch {
-    return "";
+    return { text: "", cues: [] };
   }
+}
+
+function parseXml(raw) {
+  if (!raw) return { text: "", cues: [] };
+  const unescape = (s) =>
+    s
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+  const cues = [];
+  const regex = /<text([^>]*)>([\s\S]*?)<\/text>/g;
+  let match;
+  while ((match = regex.exec(raw))) {
+    const attrs = match[1] || "";
+    let text = match[2] || "";
+    text = unescape(text).replace(/<[^>]+>/g, "").replace(/\n+/g, " ").trim();
+    if (!text) continue;
+    const startAttr = attrs.match(/start="([^"]+)"/);
+    const durAttr = attrs.match(/dur="([^"]+)"/);
+    const start = startAttr ? parseFloat(startAttr[1]) : null;
+    const end = durAttr && start != null ? start + parseFloat(durAttr[1]) : null;
+    cues.push({ start, end, text });
+  }
+  const text = cues.map((c) => c.text).join("\n");
+  return { text, cues };
+}
+
+function parseCaptionRaw(raw, fmtHint) {
+  if (!raw) return { text: "", cues: [] };
+  const trimmed = raw.trim();
+  if (fmtHint === "json3") return parseJson3(trimmed);
+  if (fmtHint === "ttml") return parseXml(trimmed);
+  if (fmtHint === "vtt") return parseVtt(raw);
+  if (/^WEBVTT/i.test(trimmed)) return parseVtt(raw);
+  if (trimmed.startsWith("{")) return parseJson3(trimmed);
+  return parseXml(trimmed);
 }
 
 // 1) Captions via youtube-transcript
@@ -129,9 +199,21 @@ async function getCaptionsViaLib(id) {
     let cues = [];
     try { cues = await YoutubeTranscript.fetchTranscript(id, { lang: "fr" }); } catch {}
     if (!cues?.length) { try { cues = await YoutubeTranscript.fetchTranscript(id); } catch {} }
-    if (!cues?.length) return { text: "", lang: null, source: null };
-    return { text: cues.map(c => c.text).join("\n"), lang: "auto", source: "youtube-transcript" };
-  } catch { return { text: "", lang: null, source: null }; }
+    if (!cues?.length) return { text: "", lang: null, source: null, cues: [] };
+    const normalized = cues
+      .map((c) => ({
+        text: normalize(c.text),
+        start: typeof c.offset === "number" ? c.offset : typeof c.start === "number" ? c.start : null,
+        end: typeof c.duration === "number" && typeof c.offset === "number" ? c.offset + c.duration : null
+      }))
+      .filter((c) => c.text);
+    return {
+      text: normalized.map((c) => c.text).join("\n"),
+      lang: "auto",
+      source: "youtube-transcript",
+      cues: normalized.map((c) => ({ start: c.start, end: c.end, text: c.text }))
+    };
+  } catch { return { text: "", lang: null, source: null, cues: [] }; }
 }
 
 // 2) Captions via ytdl player_response (baseUrl)
@@ -139,7 +221,7 @@ async function getCaptionsViaYtdlInfo(info) {
   try {
     const pr = info?.player_response || info?.playerResponse || {};
     const tracks = pr?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
-    if (!tracks?.length) return { text: "", lang: null, source: null };
+    if (!tracks?.length) return { text: "", lang: null, source: null, cues: [] };
     const order = ["fr", "fr-FR", "fr-CA", "en", "en-US"];
     let chosen = null;
     for (const code of order) {
@@ -147,14 +229,11 @@ async function getCaptionsViaYtdlInfo(info) {
       if (chosen) break;
     }
     if (!chosen) chosen = tracks[0];
-    if (!chosen?.baseUrl) return { text: "", lang: null, source: null };
+    if (!chosen?.baseUrl) return { text: "", lang: null, source: null, cues: [] };
     const raw = await fetchTEXT(chosen.baseUrl);
-    let text = "";
-    if (raw.startsWith("WEBVTT")) text = vttToPlain(raw);
-    else if (raw.trim().startsWith("{")) text = json3ToPlain(raw);
-    else text = xmlToPlain(raw);
-    return { text, lang: chosen.languageCode || null, source: "ytdl-captions" };
-  } catch { return { text: "", lang: null, source: null }; }
+    const parsed = parseCaptionRaw(raw, null);
+    return { text: parsed.text, cues: parsed.cues, lang: chosen.languageCode || null, source: "ytdl-captions" };
+  } catch { return { text: "", lang: null, source: null, cues: [] }; }
 }
 
 // 3) TimedText officiel — ESSAIS MULTIPLES (fmt/lang/tlang/kind)
@@ -166,8 +245,8 @@ async function getCaptionsViaTimedText(id) {
     for (const fmt of FMTS) {
       const url = `https://www.youtube.com/api/timedtext?lang=${encodeURIComponent(lang)}&v=${id}&fmt=${fmt}`;
       const raw = await fetchTEXT(url);
-      const txt = parseTimedTextRaw(raw, fmt);
-      if (txt && txt.length > 50) return { text: txt, lang, source: `timedtext:${fmt}` };
+      const parsed = parseCaptionRaw(raw, fmt);
+      if (parsed.text && parsed.text.length > 50) return { text: parsed.text, cues: parsed.cues, lang, source: `timedtext:${fmt}` };
     }
   }
   // b) auto (ASR)
@@ -175,24 +254,18 @@ async function getCaptionsViaTimedText(id) {
     for (const fmt of FMTS) {
       const url = `https://www.youtube.com/api/timedtext?caps=asr&lang=${encodeURIComponent(lang)}&v=${id}&fmt=${fmt}`;
       const raw = await fetchTEXT(url);
-      const txt = parseTimedTextRaw(raw, fmt);
-      if (txt && txt.length > 50) return { text: txt, lang: `${lang} (asr)`, source: `timedtext-asr:${fmt}` };
+      const parsed = parseCaptionRaw(raw, fmt);
+      if (parsed.text && parsed.text.length > 50) return { text: parsed.text, cues: parsed.cues, lang: `${lang} (asr)`, source: `timedtext-asr:${fmt}` };
     }
   }
   // c) traduction (tlang)
   for (const tlang of LANGS) {
     const url = `https://www.youtube.com/api/timedtext?lang=en&v=${id}&fmt=vtt&tlang=${encodeURIComponent(tlang)}`;
     const raw = await fetchTEXT(url);
-    const txt = vttToPlain(raw);
-    if (txt && txt.length > 50) return { text: txt, lang: `tlang:${tlang}`, source: `timedtext-tlang:vtt` };
+    const parsed = parseCaptionRaw(raw, "vtt");
+    if (parsed.text && parsed.text.length > 50) return { text: parsed.text, cues: parsed.cues, lang: `tlang:${tlang}`, source: `timedtext-tlang:vtt` };
   }
-  return { text: "", lang: null, source: null };
-}
-function parseTimedTextRaw(raw, fmt) {
-  if (!raw) return "";
-  if (fmt === "vtt") return vttToPlain(raw);
-  if (fmt === "json3") return json3ToPlain(raw);
-  return xmlToPlain(raw); // ttml
+  return { text: "", lang: null, source: null, cues: [] };
 }
 
 // ---------- Streams pour OCR ----------
@@ -372,48 +445,59 @@ export default async function handler(req, res) {
     const invid    = await getInvidiousVideo(id);
 
     // 3) Captions — multi-voies (lib, ytdl, timedtext, piped, invidious)
-    let transcript = { text: "", lang: null, source: null };
+    let transcript = { text: "", lang: null, source: null, cues: [] };
 
-    transcript = await getCaptionsViaLib(id);
-    if (!transcript.text) transcript = await getCaptionsViaYtdlInfo(meta.rawInfo);
-    if (!transcript.text) transcript = await getCaptionsViaTimedText(id);
+    let cap = await getCaptionsViaLib(id);
+    if (cap?.text) transcript = cap;
+    if (!transcript.text) {
+      cap = await getCaptionsViaYtdlInfo(meta.rawInfo);
+      if (cap?.text) transcript = cap;
+    }
+    if (!transcript.text) {
+      cap = await getCaptionsViaTimedText(id);
+      if (cap?.text) transcript = cap;
+    }
     if (!transcript.text && piped.data?.captions?.length) {
       const pref = piped.data.captions.find(c => /french/i.test(c.label)) || piped.data.captions[0];
-      if (pref) transcript = { text: await getPipedCaptions(piped.host, id, pref.label), lang: pref.label, source: "piped" };
+      if (pref) {
+        const parsed = await getPipedCaptions(piped.host, id, pref.label);
+        transcript = { ...parsed, lang: pref.label, source: "piped" };
+      }
     }
     if (!transcript.text && invid.data?.captions?.length) {
       const pref = invid.data.captions.find(c => /french|fr/i.test(c.label || c.language)) || invid.data.captions[0];
-      if (pref) transcript = { text: await getInvidiousCaptions(invid.host, id, pref.label || pref.language || "French"), lang: pref.label || pref.language, source: "invidious" };
+      if (pref) {
+        const parsed = await getInvidiousCaptions(invid.host, id, pref.label || pref.language || "French");
+        transcript = { ...parsed, lang: pref.label || pref.language, source: "invidious" };
+      }
+    }
+    transcript.cues = Array.isArray(transcript.cues) ? transcript.cues.filter(c => c && c.text) : [];
+
+    // 4) Sources textuelles agrégées
+    const textSources = [];
+    if (meta.title) {
+      textSources.push({ id: "title", type: "title", label: "Titre YouTube", text: meta.title, weight: 1.3 });
+    }
+    const pipedDesc = typeof piped.data?.description === "string" ? piped.data.description : "";
+    if (pipedDesc) {
+      const label = `Description (${(piped.host || "piped").replace(/^https?:\/\//, "")})`;
+      textSources.push({ id: "piped-desc", type: "description", label, text: pipedDesc, weight: 1 });
+    }
+    const invidDesc = typeof invid.data?.description === "string" ? invid.data.description : "";
+    if (invidDesc && invidDesc !== pipedDesc) {
+      const label = `Description (${(invid.host || "invidious").replace(/^https?:\/\//, "")})`;
+      textSources.push({ id: "invid-desc", type: "description", label, text: invidDesc, weight: 0.9 });
+    }
+    if (readable) {
+      textSources.push({ id: "readable", type: "readable", label: "Page YouTube lisible", text: readable, weight: 0.8 });
+    }
+    if (transcript.text) {
+      const langLabel = transcript.lang ? `Transcript (${transcript.lang})` : "Transcript";
+      textSources.push({ id: "transcript", type: "transcript", label: langLabel, text: transcript.text, cues: transcript.cues, weight: 2.3 });
     }
 
-    // 4) Texte assemblé (titre + descriptions + readable + transcript)
-    const assembled = [
-      meta.title || "",
-      piped.data?.description || "",
-      invid.data?.description || "",
-      readable || "",
-      transcript.text || ""
-    ].join("\n");
-
-    // 5) DofusBook + évidences
-    const dofusbooks = findDofusbookLinks(assembled);
-    const evidences  = gatherEvidences(assembled, 24);
-
-    // 6) Items depuis le texte (ordre : slot-cap > alias > exact > fuzzy)
-    const aliasHits   = scanAliases(assembled);
-    const directHits  = scanKnownItemsBySubstring(assembled);
-    const slotCapHits = scanSlotNamePatterns(assembled);
-    const textCand    = extractItemCandidates(assembled);
-    let   matchedText = normalizeItems(textCand);
-    let   matched     = dedupeByName([ ...slotCapHits, ...aliasHits, ...directHits, ...matchedText ]);
-
-    // 7) Exos + éléments (sur TOUT le texte)
-    const exos = detectExos(assembled);
-    const { ordered: elements, signals: elementSignals } = inferElementsFromText(assembled);
-    const klass = inferClassFromText(assembled);
-
-    // 8) OCR best-effort (sur flux Piped/Invidious/YouTube + fallback local ytdl)
-    let tmpDir = null, usedFormat = null, ocr = [], ocrCandidates = [], ocrMatches = [];
+    // 5) OCR best-effort (sur flux Piped/Invidious/YouTube + fallback local ytdl)
+    let tmpDir = null, usedFormat = null, ocr = [], ocrCandidates = [], ocrMatches = [], ocrText = "";
     try {
       const { tmpDir: dir, files, tried } = await tryFramesAnySource({
         id, ytFormats: meta.formats, piped, invid,
@@ -422,7 +506,7 @@ export default async function handler(req, res) {
       });
       tmpDir = dir; usedFormat = tried;
       ocr = await ocrFiles(files);
-      const ocrText = ocr.map(x => x.text).join("\n");
+      ocrText = ocr.map(x => x.text).join("\n");
       ocrCandidates = extractItemCandidates(ocrText);
       ocrMatches = normalizeItems(ocrCandidates);
     } catch (e) {
@@ -436,7 +520,37 @@ export default async function handler(req, res) {
       } catch {}
     }
 
-    // 9) Fusion finale items (priorité OCR)
+    const ocrCues = (ocr || []).map((entry, index) => {
+      const seconds = fps > 0 ? Number((index / fps).toFixed(2)) : null;
+      return { start: seconds, end: seconds != null ? seconds + (fps > 0 ? 1 / fps : 0) : null, text: entry.text };
+    }).filter(c => c.text && c.start != null);
+    if (ocrText.trim()) {
+      const label = `OCR vidéo${usedFormat ? ` (${usedFormat})` : ""}`;
+      textSources.push({ id: "ocr", type: "ocr", label, text: ocrText, cues: ocrCues, weight: 2.6 });
+    }
+
+    // 6) Texte consolidé pour l'analyse
+    const assembled = textSources.map(src => src.text || "").filter(Boolean).join("\n");
+
+    // 7) DofusBook + évidences
+    const dofusbooks = findDofusbookLinks(assembled);
+    const evidences  = gatherEvidences(textSources, 32);
+    const presentationMoments = detectStuffMoments(textSources, { limit: 5 });
+
+    // 8) Items depuis le texte (ordre : slot-cap > alias > exact > fuzzy)
+    const aliasHits   = scanAliases(assembled);
+    const directHits  = scanKnownItemsBySubstring(assembled);
+    const slotCapHits = scanSlotNamePatterns(assembled);
+    const textCand    = extractItemCandidates(assembled);
+    let   matchedText = normalizeItems(textCand);
+    let   matched     = dedupeByName([ ...slotCapHits, ...aliasHits, ...directHits, ...matchedText ]);
+
+    // 9) Exos + éléments (sur TOUT le texte consolidé)
+    const exos = detectExos(assembled);
+    const { ordered: elements, signals: elementSignals } = inferElementsFromText(assembled);
+    const klass = inferClassFromText(assembled);
+
+    // 10) Fusion finale items (priorité OCR)
     const items = dedupeByName([
       ...(ocrMatches || []),
       ...(slotCapHits || []),
@@ -445,9 +559,20 @@ export default async function handler(req, res) {
       ...(matchedText || [])
     ]).map(m => ({
       slot: m.slot, name: m.name, confidence: m.confidence,
-      source: m.source || (ocrMatches.length ? "ocr+fuzzy" : "text+fuzzy"),
+      source: m.source || (ocrMatches.some(ocrHit => ocrHit.name === m.name) ? "ocr+fuzzy" : "text+fuzzy"),
       raw: m.raw, proof: m.proof || null
     }));
+
+    const transcriptPublic = {
+      text: transcript.text,
+      length_chars: transcript.text ? transcript.text.length : 0,
+      lang: transcript.lang,
+      source: transcript.source,
+      cues_count: transcript.cues.length,
+      has_timing: transcript.cues.length > 0,
+      is_translation: /tlang/i.test(`${transcript.lang || ""} ${transcript.source || ""}`),
+      is_asr: /asr|auto/i.test(`${transcript.lang || ""} ${transcript.source || ""}`)
+    };
 
     const payload = {
       video: {
@@ -458,7 +583,9 @@ export default async function handler(req, res) {
       },
       sources: {
         piped: !!piped.data, invidious: !!invid.data, readable: !!readable,
-        transcript_source: transcript.source, transcript_lang: transcript.lang
+        transcript_source: transcript.source, transcript_lang: transcript.lang,
+        transcript_has_timing: transcriptPublic.has_timing,
+        transcript_is_translation: transcriptPublic.is_translation
       },
       dofusbook_url: dofusbooks[0] || null,
       class: klass,
@@ -469,16 +596,17 @@ export default async function handler(req, res) {
       exos,
       stats_synthese: {},
       evidences,
-      transcript: {
-        text: transcript.text,
-        length_chars: transcript.text ? transcript.text.length : 0
-      },
+      presentation_moments: presentationMoments,
+      transcript: transcriptPublic,
       explanation: null,
       debug: {
         used_format: usedFormat,
         text_candidates: textCand.length,
         ocr_frames: ocr.length,
         ocr_candidates: ocrCandidates.length,
+        evidence_count: evidences.length,
+        presentation_moments: presentationMoments.length,
+        text_sources: textSources.length,
         warns
       }
     };
