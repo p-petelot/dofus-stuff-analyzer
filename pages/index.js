@@ -85,7 +85,38 @@ function SourceBadges({ sources }) {
     transcript_lang,
     transcript_has_timing,
     transcript_is_translation,
+    speech_status,
+    speech_provider,
+    speech_model,
   } = sources;
+  const speechTone =
+    speech_status === "ok"
+      ? "success"
+      : speech_status === "error"
+      ? "warning"
+      : speech_status === "not_configured"
+      ? "warning"
+      : speech_status === "configured"
+      ? "info"
+      : speech_status === "empty"
+      ? "muted"
+      : "muted";
+  const speechLabel = (() => {
+    switch (speech_status) {
+      case "ok":
+        return `ASR ${speech_provider || "audio"}`;
+      case "configured":
+        return "ASR prêt";
+      case "empty":
+        return "ASR sans texte";
+      case "error":
+        return "ASR erreur";
+      case "not_configured":
+        return "ASR à configurer";
+      default:
+        return "ASR inactif";
+    }
+  })();
   return (
     <div className="tagrow tagrow--wrap">
       <Tag tone={readable ? "success" : "muted"} icon="📰">
@@ -112,6 +143,10 @@ function SourceBadges({ sources }) {
           Traduction auto
         </Tag>
       ) : null}
+      <Tag tone={speechTone} icon="🎙️">
+        {speechLabel}
+        {speech_model ? <span className="tag__meta tag__meta--soft">{speech_model}</span> : null}
+      </Tag>
     </div>
   );
 }
@@ -185,34 +220,311 @@ function ExoBadges({ exos }) {
 }
 
 function EvidenceList({ evidences }) {
-  if (!evidences?.length) {
-    return <p className="caption">Aucune ligne probante trouvée.</p>;
-  }
+  const [query, setQuery] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("all");
+
+  const sourceStats = useMemo(() => {
+    if (!Array.isArray(evidences)) return [];
+    const counts = new Map();
+    for (const ev of evidences) {
+      const key = ev?.source || "Autre";
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([source, count]) => ({ source, count }))
+      .sort((a, b) => b.count - a.count || a.source.localeCompare(b.source))
+      .slice(0, 6);
+  }, [evidences]);
+
+  const filtered = useMemo(() => {
+    let base = Array.isArray(evidences) ? [...evidences] : [];
+    if (sourceFilter !== "all") {
+      base = base.filter((ev) => (ev?.source || "Autre") === sourceFilter);
+    }
+    if (query.trim()) {
+      const q = query.trim().toLowerCase();
+      base = base.filter((ev) => {
+        const text = (ev?.text || "").toLowerCase();
+        const src = (ev?.source || "").toLowerCase();
+        return text.includes(q) || src.includes(q);
+      });
+    }
+    return base;
+  }, [evidences, query, sourceFilter]);
+
+  const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const highlight = (text) => {
+    if (!query.trim()) return text;
+    const safe = escapeRegExp(query.trim());
+    if (!safe) return text;
+    const parts = text.split(new RegExp(`(${safe})`, "ig"));
+    const needle = query.trim().toLowerCase();
+    return parts.map((part, idx) =>
+      part.toLowerCase() === needle ? (
+        <mark key={idx} className="highlight">{part}</mark>
+      ) : (
+        <span key={idx}>{part}</span>
+      )
+    );
+  };
+
   return (
-    <ul className="evidence-list">
-      {evidences.map((e, i) => (
-        <li key={i} className="evidence">
-          <div className="evidence__meta">
-            {e.timestamp ? (
-              <Tag tone="info" subtle icon="⏱️">
-                {e.timestamp}
-              </Tag>
-            ) : null}
-            {e.source ? (
-              <Tag tone="neutral" subtle icon="🧾">
-                {e.source}
-              </Tag>
-            ) : null}
-            {typeof e.score === "number" ? (
-              <Tag tone="accent" subtle icon="📈">
-                Indice {e.score.toFixed(1)}
-              </Tag>
-            ) : null}
+    <div className="evidence-panel">
+      <div className="evidence-toolbar">
+        <div className="evidence-count">
+          <span className="caption">Total</span>
+          <strong>{evidences?.length || 0}</strong>
+        </div>
+        <div className="evidence-filters">
+          {sourceStats.map((stat) => (
+            <button
+              key={stat.source}
+              type="button"
+              className={`chip ${sourceFilter === stat.source ? "chip--active" : ""}`}
+              onClick={() => setSourceFilter((prev) => (prev === stat.source ? "all" : stat.source))}
+            >
+              {stat.source}
+              <span className="chip__count">{stat.count}</span>
+            </button>
+          ))}
+          {sourceFilter !== "all" ? (
+            <button type="button" className="chip chip--ghost" onClick={() => setSourceFilter("all")}>
+              Réinitialiser
+            </button>
+          ) : null}
+        </div>
+        <div className="evidence-search">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Filtrer un mot-clé…"
+            spellCheck={false}
+          />
+          {query ? (
+            <button type="button" className="chip chip--ghost" onClick={() => setQuery("")}>
+              Effacer
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <div className="evidence-scroll">
+        {filtered.length ? (
+          <ul className="evidence-list">
+            {filtered.map((e, i) => (
+              <li key={`${e.source || "evidence"}-${i}`} className="evidence">
+                <div className="evidence__meta">
+                  {e.timestamp ? (
+                    <Tag tone="info" subtle icon="⏱️">
+                      {e.timestamp}
+                    </Tag>
+                  ) : null}
+                  {e.source ? (
+                    <Tag tone="neutral" subtle icon="🧾">
+                      {e.source}
+                    </Tag>
+                  ) : null}
+                  {typeof e.score === "number" ? (
+                    <Tag tone="accent" subtle icon="📈">
+                      Indice {e.score.toFixed(1)}
+                    </Tag>
+                  ) : null}
+                </div>
+                <p className="evidence__text">{highlight(e.text || "")}</p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="caption">Aucun indice ne correspond à ce filtre.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SpeechInsights({ speech }) {
+  if (!speech) {
+    return <p className="caption">Analyse audio indisponible.</p>;
+  }
+
+  const status = speech.status || "missing";
+  const providerLabel = speech.provider_label || (speech.provider ? `ASR ${speech.provider}` : "Analyse audio");
+  const statusTone =
+    status === "ok"
+      ? "success"
+      : status === "error"
+      ? "warning"
+      : status === "not_configured"
+      ? "warning"
+      : "muted";
+  const statusText =
+    {
+      ok: "Analyse audio activée",
+      empty: "Aucun segment exploitable",
+      error: "Erreur de transcription",
+      not_configured: "ASR non configuré",
+      configured: "ASR prêt",
+    }[status] || status;
+
+  const providerTone =
+    status === "ok"
+      ? "success"
+      : status === "error"
+      ? "warning"
+      : status === "not_configured"
+      ? "warning"
+      : "muted";
+
+  const ratio = typeof speech.coverage_ratio === "number" ? Math.round(Math.max(0, Math.min(1, speech.coverage_ratio)) * 100) : null;
+  const rawConfidence = typeof speech.avg_confidence === "number" ? Math.max(0, Math.min(1, speech.avg_confidence)) : null;
+  const avgConfidence = rawConfidence != null ? Math.round(rawConfidence * 100) : null;
+  const segments = speech.segment_count ?? (speech.cues?.length ?? 0);
+  const keywords = Array.isArray(speech.keywords) ? speech.keywords : [];
+  const highlights = Array.isArray(speech.highlights) ? speech.highlights.slice(0, 6) : [];
+  const notes = Array.isArray(speech.notes) ? speech.notes : [];
+  const moments = Array.isArray(speech.moments) ? speech.moments.slice(0, 4) : [];
+
+  const formatDuration = (seconds) => {
+    if (typeof seconds !== "number" || Number.isNaN(seconds)) return null;
+    const total = Math.round(seconds);
+    const minutes = Math.floor(total / 60);
+    const secs = total % 60;
+    if (minutes > 0) {
+      return `${minutes}m${secs.toString().padStart(2, "0")}s`;
+    }
+    return `${secs}s`;
+  };
+
+  const durationLabel = formatDuration(speech.duration_seconds);
+
+  return (
+    <div className="speech-panel">
+      <div className="speech-header">
+        <div className="speech-badges">
+          <Tag tone={providerTone} icon="🎙️">
+            {providerLabel}
+            {speech.model ? <span className="tag__meta tag__meta--soft">{speech.model}</span> : null}
+          </Tag>
+          <Tag tone={statusTone} subtle icon={status === "ok" ? "✅" : "⚠️"}>
+            {statusText}
+          </Tag>
+        </div>
+        {status === "ok" ? (
+          <div className="speech-metrics">
+            <div className="metric">
+              <span className="metric__label">Segments</span>
+              <strong>{segments}</strong>
+            </div>
+            <div className="metric">
+              <span className="metric__label">Couverture</span>
+              <strong>{ratio != null ? `${ratio}%` : "—"}</strong>
+            </div>
+            <div className="metric">
+              <span className="metric__label">Confiance</span>
+              <strong>{avgConfidence != null ? `${avgConfidence}%` : "—"}</strong>
+            </div>
+            <div className="metric">
+              <span className="metric__label">Durée</span>
+              <strong>{durationLabel || "—"}</strong>
+            </div>
           </div>
-          <p className="evidence__text">{e.text}</p>
-        </li>
-      ))}
-    </ul>
+        ) : null}
+      </div>
+
+      {status === "ok" ? (
+        <>
+          <div className="speech-keywords">
+            <span className="caption caption--label">Mots-clés audio</span>
+            {keywords.length ? (
+              <div className="tagrow tagrow--wrap" style={{ marginTop: 8 }}>
+                {keywords.map((kw) => (
+                  <Tag key={kw.term} tone="accent" subtle icon="🔑">
+                    {kw.term}
+                    <span className="tag__meta">×{kw.count}</span>
+                  </Tag>
+                ))}
+              </div>
+            ) : (
+              <p className="caption">Aucun mot-clé distinct n’a été détecté.</p>
+            )}
+          </div>
+
+          {highlights.length ? (
+            <div className="speech-highlights">
+              <span className="caption caption--label">Phrases probantes (audio)</span>
+              <ul>
+                {highlights.map((h, idx) => (
+                  <li key={`${h.source || "highlight"}-${idx}`} className="speech-highlight">
+                    <div className="speech-highlight__meta">
+                      {h.timestamp ? (
+                        <Tag tone="info" subtle icon="⏱️">
+                          {h.timestamp}
+                        </Tag>
+                      ) : null}
+                      {h.source ? (
+                        <Tag tone="neutral" subtle icon="🧾">
+                          {h.source}
+                        </Tag>
+                      ) : null}
+                      {typeof h.score === "number" ? (
+                        <Tag tone="accent" subtle icon="📈">
+                          {h.score.toFixed(1)}
+                        </Tag>
+                      ) : null}
+                    </div>
+                    <p>{h.text}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {moments.length ? (
+            <div className="speech-moments">
+              <span className="caption caption--label">Timecodes audio</span>
+              <div className="speech-moments__row">
+                {moments.map((m, idx) => (
+                  <div key={`${m.timestamp || idx}`} className="speech-moment">
+                    <Tag tone="info" subtle icon="🎯">
+                      {m.timestamp || "—"}
+                    </Tag>
+                    <p>{m.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {notes.length ? (
+            <ul className="speech-notes">
+              {notes.map((note, idx) => (
+                <li key={idx}>{note}</li>
+              ))}
+            </ul>
+          ) : null}
+
+          {speech.text ? (
+            <details className="speech-raw">
+              <summary>Transcript audio détaillé</summary>
+              <div className="speech-raw__actions">
+                <CopyButton text={speech.text} label="Copier l'audio" />
+              </div>
+              <pre className="pre speech__text">{speech.text}</pre>
+            </details>
+          ) : null}
+        </>
+      ) : (
+        <div className="speech-empty">
+          <p className="caption">{statusText}.</p>
+          {notes.length ? (
+            <ul className="speech-notes">
+              {notes.map((note, idx) => (
+                <li key={idx}>{note}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -340,6 +652,12 @@ export default function Home() {
                     <Tag tone={out.dofusbook_url ? "success" : "muted"} icon="📘">
                       {out.dofusbook_url ? "DofusBook détecté" : "DofusBook manquant"}
                     </Tag>
+                    <Tag
+                      tone={out.speech?.status === "ok" ? "success" : out.speech?.status === "error" ? "warning" : "muted"}
+                      icon="🎧"
+                    >
+                      {out.speech?.status === "ok" ? "Audio analysé" : "Audio inactif"}
+                    </Tag>
                   </div>
                   <ElementBadges elements={out.element_build} signals={out.element_signals} />
                   <SourceBadges sources={out.sources} />
@@ -421,11 +739,18 @@ export default function Home() {
             </section>
 
             <section className="grid">
-              <div className="card">
+              <div className="card card--evidence">
                 <h2>🔎 Indices textuels</h2>
                 <EvidenceList evidences={out.evidences} />
               </div>
 
+              <div className="card card--speech">
+                <h2>🎧 Analyse audio</h2>
+                <SpeechInsights speech={out.speech} />
+              </div>
+            </section>
+
+            <section className="grid">
               <div className="card">
                 <div className="card-heading">
                   <h2>🗒️ Transcript</h2>
@@ -470,9 +795,7 @@ export default function Home() {
                   <p className="caption">Transcript indisponible via YouTube/Piped/Invidious/timedtext pour cette vidéo.</p>
                 )}
               </div>
-            </section>
 
-            <section className="grid">
               <div className="card">
                 <h2>🧪 Debug</h2>
                 <p className="caption">
@@ -480,7 +803,9 @@ export default function Home() {
                 </p>
                 {out.debug?.warns?.length ? <pre className="pre">{JSON.stringify(out.debug.warns, null, 2)}</pre> : null}
               </div>
+            </section>
 
+            <section className="grid">
               <div className="card">
                 <h2>📝 JSON brut</h2>
                 <details>
