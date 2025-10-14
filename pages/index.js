@@ -83,9 +83,11 @@ function SourceBadges({ sources }) {
     piped,
     piped_host,
     piped_note,
+    piped_attempts = 0,
     invidious,
     invidious_host,
     invidious_note,
+    invidious_attempts = 0,
     readable,
     readable_status,
     readable_note,
@@ -135,15 +137,21 @@ function SourceBadges({ sources }) {
       return value.replace(/^https?:\/\//, "");
     }
   };
-  const firstDetail = (note) => {
+  const attemptsLabel = (count) => {
+    if (!count || count <= 1) return "";
+    return ` (+${count - 1} tentative${count - 1 > 1 ? "s" : ""})`;
+  };
+  const firstDetail = (note, attemptsCount = 0) => {
     if (!note) return null;
     const [first] = note.split('|');
     if (!first) return null;
     const colon = first.indexOf(':');
     if (colon !== -1) {
-      return first.slice(colon + 1).trim();
+      const base = first.slice(colon + 1).trim();
+      return base ? `${base}${attemptsLabel(attemptsCount)}` : null;
     }
-    return first.trim();
+    const base = first.trim();
+    return base ? `${base}${attemptsLabel(attemptsCount)}` : null;
   };
   const readableTone = readable ? "success" : readable_status === "failed" ? "warning" : "muted";
   const pipedTone = piped ? "success" : piped_note ? "warning" : "muted";
@@ -174,7 +182,7 @@ function SourceBadges({ sources }) {
           </>
         ) : null}
         {!piped && piped_note ? (
-          <span className="tag__meta">{firstDetail(piped_note)}</span>
+          <span className="tag__meta">{firstDetail(piped_note, piped_attempts)}</span>
         ) : null}
       </Tag>
       <Tag tone={invidTone} icon="🌀" title={invidious_note || undefined}>
@@ -186,7 +194,7 @@ function SourceBadges({ sources }) {
           </>
         ) : null}
         {!invidious && invidious_note ? (
-          <span className="tag__meta">{firstDetail(invidious_note)}</span>
+          <span className="tag__meta">{firstDetail(invidious_note, invidious_attempts)}</span>
         ) : null}
       </Tag>
       <Tag tone={transcript_source ? "info" : "warning"} icon="💬" title={transcript_source || undefined}>

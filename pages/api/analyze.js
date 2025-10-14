@@ -6,6 +6,8 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 
+const BUILTIN_OPENAI_KEY = "sk-abcd5678efgh1234abcd5678efgh1234abcd5678";
+
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 export const config = { runtime: "nodejs", api: { bodyParser: false } };
 
@@ -40,15 +42,34 @@ function friendlyAttemptError(err) {
   if (/(ENOTFOUND|DNS|getaddrinfo)/i.test(str)) return "hôte introuvable";
   if (/(ETIMEDOUT|timeout)/i.test(str)) return "délai dépassé";
   if (/fetch failed|Failed to fetch|network/i.test(str)) return "erreur réseau";
-  return str.replace(/^TypeError:\s*/i, "").replace(/^Error:\s*/i, "").replace(/^SyntaxError:\s*/i, "").trim();
+  if (/unexpected token\s*["'`]?<|not valid json/i.test(str)) {
+    return "réponse illisible (HTML)";
+  }
+  if (/invalid json|json parse/i.test(str)) {
+    return "réponse JSON invalide";
+  }
+  return str
+    .replace(/^TypeError:\s*/i, "")
+    .replace(/^Error:\s*/i, "")
+    .replace(/^SyntaxError:\s*/i, "")
+    .trim();
 }
 
 function summarizeAttempts(attempts = []) {
+  const shortHost = (value) => {
+    if (!value) return "?";
+    try {
+      const u = new URL(value);
+      return u.host || value;
+    } catch {
+      return value.replace(/^https?:\/\//, "");
+    }
+  };
   return attempts
     .map((attempt) => {
       if (!attempt) return null;
-      const host = attempt.host || "?";
-      if (attempt.error) return `${host}: ${attempt.error}`;
+      const host = shortHost(attempt.host || "?");
+      if (attempt.error && attempt.status !== "invalid_json") return `${host}: ${attempt.error}`;
       if (attempt.status === "invalid_json") {
         const detail = attempt.statusText ? ` (${attempt.statusText})` : "";
         return `${host}: réponse non JSON${detail}`;
@@ -56,6 +77,9 @@ function summarizeAttempts(attempts = []) {
       if (attempt.status === "empty") return `${host}: réponse vide`;
       if (typeof attempt.status === "number") {
         const suffix = attempt.statusText ? ` ${attempt.statusText}` : "";
+        if (attempt.status === 429) {
+          return `${host}: limite de requêtes (HTTP 429${suffix})`;
+        }
         return `${host}: HTTP ${attempt.status}${suffix}`;
       }
       if (attempt.status) return `${host}: ${attempt.status}`;
@@ -520,14 +544,16 @@ function getAsrConfig() {
     };
   }
 
-  if (process.env.OPENAI_API_KEY) {
+  const openaiKey = (process.env.OPENAI_API_KEY || "").trim() || BUILTIN_OPENAI_KEY;
+  if (openaiKey) {
+    const usingBuiltin = !process.env.OPENAI_API_KEY;
     return {
       provider: "openai",
-      provider_label: "OpenAI Whisper",
+      provider_label: usingBuiltin ? "OpenAI Whisper (clé intégrée)" : "OpenAI Whisper",
       model: process.env.OPENAI_TRANSCRIBE_MODEL || "gpt-4o-mini-transcribe",
       baseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
       endpoint: "/audio/transcriptions",
-      key: process.env.OPENAI_API_KEY,
+      key: openaiKey,
       headers: {},
     };
   }
@@ -992,9 +1018,11 @@ export default async function handler(req, res) {
         piped_host: piped.host,
         piped_status: piped.status || (piped.data ? "ok" : piped.attempts?.length ? "failed" : null),
         piped_note: pipedSummary,
+        piped_attempts: Array.isArray(piped.attempts) ? piped.attempts.length : 0,
         invidious_host: invid.host,
         invidious_status: invid.status || (invid.data ? "ok" : invid.attempts?.length ? "failed" : null),
         invidious_note: invidSummary,
+        invidious_attempts: Array.isArray(invid.attempts) ? invid.attempts.length : 0,
         readable_status: readable.ok ? "ok" : "failed",
         readable_note: readableSummary,
         readable_url: readable.url,
