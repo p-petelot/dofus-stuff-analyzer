@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Head from "next/head";
 
 const BRAND_NAME = "KrosPalette";
-const MAX_COLORS = 8;
-const MAX_DIMENSION = 320;
+const MAX_COLORS = 6;
+const MAX_DIMENSION = 280;
 const BUCKET_SIZE = 24;
 
 function componentToHex(value) {
@@ -245,14 +245,14 @@ export default function Home() {
       }
       setError(null);
       setCopiedCode(value);
-      setToast({ id: Date.now(), message: `${value} copié dans le presse-papiers` });
+      setToast({ id: Date.now(), label: "Couleur copiée", value });
     } catch (err) {
       console.error(err);
       try {
         fallbackCopy(value);
         setError(null);
         setCopiedCode(value);
-        setToast({ id: Date.now(), message: `${value} copié dans le presse-papiers` });
+        setToast({ id: Date.now(), label: "Couleur copiée", value });
       } catch (fallbackErr) {
         console.error(fallbackErr);
         setError("Impossible de copier dans le presse-papiers.");
@@ -270,8 +270,10 @@ export default function Home() {
       return { left: "50%", top: "50%" };
     }
 
-    const radius = total >= 8 ? 41 : total >= 5 ? 38 : 34;
-    const angle = (index / total) * 360 - 90;
+    const radius =
+      total <= 2 ? 30 : total === 3 ? 34 : total === 4 ? 36 : total === 5 ? 38 : 40;
+    const evenOffset = total % 2 === 0 ? 180 / total : 0;
+    const angle = (index / total) * 360 - 90 + evenOffset;
     const radians = (angle * Math.PI) / 180;
     const x = 50 + radius * Math.cos(radians);
     const y = 50 + radius * Math.sin(radians);
@@ -298,7 +300,15 @@ export default function Home() {
       </Head>
       <main className="page">
         <div className={`toast-tray${toast ? " toast-tray--visible" : ""}`} aria-live="polite">
-          {toast ? <div className="toast">{toast.message}</div> : null}
+          {toast ? (
+            <div className="toast">
+              <span className="toast__icon" aria-hidden="true">✓</span>
+              <div className="toast__body">
+                <span className="toast__title">{toast.label}</span>
+                <span className="toast__value">{toast.value}</span>
+              </div>
+            </div>
+          ) : null}
         </div>
         <header className="hero">
           <h1>{BRAND_NAME}</h1>
@@ -399,7 +409,6 @@ export default function Home() {
                         title="Cliquer pour copier"
                       >
                         <span className="swatch-hex__value">{value}</span>
-                        {isCopied ? <span className="swatch-hex__feedback">Copié !</span> : null}
                       </button>
                     </li>
                   );
