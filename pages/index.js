@@ -333,6 +333,7 @@ function normalizeDofusItem(item, type) {
     ankamaId,
     signature: null,
     shape: null,
+    tones: null,
   };
 }
 
@@ -340,22 +341,28 @@ const BRAND_NAME = "KrosPalette";
 const MAX_COLORS = 6;
 const MAX_DIMENSION = 280;
 const BUCKET_SIZE = 24;
-const SIGNATURE_GRID_SIZE = 10;
+const SIGNATURE_GRID_SIZE = 12;
 const SHAPE_PROFILE_SIZE = 28;
-const PALETTE_SCORE_WEIGHT = 0.38;
-const SIGNATURE_SCORE_WEIGHT = 0.37;
-const SHAPE_SCORE_WEIGHT = 0.25;
+const HUE_BUCKETS = 12;
+const HUE_NEUTRAL_INDEX = HUE_BUCKETS;
+const MAX_TONE_DISTANCE = 2;
+const PALETTE_SCORE_WEIGHT = 0.28;
+const SIGNATURE_SCORE_WEIGHT = 0.32;
+const SHAPE_SCORE_WEIGHT = 0.18;
+const TONE_SCORE_WEIGHT = 0.22;
 const MAX_COLOR_DISTANCE = Math.sqrt(255 * 255 * 3);
 const PALETTE_COVERAGE_THRESHOLD = 56;
 const PALETTE_COVERAGE_WEIGHT = 0.32;
 const SIGNATURE_CONFIDENCE_DISTANCE = 160;
-const SIGNATURE_CONFIDENCE_WEIGHT = 0.22;
-const SIGNATURE_STRONG_THRESHOLD = 24;
-const SIGNATURE_PERFECT_THRESHOLD = 14;
+const SIGNATURE_CONFIDENCE_WEIGHT = 0.24;
+const SIGNATURE_STRONG_THRESHOLD = 20;
+const SIGNATURE_PERFECT_THRESHOLD = 12;
 const MAX_SHAPE_DISTANCE = 1;
 const SHAPE_CONFIDENCE_DISTANCE = 0.32;
 const SHAPE_CONFIDENCE_WEIGHT = 0.16;
 const SHAPE_STRONG_THRESHOLD = 0.18;
+const TONE_CONFIDENCE_DISTANCE = 0.72;
+const TONE_CONFIDENCE_WEIGHT = 0.18;
 const MIN_ALPHA_WEIGHT = 0.05;
 const MAX_RECOMMENDATIONS = 1;
 
@@ -717,6 +724,158 @@ function colorDistance(colorA, colorB) {
   return Math.sqrt(dr * dr + dg * dg + db * db);
 }
 
+function rgbToHsl(r, g, b) {
+  const rr = r / 255;
+  const gg = g / 255;
+  const bb = b / 255;
+
+  const max = Math.max(rr, gg, bb);
+  const min = Math.min(rr, gg, bb);
+  const delta = max - min;
+
+  let h = 0;
+  if (delta !== 0) {
+    if (max === rr) {
+      h = ((gg - bb) / delta) % 6;
+    } else if (max === gg) {
+      h = (bb - rr) / delta + 2;
+    } else {
+      h = (rr - gg) / delta + 4;
+    }
+  }
+
+  const l = (max + min) / 2;
+  const s = delta === 0 ? 0 : delta / (1 - Math.abs(2 * l - 1));
+
+  return {
+    h: (h * 60 + 360) % 360,
+    s,
+    l,
+  };
+}
+
+function computeToneHistogramFromPixels(pixels, bucketCount = HUE_BUCKETS) {
+  if (!pixels || pixels.length === 0) {
+    return null;
+  }
+
+  const buckets = new Array(bucketCount + 1).fill(0);
+  let total = 0;
+
+  for (let i = 0; i < pixels.length; i += 4) {
+    const alpha = pixels[i + 3] / 255;
+    if (alpha < 0.16) {
+      continue;
+    }
+
+    const r = pixels[i];
+    const g = pixels[i + 1];
+    const b = pixels[i + 2];
+
+    const { h, s, l } = rgbToHsl(r, g, b);
+    const isNeutral = s < 0.18 || l < 0.12 || l > 0.88;
+
+    const weight = alpha * (0.7 + s * 0.6);
+    if (!Number.isFinite(weight) || weight <= 0) {
+      continue;
+    }
+
+    if (isNeutral) {
+      buckets[HUE_NEUTRAL_INDEX] += weight;
+      total += weight;
+      continue;
+    }
+
+    const segment = Math.min(bucketCount - 1, Math.floor((h / 360) * bucketCount));
+    buckets[segment] += weight;
+    total += weight;
+  }
+
+  if (total <= 0) {
+    return null;
+  }
+
+  return buckets.map((value) => value / total);
+}
+
+function computeToneDistribution(image) {
+  if (!image || typeof document === "undefined") {
+    return null;
+  }
+
+  const canvas = document.createElement("canvas");
+  const ratio = Math.min(
+    1,
+    MAX_DIMENSION / (image.width || MAX_DIMENSION),
+    MAX_DIMENSION / (image.height || MAX_DIMENSION)
+  );
+
+  const width = Math.max(1, Math.round((image.width || MAX_DIMENSION) * ratio));
+  const height = Math.max(1, Math.round((image.height || MAX_DIMENSION) * ratio));
+
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) {
+    return null;
+  }
+
+  context.drawImage(image, 0, 0, width, height);
+  const { data } = context.getImageData(0, 0, width, height);
+
+  return computeToneHistogramFromPixels(data);
+}
+
+function computeToneDistributionFromPalette(palette) {
+  if (!palette || !palette.length) {
+    return null;
+  }
+
+  const buckets = new Array(HUE_BUCKETS + 1).fill(0);
+  let total = 0;
+
+  palette.forEach((hex, index) => {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return;
+    const { h, s, l } = rgbToHsl(rgb.r, rgb.g, rgb.b);
+    const weight = 1 / (index + 1);
+    if (s < 0.18 || l < 0.12 || l > 0.88) {
+      buckets[HUE_NEUTRAL_INDEX] += weight;
+    } else {
+      const segment = Math.min(HUE_BUCKETS - 1, Math.floor((h / 360) * HUE_BUCKETS));
+      buckets[segment] += weight;
+    }
+    total += weight;
+  });
+
+  if (total <= 0) {
+    return null;
+  }
+
+  return buckets.map((value) => value / total);
+}
+
+function computeToneDistance(tonesA, tonesB) {
+  if (!Array.isArray(tonesA) || !Array.isArray(tonesB)) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const length = Math.min(tonesA.length, tonesB.length);
+  if (!length) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  let total = 0;
+  for (let i = 0; i < length; i += 1) {
+    const valueA = tonesA[i] ?? 0;
+    const valueB = tonesB[i] ?? 0;
+    total += Math.abs(valueA - valueB);
+  }
+
+  return total / length;
+}
+
 function computeSignatureDistance(signatureA, signatureB) {
   if (!Array.isArray(signatureA) || !Array.isArray(signatureB)) {
     return Number.POSITIVE_INFINITY;
@@ -759,7 +918,7 @@ function computeSignatureDistance(signatureA, signatureB) {
   return total / weightTotal;
 }
 
-function scoreItemAgainstPalette(item, palette, referenceSignature, referenceShape) {
+function scoreItemAgainstPalette(item, palette, referenceSignature, referenceShape, referenceTones) {
   let paletteScore = Number.POSITIVE_INFINITY;
   let paletteCoverage = 0;
   if (palette.length > 0 && item.palette && item.palette.length > 0) {
@@ -799,12 +958,21 @@ function scoreItemAgainstPalette(item, palette, referenceSignature, referenceSha
     shapeScore = computeShapeDistance(referenceShape, item.shape);
   }
 
+  let toneScore = Number.POSITIVE_INFINITY;
+  if (referenceTones && item) {
+    const itemTones = item.tones ?? computeToneDistributionFromPalette(item.palette);
+    if (itemTones) {
+      toneScore = computeToneDistance(referenceTones, itemTones);
+    }
+  }
+
   const paletteFinite = Number.isFinite(paletteScore);
   const signatureFinite = Number.isFinite(signatureScore);
 
   const shapeFinite = Number.isFinite(shapeScore);
+  const toneFinite = Number.isFinite(toneScore);
 
-  if (!paletteFinite && !signatureFinite && !shapeFinite) {
+  if (!paletteFinite && !signatureFinite && !shapeFinite && !toneFinite) {
     return Number.POSITIVE_INFINITY;
   }
 
@@ -817,6 +985,7 @@ function scoreItemAgainstPalette(item, palette, referenceSignature, referenceSha
   const shapeNormalized = shapeFinite
     ? Math.min(shapeScore / MAX_SHAPE_DISTANCE, 1)
     : Number.POSITIVE_INFINITY;
+  const toneNormalized = toneFinite ? Math.min(toneScore / MAX_TONE_DISTANCE, 1) : Number.POSITIVE_INFINITY;
 
   let weightedScore = 0;
   let totalWeight = 0;
@@ -834,6 +1003,11 @@ function scoreItemAgainstPalette(item, palette, referenceSignature, referenceSha
   if (shapeFinite) {
     weightedScore += shapeNormalized * SHAPE_SCORE_WEIGHT;
     totalWeight += SHAPE_SCORE_WEIGHT;
+  }
+
+  if (toneFinite) {
+    weightedScore += toneNormalized * TONE_SCORE_WEIGHT;
+    totalWeight += TONE_SCORE_WEIGHT;
   }
 
   if (totalWeight <= 0) {
@@ -869,6 +1043,16 @@ function scoreItemAgainstPalette(item, palette, referenceSignature, referenceSha
     }
   }
 
+  if (toneFinite) {
+    const toneConfidence = Math.max(0, 1 - toneScore / TONE_CONFIDENCE_DISTANCE);
+    if (toneConfidence > 0) {
+      finalScore -= toneConfidence * TONE_CONFIDENCE_WEIGHT;
+    }
+    if (toneScore < 0.18) {
+      finalScore -= 0.05;
+    }
+  }
+
   return Number.isFinite(finalScore) ? finalScore : Number.POSITIVE_INFINITY;
 }
 
@@ -886,14 +1070,15 @@ function analyzePaletteFromUrl(imageUrl) {
         const palette = extractPalette(image);
         const signature = computeImageSignature(image);
         const shape = computeShapeProfile(image);
-        resolve({ palette, signature, shape });
+        const tones = computeToneDistribution(image);
+        resolve({ palette, signature, shape, tones });
       } catch (err) {
         console.error(err);
-        resolve({ palette: [], signature: [], shape: null });
+        resolve({ palette: [], signature: [], shape: null, tones: null });
       }
     };
     image.onerror = () => {
-      resolve({ palette: [], signature: [], shape: null });
+      resolve({ palette: [], signature: [], shape: null, tones: null });
     };
     image.src = imageUrl;
   });
@@ -914,7 +1099,7 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
         return { ...item, palette: [] };
       }
 
-      const { palette: paletteEntries, signature, shape } = await analyzePaletteFromUrl(item.imageUrl);
+      const { palette: paletteEntries, signature, shape, tones } = await analyzePaletteFromUrl(item.imageUrl);
       if (shouldCancel?.()) {
         return item;
       }
@@ -932,6 +1117,7 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
         ? item.signature
         : null;
       const nextShape = shape ?? item.shape ?? null;
+      const nextTones = tones ?? item.tones ?? computeToneDistributionFromPalette(nextPalette);
 
       return {
         ...item,
@@ -939,6 +1125,7 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
         paletteSource: nextSource,
         signature: nextSignature,
         shape: nextShape,
+        tones: nextTones,
       };
     })
   );
@@ -951,6 +1138,7 @@ export default function Home() {
   const [colors, setColors] = useState([]);
   const [imageSignature, setImageSignature] = useState(null);
   const [imageShape, setImageShape] = useState(null);
+  const [imageTones, setImageTones] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
@@ -988,12 +1176,12 @@ export default function Home() {
 
     if (isProcessing) {
       let value = typeof handles.value === "number" && handles.value > 0 ? handles.value : 6;
-      value = Math.min(value, 90);
+      value = Math.min(value, 88);
       handles.value = value;
       setAnalysisProgress(value);
 
       const tick = () => {
-        value = Math.min(value + Math.random() * 6 + 2, 94);
+        value = Math.min(value + Math.random() * 3.4 + 0.9, 96);
         handles.value = value;
         setAnalysisProgress(value);
         handles.frame = window.requestAnimationFrame(tick);
@@ -1007,7 +1195,7 @@ export default function Home() {
         setAnalysisProgress(0);
         handles.value = 0;
         handles.timeout = null;
-      }, 700);
+      }, 1100);
     } else {
       handles.value = 0;
       setAnalysisProgress(0);
@@ -1040,7 +1228,7 @@ export default function Home() {
       const scoredItems = catalogItems
         .map((item) => ({
           item,
-          score: scoreItemAgainstPalette(item, colors, imageSignature, imageShape),
+          score: scoreItemAgainstPalette(item, colors, imageSignature, imageShape, imageTones),
         }))
         .sort((a, b) => a.score - b.score);
 
@@ -1050,7 +1238,7 @@ export default function Home() {
       accumulator[type] = ranked.slice(0, MAX_RECOMMENDATIONS).map(({ item }) => item);
       return accumulator;
     }, {});
-  }, [colors, imageSignature, imageShape, itemsCatalog]);
+  }, [colors, imageSignature, imageShape, imageTones, itemsCatalog]);
 
   const barbofusLink = useMemo(() => {
     if (!colors.length || !recommendations) {
@@ -1243,6 +1431,7 @@ export default function Home() {
     setCopiedCode(null);
     setImageSignature(null);
     setImageShape(null);
+    setImageTones(null);
 
     const image = new Image();
     image.crossOrigin = "anonymous";
@@ -1251,9 +1440,11 @@ export default function Home() {
         const palette = extractPalette(image);
         const signature = computeImageSignature(image);
         const shape = computeShapeProfile(image);
+        const tones = computeToneDistribution(image);
         setColors(palette);
         setImageSignature(signature.length ? signature : null);
         setImageShape(shape);
+        setImageTones(Array.isArray(tones) && tones.length ? tones : null);
         if (palette.length === 0) {
           setError("Aucune couleur dominante détectée.");
         }
@@ -1263,6 +1454,7 @@ export default function Home() {
         setColors([]);
         setImageSignature(null);
         setImageShape(null);
+        setImageTones(null);
       } finally {
         setIsProcessing(false);
       }
@@ -1273,6 +1465,7 @@ export default function Home() {
       setColors([]);
       setImageSignature(null);
       setImageShape(null);
+      setImageTones(null);
     };
     image.src = dataUrl;
   }, []);
@@ -1283,6 +1476,7 @@ export default function Home() {
         setError("Merci de choisir un fichier image.");
         setImageSignature(null);
         setImageShape(null);
+        setImageTones(null);
         return;
       }
 
@@ -1416,6 +1610,8 @@ export default function Home() {
       codeFormat === "hex" ? "translateX(0%)" : "translateX(calc(100% + 4px))",
   };
 
+  const showProgressBar = isProcessing || analysisProgress > 0;
+
   const getRingPosition = useCallback((index, total) => {
     if (total <= 1) {
       return { left: "50%", top: "50%" };
@@ -1452,6 +1648,26 @@ export default function Home() {
           content="KrosPalette extrait les couleurs dominantes de tes images pour composer des skins Dofus harmonieux."
         />
       </Head>
+      {showProgressBar ? (
+        <div className="page-progress" role="status" aria-live="polite">
+          <div className={`progress-bar${isProcessing ? " progress-bar--active" : ""}`}>
+            <div className="progress-bar__track">
+              <div
+                className="progress-bar__indicator"
+                style={{ width: `${Math.min(100, Math.max(analysisProgress, 0))}%` }}
+              />
+              <span className="progress-bar__glow" />
+            </div>
+            <span className="progress-bar__label">
+              {isProcessing
+                ? "Analyse de l'image…"
+                : analysisProgress >= 100
+                ? "Analyse terminée"
+                : "Analyse prête"}
+            </span>
+          </div>
+        </div>
+      ) : null}
       <main className="page">
         <div className={`toast-tray${toast ? " toast-tray--visible" : ""}`} aria-live="polite">
           {toast ? (
@@ -1469,26 +1685,6 @@ export default function Home() {
         </header>
 
         <section className="workspace">
-          {(isProcessing || analysisProgress > 0) && (
-            <div className="workspace__progress" role="status" aria-live="polite">
-              <div className={`progress-bar${isProcessing ? " progress-bar--active" : ""}`}>
-                <div className="progress-bar__track">
-                  <div
-                    className="progress-bar__indicator"
-                    style={{ width: `${Math.min(100, Math.max(analysisProgress, 0))}%` }}
-                  />
-                  <span className="progress-bar__glow" />
-                </div>
-                <span className="progress-bar__label">
-                  {isProcessing
-                    ? "Analyse de l'image…"
-                    : analysisProgress >= 100
-                    ? "Analyse terminée"
-                    : "Analyse prête"}
-                </span>
-              </div>
-            </div>
-          )}
           <div
             className={`dropzone${isDragging ? " dropzone--active" : ""}${imageSrc ? " dropzone--filled" : ""}`}
             onDrop={onDrop}
