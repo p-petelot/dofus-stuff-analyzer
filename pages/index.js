@@ -33,48 +33,25 @@ const CLASS_ICON = {
 };
 
 const EQUIPMENT_LAYOUT = [
-  { id: "head", label: "Coiffe", slots: ["Coiffe"] },
-  { id: "amulet", label: "Amulette", slots: ["Amulette"] },
-  { id: "ring-left", label: "Anneau gauche", slots: ["Anneau 1", "Anneau"] },
-  { id: "ring-right", label: "Anneau droite", slots: ["Anneau 2"] },
-  { id: "cape", label: "Cape", slots: ["Cape"] },
-  { id: "shield", label: "Bouclier", slots: ["Bouclier"] },
-  { id: "weapon", label: "Arme", slots: ["Arme"] },
-  { id: "belt", label: "Ceinture", slots: ["Ceinture"] },
-  { id: "boots", label: "Bottes", slots: ["Bottes"] },
-  { id: "pet", label: "Familier", slots: ["Familier"] },
-  { id: "mount", label: "Monture", slots: ["Monture"] },
-  { id: "dofus", label: "Dofus & trophées", slots: ["Dofus", "Dofus/Trophées", "Trophée"] },
-  { id: "extras", label: "Autres", slots: ["Autre"] },
+  { id: "head", label: "Coiffe", slots: ["Coiffe"], area: "head" },
+  { id: "amulet", label: "Amulette", slots: ["Amulette"], area: "amulet" },
+  { id: "ring-left", label: "Anneau gauche", slots: ["Anneau 1", "Anneau"], area: "ringLeft" },
+  { id: "ring-right", label: "Anneau droite", slots: ["Anneau 2"], area: "ringRight" },
+  { id: "cape", label: "Cape", slots: ["Cape"], area: "cape" },
+  { id: "shield", label: "Bouclier", slots: ["Bouclier"], area: "shield" },
+  { id: "weapon", label: "Arme", slots: ["Arme"], area: "weapon" },
+  { id: "belt", label: "Ceinture", slots: ["Ceinture"], area: "belt" },
+  { id: "boots", label: "Bottes", slots: ["Bottes"], area: "boots" },
+  { id: "pet", label: "Familier", slots: ["Familier"], area: "pet" },
+  { id: "mount", label: "Monture", slots: ["Monture"], area: "mount" },
+  {
+    id: "dofus",
+    label: "Dofus & trophées",
+    slots: ["Dofus", "Dofus/Trophées", "Trophée"],
+    area: "dofus",
+  },
+  { id: "extras", label: "Autres", slots: ["Autre"], area: "extras" },
 ];
-
-function groupBySlot(items = []) {
-  const m = new Map();
-  for (const it of items) {
-    const slot = it.slot || "Autre";
-    if (!m.has(slot)) m.set(slot, []);
-    m.get(slot).push(it);
-  }
-  const order = [
-    "Amulette",
-    "Coiffe",
-    "Cape",
-    "Ceinture",
-    "Bottes",
-    "Anneau 1",
-    "Anneau 2",
-    "Anneau",
-    "Bouclier",
-    "Arme",
-    "Monture",
-    "Familier",
-    "Dofus",
-    "Trophée",
-    "Dofus/Trophées",
-    "Autre",
-  ];
-  return Array.from(m.entries()).sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
-}
 
 function Tag({ children, tone = "neutral", icon, subtle, title }) {
   const cls = ["tag", `tag--${tone}`];
@@ -332,44 +309,46 @@ function EquipmentBoard({ items, preview }) {
     }
   }
 
-  const renderItems = (bucket = []) => {
+  const renderSlot = (bucket = []) => {
     if (!bucket.length) {
-      return <span className="equip-slot__empty">—</span>;
+      return <div className="equip-item equip-item--empty">Vide</div>;
     }
-    return bucket.map((item, idx) => (
-      <div key={`${item.name}-${idx}`} className="equip-item">
-        <span className="equip-item__name">{item.name}</span>
-        <ConfidenceBar value={item.confidence} />
-        <div className="equip-item__meta">
-          <span className="equip-item__source">{item.source}</span>
-          {item.proof ? (
-            <span className="equip-item__proof" title={item.proof}>
-              Preuve
-            </span>
+    const [primary, ...rest] = bucket;
+    return (
+      <>
+        <div className="equip-item equip-item--primary">
+          <span className="equip-item__name">{primary.name}</span>
+          {typeof primary.confidence === "number" ? (
+            <span className="equip-item__confidence">{Math.round(primary.confidence * 100)}%</span>
           ) : null}
         </div>
-      </div>
-    ));
+        {rest.length ? (
+          <div className="equip-item equip-item--more">+{rest.length}</div>
+        ) : null}
+      </>
+    );
   };
 
   return (
     <div className="equipment-board">
-      <div className="equipment-board__preview">
-        {preview?.thumbnail ? (
-          <div className="equipment-preview" style={{ backgroundImage: `url(${preview.thumbnail})` }} aria-hidden="true" />
-        ) : (
-          <div className="equipment-preview equipment-preview--placeholder" aria-hidden="true">
-            <span>{preview?.icon || "🧙"}</span>
-          </div>
-        )}
-        <span className="equipment-preview__caption">{preview?.label || "Aperçu"}</span>
-      </div>
-      {EQUIPMENT_LAYOUT.map((area) => (
-        <div key={area.id} className={`equip-slot equip-slot--${area.id}`}>
-          <span className="equip-slot__label">{area.label}</span>
-          <div className="equip-slot__items">{renderItems(areaMap.get(area.id))}</div>
+      <div className="equipment-board__grid">
+        <div className="equipment-preview">
+          {preview?.thumbnail ? (
+            <img src={preview.thumbnail} alt="Aperçu du stuff" />
+          ) : (
+            <div className="equipment-preview__placeholder" aria-hidden="true">
+              <span>{preview?.icon || "🧙"}</span>
+            </div>
+          )}
+          <span className="equipment-preview__label">{preview?.label || "Aperçu"}</span>
         </div>
-      ))}
+        {EQUIPMENT_LAYOUT.map((area) => (
+          <div key={area.id} className={`equip-slot equip-slot--${area.id}`} data-area={area.area}>
+            <span className="equip-slot__label">{area.label}</span>
+            <div className="equip-slot__content">{renderSlot(areaMap.get(area.id))}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -784,18 +763,6 @@ ASR_LABEL=Mon ASR`}
   );
 }
 
-function ConfidenceBar({ value }) {
-  const pct = Math.round((value || 0) * 100);
-  return (
-    <div className="confidence">
-      <div className="confidence__bar">
-        <span style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
-      </div>
-      <span className="confidence__value">{pct}%</span>
-    </div>
-  );
-}
-
 function CopyButton({ text, label = "Copier" }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -821,6 +788,7 @@ export default function Home() {
   const [out, setOut] = useState(null);
   const [err, setErr] = useState("");
   const [activeStuffIndex, setActiveStuffIndex] = useState(0);
+  const [isVideoHovered, setVideoHovered] = useState(false);
 
   async function run() {
     setLoading(true);
@@ -872,13 +840,31 @@ export default function Home() {
 
   const activeStuff = stuffs[activeStuffIndex] || null;
 
-  const grouped = useMemo(() => groupBySlot(activeStuff?.items || []), [activeStuff]);
   const className = out?.class || "Classe inconnue";
   const classIcon = CLASS_ICON[out?.class] || "🧙";
   const dofusbookCount = out?.dofusbook_urls?.length || 0;
   const hasDofusbook = dofusbookCount > 0;
   const activeItemCount = activeStuff?.item_count ?? activeStuff?.items?.length ?? 0;
   const variantCount = stuffs.length;
+
+  const previewEmbedUrl = useMemo(() => {
+    if (!out?.video?.embed_url) return null;
+    try {
+      const url = new URL(out.video.embed_url);
+      url.searchParams.set("autoplay", "1");
+      url.searchParams.set("mute", "1");
+      url.searchParams.set("controls", "0");
+      url.searchParams.set("modestbranding", "1");
+      return url.toString();
+    } catch (e) {
+      const separator = out.video.embed_url.includes("?") ? "&" : "?";
+      return `${out.video.embed_url}${separator}autoplay=1&mute=1&controls=0&modestbranding=1`;
+    }
+  }, [out?.video?.embed_url]);
+
+  useEffect(() => {
+    setVideoHovered(false);
+  }, [out?.video?.embed_url]);
 
   return (
     <>
@@ -895,93 +881,84 @@ export default function Home() {
 
       <main className="container">
         <header className="page-header">
-          <span className="eyebrow">Outil communautaire</span>
-          <h1>🧙‍♂️ Dofus Stuff Analyzer</h1>
-          <p>
-            Analyse une vidéo YouTube Dofus : transcript, OCR, items, éléments, exos et métadonnées en quelques secondes.
-          </p>
+          <h1>Dofus Stuff Analyzer</h1>
+          <p>Analyse rapidement l'équipement présenté dans une vidéo Dofus.</p>
         </header>
 
-        <section className="card card--input">
-          <label>URL YouTube</label>
-          <div className="input-row">
+        <section className="card search-card">
+          <div className="search-bar">
             <input
+              className="search-bar__input"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://youtu.be/..."
+              placeholder="Coller une URL YouTube"
               spellCheck={false}
             />
-            <button className="btn" onClick={run} disabled={loading} type="button">
-              {loading ? "Analyse en cours…" : "Analyser"}
+            <button className="btn search-bar__button" onClick={run} disabled={loading} type="button">
+              {loading ? "Analyse…" : "Analyser"}
             </button>
           </div>
-          <p className="caption">Coller un lien public YouTube. L’outil explore Piped, Invidious, transcript et OCR.</p>
           {err ? <p className="error">⚠️ {err}</p> : null}
         </section>
 
         {out && (
           <>
-            <section className="card card--hero">
-              <div className="hero-grid">
+            <section className="card hero-card">
+              <div className="hero-card__layout">
                 <div
                   className="hero-thumb"
-                  style={{ backgroundImage: out.video?.thumbnail ? `url(${out.video.thumbnail})` : undefined }}
-                  aria-hidden="true"
-                />
-                <div className="hero-body">
-                  <span className="eyebrow">Vidéo analysée</span>
+                  onMouseEnter={() => setVideoHovered(true)}
+                  onMouseLeave={() => setVideoHovered(false)}
+                >
+                  {out.video?.thumbnail ? (
+                    <img src={out.video.thumbnail} alt={out.video?.title || "Miniature vidéo"} />
+                  ) : (
+                    <div className="hero-thumb__placeholder" aria-hidden="true">
+                      <span>{classIcon}</span>
+                    </div>
+                  )}
+                  {isVideoHovered && previewEmbedUrl ? (
+                    <iframe
+                      key="preview"
+                      src={previewEmbedUrl}
+                      title="Lecture rapide de la vidéo"
+                      className="hero-thumb__video"
+                      frameBorder="0"
+                      allow="autoplay; encrypted-media; picture-in-picture"
+                      allowFullScreen
+                    />
+                  ) : null}
+                </div>
+                <div className="hero-info">
                   <h2>{out.video?.title || "Titre indisponible"}</h2>
                   <p className="hero-channel">{out.video?.channel || "Chaîne inconnue"}</p>
                   <div className="hero-tags">
                     <Tag tone="neutral" icon={classIcon}>
                       {className}
                     </Tag>
-                    <Tag tone={hasDofusbook ? "success" : "muted"} icon="📘">
-                      {hasDofusbook ? `DofusBook ×${dofusbookCount}` : "DofusBook manquant"}
-                    </Tag>
-                    <Tag
-                      tone={out.speech?.status === "ok" ? "success" : out.speech?.status === "error" ? "warning" : "muted"}
-                      icon="🎧"
-                    >
-                      {out.speech?.status === "ok" ? "Audio analysé" : "Audio inactif"}
-                    </Tag>
+                    {hasDofusbook ? (
+                      <Tag tone="success" icon="📘">
+                        DofusBook ×{dofusbookCount}
+                      </Tag>
+                    ) : null}
                   </div>
                   <ElementBadges elements={out.element_build} signals={out.element_signals} />
-                  <SourceBadges sources={out.sources} />
-                  <MomentsList moments={out.presentation_moments} />
-                  <ExoBadges exos={out.exos} />
                   {hasDofusbook ? (
-                    <div className="dofusbook-links">
+                    <div className="hero-links">
                       {out.dofusbook_urls.map((link, idx) => (
-                        <a key={link + idx} className="btn btn-ghost" href={link} target="_blank" rel="noreferrer">
-                          {dofusbookCount > 1 ? `DofusBook #${idx + 1}` : "Ouvrir sur DofusBook"} ↗
+                        <a key={link + idx} href={link} target="_blank" rel="noreferrer">
+                          {dofusbookCount > 1 ? `DofusBook #${idx + 1}` : "Ouvrir sur DofusBook"}
                         </a>
                       ))}
                     </div>
                   ) : null}
                 </div>
               </div>
-              {out.video?.embed_url ? (
-                <details className="player-toggle">
-                  <summary>Voir l’extrait YouTube intégré</summary>
-                  <div className="player-frame">
-                    <iframe
-                      width="100%"
-                      height="315"
-                      src={out.video.embed_url}
-                      title="YouTube video"
-                      frameBorder="0"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
-                  </div>
-                </details>
-              ) : null}
             </section>
 
             <section className="card card--items">
               <div className="card-heading">
-                <h2>🧩 Stuff détecté</h2>
+                <h2>Stuff détecté</h2>
                 <span className="caption">
                   {activeItemCount} pièce{activeItemCount === 1 ? "" : "s"} détectée{activeItemCount === 1 ? "" : "s"}
                   {variantCount > 1 ? ` • ${variantCount} variantes` : ""}
@@ -1000,142 +977,15 @@ export default function Home() {
                     items={activeStuff?.items || []}
                     preview={{ thumbnail: out.video?.thumbnail, icon: classIcon, label: activeStuff?.label || className }}
                   />
-                  {activeStuff?.context_excerpt ? (
-                    <blockquote className="stuff-context">
-                      {activeStuff.context_excerpt}
-                    </blockquote>
-                  ) : null}
-                  <details className="items-details">
-                    <summary>Voir la liste détaillée</summary>
-                    <div className="table-wrap">
-                      {grouped.map(([slot, items]) => (
-                        <div key={slot} className="slot-block">
-                          <div className="slot-heading">{slot}</div>
-                          <table className="table">
-                            <thead>
-                              <tr>
-                                <th>Nom</th>
-                                <th>Confiance</th>
-                                <th>Source</th>
-                                <th>Preuve</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {items.map((it, i) => (
-                                <tr key={slot + i}>
-                                  <td>{it.name}</td>
-                                  <td>
-                                    <ConfidenceBar value={it.confidence} />
-                                  </td>
-                                  <td>
-                                    <Tag tone="info" subtle>
-                                      {it.source}
-                                    </Tag>
-                                  </td>
-                                  <td className="caption" title={it.proof || ""}>
-                                    {it.proof ? (it.proof.length > 80 ? `${it.proof.slice(0, 80)}…` : it.proof) : "—"}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ))}
-                    </div>
-                  </details>
                 </>
               ) : (
-                <p>
-                  Aucun item probant pour cette vidéo {out.sources?.transcript_source ? "(captions dispo)" : "(captions indisponibles)"}. Essaie
-                  d’enrichir <code>lib/items.json</code> avec plus d’objets méta ou vise un timecode où l’inventaire est affiché pour
-                  l’OCR.
-                </p>
+                <p className="caption">Aucun item détecté pour ce stuff.</p>
               )}
             </section>
 
-            <section className="grid">
-              <div className="card card--evidence">
-                <h2>🔎 Indices textuels</h2>
-                <EvidenceList evidences={out.evidences} />
-              </div>
-
-              <div className="card card--speech">
-                <h2>🎧 Analyse audio</h2>
-                <SpeechInsights speech={out.speech} />
-              </div>
-            </section>
-
-            <section className="grid">
-              <div className="card">
-                <div className="card-heading">
-                  <h2>🗒️ Transcript</h2>
-                  <div className="card-heading__actions">
-                    <span className="caption">
-                      {out.transcript?.length_chars ? `${out.transcript.length_chars.toLocaleString()} caractères` : "—"}
-                    </span>
-                    {out.transcript?.lang ? (
-                      <Tag tone="info" subtle icon="🌐">
-                        {out.transcript.lang}
-                      </Tag>
-                    ) : null}
-                    {out.transcript?.has_timing ? (
-                      <Tag tone="success" subtle icon="⏱️">
-                        Horodatage
-                      </Tag>
-                    ) : null}
-                    {out.transcript?.is_translation ? (
-                      <Tag tone="warning" subtle icon="🌍">
-                        Traduction
-                      </Tag>
-                    ) : null}
-                    {out.transcript?.is_asr ? (
-                      <Tag tone="warning" subtle icon="🗣️">
-                        Reconnaissance vocale
-                      </Tag>
-                    ) : null}
-                    <CopyButton text={out.transcript?.text || ""} />
-                  </div>
-                </div>
-                {out.transcript?.source ? (
-                  <p className="caption transcript-meta">
-                    Source&nbsp;: {out.transcript.source} · {out.transcript?.cues_count || 0} segments
-                  </p>
-                ) : null}
-                {out.transcript?.text ? (
-                  <details className="transcript">
-                    <summary>Afficher/Masquer le transcript</summary>
-                    <pre className="pre transcript__content">{out.transcript.text}</pre>
-                  </details>
-                ) : (
-                  <p className="caption">Transcript indisponible via YouTube/Piped/Invidious/timedtext pour cette vidéo.</p>
-                )}
-              </div>
-
-              <div className="card">
-                <h2>🧪 Debug</h2>
-                <p className="caption">
-                  format: {out.debug?.used_format || "—"} · ocr_frames: {out.debug?.ocr_frames ?? 0} · text_candidates: {out.debug?.text_candidates ?? 0} · ocr_candidates: {out.debug?.ocr_candidates ?? 0}
-                </p>
-                {out.debug?.warns?.length ? <pre className="pre">{JSON.stringify(out.debug.warns, null, 2)}</pre> : null}
-              </div>
-            </section>
-
-            <section className="grid">
-              <div className="card">
-                <h2>📝 JSON brut</h2>
-                <details>
-                  <summary>Afficher le payload complet</summary>
-                  <pre className="pre">{JSON.stringify(out, null, 2)}</pre>
-                </details>
-                <div className="caption">Ce JSON est exactement le payload renvoyé par l’API.</div>
-              </div>
-            </section>
           </>
         )}
 
-        <footer className="caption" style={{ textAlign: "center", margin: "32px 0" }}>
-          Front V8 — interface remaniée, badges dynamiques, barre de chargement et signaux d’éléments enrichis.
-        </footer>
       </main>
     </>
   );

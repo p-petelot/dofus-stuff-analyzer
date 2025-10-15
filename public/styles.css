@@ -36,36 +36,28 @@ a {
 a:hover { color: #c084fc; }
 
 .container {
-  max-width: 1100px;
-  margin: 32px auto 48px;
+  max-width: 1080px;
+  margin: 28px auto 48px;
   padding: 0 20px 40px;
   position: relative;
 }
 
 .page-header {
   text-align: center;
-  margin-bottom: 32px;
-}
-
-.eyebrow {
-  display: inline-block;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  font-size: 12px;
-  color: var(--muted);
-  margin-bottom: 8px;
+  margin-bottom: 28px;
 }
 
 .page-header h1 {
-  margin: 8px 0;
-  font-size: clamp(2rem, 2.8vw, 2.8rem);
+  margin: 4px 0 6px;
+  font-size: clamp(2rem, 2.4vw, 2.6rem);
+  font-weight: 600;
 }
 
 .page-header p {
   margin: 0 auto;
-  max-width: 620px;
+  max-width: 520px;
   color: var(--muted);
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 .card {
@@ -88,38 +80,39 @@ a:hover { color: #c084fc; }
   pointer-events: none;
 }
 
-.card--input {
+.search-card {
   margin-top: 12px;
+  padding: 18px 20px;
 }
 
-label {
-  display: block;
-  margin-bottom: 8px;
-  color: var(--muted);
-  font-weight: 500;
-}
-
-.input-row {
+.search-bar {
   display: flex;
   gap: 12px;
-  flex-wrap: wrap;
+  align-items: center;
 }
 
-input {
-  flex: 1 1 280px;
-  padding: 12px 14px;
+.search-bar__input {
+  flex: 1 1 auto;
+  padding: 10px 14px;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: rgba(15, 23, 42, 0.75);
+  background: rgba(15, 23, 42, 0.7);
   color: var(--fg);
+  font-size: 15px;
   outline: none;
-  font-size: 16px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-input:focus {
+.search-bar__input::placeholder { color: rgba(148, 163, 184, 0.6); }
+
+.search-bar__input:focus {
   border-color: var(--accent-strong);
   box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.25);
+}
+
+.search-bar__button {
+  padding: 10px 18px;
+  min-width: 120px;
 }
 
 .btn {
@@ -274,37 +267,67 @@ input:focus {
   gap: 12px;
 }
 
-.hero-grid {
-  display: grid;
-  gap: 24px;
+.hero-card__layout {
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+  flex-wrap: wrap;
 }
 
 .hero-thumb {
   position: relative;
-  min-height: 160px;
-  border-radius: 16px;
-  background-size: cover;
-  background-position: center;
-  background-color: rgba(15, 23, 42, 0.6);
+  width: min(320px, 100%);
+  aspect-ratio: 16 / 9;
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 20px 36px -28px rgba(59, 130, 246, 0.55);
+  cursor: pointer;
 }
 
-.hero-thumb::after {
-  content: "";
+.hero-thumb img,
+.hero-thumb__video {
   position: absolute;
   inset: 0;
-  border-radius: 16px;
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.75), transparent 70%);
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
 }
 
-.hero-body {
+.hero-thumb img {
+  z-index: 1;
+  pointer-events: none;
+}
+
+.hero-thumb__video {
+  z-index: 2;
+  border: none;
+  background: #000;
+}
+
+.hero-thumb__placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 42px;
+  color: rgba(241, 245, 249, 0.75);
+  background: radial-gradient(circle at top, rgba(148, 163, 184, 0.2), transparent 60%), rgba(15, 23, 42, 0.65);
+}
+
+.hero-info {
+  flex: 1 1 320px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
-.hero-body h2 {
+.hero-info h2 {
   margin: 0;
-  font-size: clamp(1.6rem, 2.4vw, 2.4rem);
+  font-size: clamp(1.5rem, 2.1vw, 2.2rem);
 }
 
 .hero-channel {
@@ -317,6 +340,30 @@ input:focus {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.hero-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.hero-links a {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  color: var(--fg);
+  font-size: 13px;
+  background: rgba(15, 23, 42, 0.55);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.hero-links a:hover {
+  border-color: rgba(148, 163, 184, 0.4);
+  background: rgba(15, 23, 42, 0.75);
 }
 
 .status-grid {
@@ -468,68 +515,76 @@ input:focus {
 }
 
 .equipment-board {
-  display: grid;
-  gap: 14px;
-  margin-top: 16px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  grid-template-areas:
-    ". head head cape cape"
-    "ring-left amulet center center ring-right"
-    "shield weapon center center pet"
-    "belt belt center center mount"
-    "boots boots dofus dofus extras";
+  margin-top: 20px;
 }
 
-.equipment-board__preview {
-  grid-area: center;
-  position: relative;
+.equipment-board__grid {
+  display: grid;
+  gap: 14px;
+  justify-content: center;
+  grid-template-columns: repeat(5, minmax(80px, 1fr));
+  grid-template-rows: repeat(5, minmax(80px, auto));
+  grid-template-areas:
+    ". head head cape weapon"
+    "amulet ringLeft preview preview ringRight"
+    "amulet belt preview preview ringRight"
+    "shield boots preview preview dofus"
+    "pet mount preview preview extras";
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+.equipment-preview {
+  grid-area: preview;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 18px;
-  border-radius: 18px;
-  background: rgba(15, 23, 42, 0.6);
+  gap: 12px;
+  padding: 16px;
+  border-radius: 22px;
+  background: rgba(15, 23, 42, 0.55);
   border: 1px solid rgba(148, 163, 184, 0.16);
 }
 
-.equipment-preview {
-  width: 160px;
-  height: 160px;
-  border-radius: 18px;
-  background-size: cover;
-  background-position: center;
+.equipment-preview img,
+.equipment-preview__placeholder {
+  width: min(210px, 100%);
+  aspect-ratio: 1;
+  border-radius: 22px;
+  object-fit: cover;
   border: 1px solid rgba(148, 163, 184, 0.2);
-  box-shadow: 0 18px 38px -26px rgba(59, 130, 246, 0.55);
+  box-shadow: 0 22px 40px -28px rgba(59, 130, 246, 0.55);
+  background: rgba(15, 23, 42, 0.7);
 }
 
-.equipment-preview--placeholder {
+.equipment-preview__placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 56px;
-  color: rgba(241, 245, 249, 0.8);
-  background: radial-gradient(circle at top, rgba(148, 163, 184, 0.22), transparent 60%), rgba(15, 23, 42, 0.7);
+  font-size: 52px;
+  color: rgba(241, 245, 249, 0.78);
 }
 
-.equipment-preview__caption {
+.equipment-preview__label {
   font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   color: var(--muted);
 }
 
 .equip-slot {
   position: relative;
-  padding: 14px;
-  border-radius: 16px;
-  background: rgba(15, 23, 42, 0.55);
-  border: 1px solid rgba(148, 163, 184, 0.16);
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  min-height: 120px;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  min-height: 110px;
 }
 
 .equip-slot__label {
@@ -539,63 +594,83 @@ input:focus {
   color: var(--muted);
 }
 
-.equip-slot__items {
+.equip-slot__content {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-}
-
-.equip-slot__empty {
-  font-style: italic;
-  color: var(--muted);
+  align-items: center;
+  gap: 6px;
+  width: 100%;
 }
 
 .equip-item {
-  background: rgba(15, 23, 42, 0.78);
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  width: 100%;
   border-radius: 12px;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.75);
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.35;
 }
 
-.equip-item__name {
+.equip-item--primary {
   font-weight: 600;
-  font-size: 14px;
 }
 
-.equip-item__meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.equip-item__confidence {
+  display: block;
+  margin-top: 4px;
   font-size: 11px;
   color: var(--muted);
 }
 
-.equip-item__source {
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+.equip-item--more {
+  font-size: 11px;
+  color: rgba(148, 163, 184, 0.75);
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  background: transparent;
+  padding: 6px 10px;
 }
 
-.equip-item__proof {
-  text-decoration: underline;
-  cursor: help;
+.equip-item--empty {
+  border: 1px dashed rgba(148, 163, 184, 0.32);
+  color: rgba(148, 163, 184, 0.7);
+  background: transparent;
+  padding: 14px 10px;
+  font-size: 12px;
 }
 
-.equip-slot--head { grid-area: head; }
-.equip-slot--amulet { grid-area: amulet; }
-.equip-slot--ring-left { grid-area: ring-left; }
-.equip-slot--ring-right { grid-area: ring-right; }
-.equip-slot--cape { grid-area: cape; }
-.equip-slot--shield { grid-area: shield; }
-.equip-slot--weapon { grid-area: weapon; }
-.equip-slot--belt { grid-area: belt; }
-.equip-slot--boots { grid-area: boots; }
-.equip-slot--pet { grid-area: pet; }
-.equip-slot--mount { grid-area: mount; }
-.equip-slot--dofus { grid-area: dofus; }
-.equip-slot--extras { grid-area: extras; }
+.equip-slot[data-area="head"] { grid-area: head; }
+.equip-slot[data-area="amulet"] { grid-area: amulet; }
+.equip-slot[data-area="ringLeft"] { grid-area: ringLeft; }
+.equip-slot[data-area="ringRight"] { grid-area: ringRight; }
+.equip-slot[data-area="cape"] { grid-area: cape; }
+.equip-slot[data-area="shield"] { grid-area: shield; }
+.equip-slot[data-area="weapon"] { grid-area: weapon; }
+.equip-slot[data-area="belt"] { grid-area: belt; }
+.equip-slot[data-area="boots"] { grid-area: boots; }
+.equip-slot[data-area="pet"] { grid-area: pet; }
+.equip-slot[data-area="mount"] { grid-area: mount; }
+.equip-slot[data-area="dofus"] { grid-area: dofus; }
+.equip-slot[data-area="extras"] { grid-area: extras; }
+
+@media (max-width: 900px) {
+  .equipment-board__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: auto;
+    grid-template-areas:
+      "preview preview preview"
+      "head head cape"
+      "amulet ringLeft ringRight"
+      "weapon belt boots"
+      "shield pet dofus"
+      "mount extras extras";
+  }
+
+  .equipment-preview img,
+  .equipment-preview__placeholder {
+    width: min(180px, 100%);
+  }
+}
 
 .items-details {
   margin-top: 18px;
@@ -605,28 +680,6 @@ input:focus {
   cursor: pointer;
   font-weight: 600;
   margin-bottom: 12px;
-}
-
-@media (max-width: 900px) {
-  .equipment-board {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas:
-      "center center"
-      "head cape"
-      "amulet weapon"
-      "ring-left ring-right"
-      "shield pet"
-      "belt mount"
-      "boots boots"
-      "dofus dofus"
-      "extras extras";
-  }
-
-  .equipment-preview {
-    width: 100%;
-    max-width: 220px;
-    height: 180px;
-  }
 }
 
 .table-wrap {
