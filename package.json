@@ -1,5 +1,5 @@
 {
-  "name": "dofus-stuff-analyzer",
+  "name": "prismforge",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -7,17 +7,8 @@
     "build": "next build"
   },
   "dependencies": {
-    "@ffmpeg-installer/ffmpeg": "^1.1.0",
-    "fluent-ffmpeg": "^2.1.2",
     "next": "14.2.5",
     "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "string-similarity": "^4.0.4",
-    "tesseract.js": "^5.1.0",
-    "ytdl-core": "^4.11.5",
-    "youtube-transcript": "^1.2.1",
-    "typescript": "^5.5.4",
-    "@types/react": "^18.3.1",
-    "@types/node": "^20.11.25"
+    "react-dom": "18.3.1"
   }
 }

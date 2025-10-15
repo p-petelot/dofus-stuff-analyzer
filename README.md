@@ -1,24 +1,31 @@
-# Dofus Stuff Analyzer (V1 API)
+# KrosPalette
 
-Expose une route `GET /api/analyze?url=...` qui renvoie :
-- titre, chaîne
-- description (utilisée pour la détection)
-- lien DofusBook s’il est présent
-- transcript (extrait)
-- candidats d’items (heuristique)
-- classe + éléments (déduction simple)
+KrosPalette est un studio de palettes pour les créateurs de skins Dofus. Dépose, colle ou importe une image de référence et l'application extrait instantanément les couleurs dominantes pour guider tes compositions.
 
-## Déploiement Vercel
+## Lancer le projet
 
-1) **Créer un nouveau projet** sur vercel.com → "New Project" → Import depuis Git
-2) Sélectionner ce repo
-3) Runtime: Node 18+ (par défaut, OK)
-4) Build command: `next build` (par défaut)
-5) Output: .vercel/output (géré par Next)
-6) Déployer
+```bash
+npm install
+npm run dev
+```
 
-> Rien à configurer côté env pour la V1.
-> Si Vercel demande des permissions, accepter par défaut.
+La page est disponible sur http://localhost:3000.
 
-## Test
+## Construire pour la production
 
+```bash
+npm run build
+npm start
+```
+
+## Fonctionnalités principales
+
+- Glisser-déposer ou coller une image depuis le presse-papiers.
+- Visualisation de l'aperçu directement dans l'atelier.
+- Extraction rapide des teintes principales avec codes Hex et RGB affichés en anneau hexagonal.
+- Copie en un clic (clic ou tap) pour intégrer les couleurs dans ton outil favori.
+
+## Ressources DofusDB
+
+- L'API publique de DofusDB est disponible via `https://api.dofusdb.fr/` et expose des collections comme `items`, `sets` ou `weapons` (documentation embarquée dans le site officiel).
+- L'accès direct depuis cette sandbox retourne actuellement une réponse HTTP 403 (voir `curl https://api.dofusdb.fr/items?lang=fr&size=1`). Il faudra prévoir un proxy côté serveur ou ajouter les en-têtes attendus par DofusDB (référent, User-Agent navigateur) pour consommer les données en production.
