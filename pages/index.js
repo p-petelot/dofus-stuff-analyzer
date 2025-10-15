@@ -93,6 +93,34 @@ function Tag({ children, tone = "neutral", icon, subtle, title }) {
   );
 }
 
+function MomentsList({ moments }) {
+  if (!moments?.length) return null;
+  return (
+    <div className="moments">
+      <span className="caption caption--label">Moments où le stuff est présenté</span>
+      <ul className="moments__list">
+        {moments.map((moment, idx) => (
+          <li key={idx} className="moments__item">
+            <div className="moments__meta">
+              {moment.timestamp ? (
+                <Tag tone="info" icon="⏱️">
+                  {moment.timestamp}
+                </Tag>
+              ) : null}
+              {moment.source ? (
+                <Tag tone="neutral" subtle icon="📄">
+                  {moment.source}
+                </Tag>
+              ) : null}
+            </div>
+            <p className="moments__text">{moment.text}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function SourceBadges({ sources }) {
   if (!sources) return null;
   const {
