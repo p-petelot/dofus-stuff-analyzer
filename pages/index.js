@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
+import DOFUS_ITEMS, { ITEM_TYPES } from "../data/dofusItems";
 
 const BRAND_NAME = "KrosPalette";
 const MAX_COLORS = 6;
@@ -84,6 +85,41 @@ function extractPalette(image) {
     });
 }
 
+function hexToRgb(hex) {
+  const value = hex.replace("#", "");
+  const bigint = parseInt(value, 16);
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  return { r, g, b };
+}
+
+function colorDistance(colorA, colorB) {
+  const dr = colorA.r - colorB.r;
+  const dg = colorA.g - colorB.g;
+  const db = colorA.b - colorB.b;
+  return Math.sqrt(dr * dr + dg * dg + db * db);
+}
+
+function scoreItemAgainstPalette(item, palette) {
+  if (palette.length === 0) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const paletteRgb = palette.map((color) => ({ r: color.r, g: color.g, b: color.b }));
+  const itemRgb = item.palette.map(hexToRgb);
+
+  const totalDistance = itemRgb.reduce((accumulator, itemColor) => {
+    const closestDistance = paletteRgb.reduce((best, paletteColor) => {
+      const distance = colorDistance(itemColor, paletteColor);
+      return Math.min(best, distance);
+    }, Number.POSITIVE_INFINITY);
+    return accumulator + closestDistance;
+  }, 0);
+
+  return totalDistance / itemRgb.length;
+}
+
 export default function Home() {
   const [imageSrc, setImageSrc] = useState(null);
   const [colors, setColors] = useState([]);
@@ -93,6 +129,25 @@ export default function Home() {
   const [copiedCode, setCopiedCode] = useState(null);
   const [codeFormat, setCodeFormat] = useState("hex");
   const [toast, setToast] = useState(null);
+
+  const recommendations = useMemo(() => {
+    if (!colors.length) {
+      return null;
+    }
+
+    return ITEM_TYPES.reduce((accumulator, type) => {
+      const scoredItems = DOFUS_ITEMS.filter((item) => item.type === type)
+        .map((item) => ({
+          item,
+          score: scoreItemAgainstPalette(item, colors),
+        }))
+        .sort((a, b) => a.score - b.score)
+        .slice(0, 2)
+        .map(({ item }) => item);
+
+      return { ...accumulator, [type]: scoredItems };
+    }, {});
+  }, [colors]);
 
   const inputRef = useRef(null);
 
@@ -270,10 +325,13 @@ export default function Home() {
       return { left: "50%", top: "50%" };
     }
 
-    const radius =
-      total <= 2 ? 30 : total === 3 ? 34 : total === 4 ? 36 : total === 5 ? 38 : 40;
-    const evenOffset = total % 2 === 0 ? 180 / total : 0;
-    const angle = (index / total) * 360 - 90 + evenOffset;
+    if (index === 0) {
+      return { left: "50%", top: "50%" };
+    }
+
+    const orbitCount = total - 1;
+    const radius = orbitCount <= 2 ? 24 : orbitCount === 3 ? 28 : orbitCount === 4 ? 32 : 34;
+    const angle = ((index - 1) / orbitCount) * 360 - 90;
     const radians = (angle * Math.PI) / 180;
     const x = 50 + radius * Math.cos(radians);
     const y = 50 + radius * Math.sin(radians);
@@ -420,6 +478,63 @@ export default function Home() {
                   Dépose une image pour révéler automatiquement ses teintes dominantes. Les codes Hex et RGB
                   sont prêts à être copiés.
                 </p>
+              </div>
+            )}
+          </div>
+          <div className="suggestions">
+            <div className="suggestions__header">
+              <h2>Correspondances Dofus</h2>
+              <p>
+                Une sélection d&apos;objets inspirée des couleurs extraites afin d&apos;harmoniser ton skin avec l&apos;image de
+                référence.
+              </p>
+            </div>
+            {colors.length === 0 ? (
+              <div className="suggestions__empty">
+                <p>Importe d&apos;abord une image pour générer des propositions personnalisées.</p>
+              </div>
+            ) : (
+              <div className="suggestions__grid">
+                {ITEM_TYPES.map((type) => {
+                  const items = recommendations?.[type] ?? [];
+                  return (
+                    <section key={type} className="suggestions__group">
+                      <header className="suggestions__group-header">
+                        <span className="suggestions__group-type">{type}</span>
+                      </header>
+                      {items.length === 0 ? (
+                        <p className="suggestions__group-empty">Aucune correspondance probante pour cette teinte.</p>
+                      ) : (
+                        <ul className="suggestions__list">
+                          {items.map((item) => (
+                            <li key={item.id} className="suggestions__item">
+                              <div className="suggestions__swatches" aria-hidden="true">
+                                {item.palette.map((hex) => (
+                                  <span
+                                    key={hex}
+                                    className="suggestions__swatch"
+                                    style={{ backgroundColor: hex }}
+                                  />
+                                ))}
+                              </div>
+                              <div className="suggestions__content">
+                                <a
+                                  href={item.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="suggestions__title"
+                                >
+                                  {item.name}
+                                </a>
+                                <p className="suggestions__description">{item.description}</p>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </section>
+                  );
+                })}
               </div>
             )}
           </div>
