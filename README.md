@@ -1,6 +1,6 @@
-# PrismForge
+# KrosPalette
 
-PrismForge est un atelier de palettes pour les créateurs de skins Dofus. Dépose, colle ou importe une image de référence et l'application extrait instantanément les couleurs dominantes pour guider tes compositions.
+KrosPalette est un studio de palettes pour les créateurs de skins Dofus. Dépose, colle ou importe une image de référence et l'application extrait instantanément les couleurs dominantes pour guider tes compositions.
 
 ## Lancer le projet
 

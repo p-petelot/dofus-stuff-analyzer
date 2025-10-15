@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Head from "next/head";
 
-const BRAND_NAME = "PrismForge";
-const MAX_COLORS = 6;
+const BRAND_NAME = "KrosPalette";
+const MAX_COLORS = 10;
 const MAX_DIMENSION = 320;
 const BUCKET_SIZE = 24;
 
@@ -91,6 +91,7 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [copiedCode, setCopiedCode] = useState(null);
+  const [codeFormat, setCodeFormat] = useState("hex");
 
   const inputRef = useRef(null);
 
@@ -224,15 +225,14 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>{`${BRAND_NAME} · Atelier de palettes Dofus`}</title>
+        <title>{`${BRAND_NAME} · Studio de skins Dofus`}</title>
         <meta
           name="description"
-          content="PrismForge extrait les couleurs dominantes de tes images pour composer des skins Dofus harmonieux."
+          content="KrosPalette extrait les couleurs dominantes de tes images pour composer des skins Dofus harmonieux."
         />
       </Head>
       <main className="page">
         <header className="hero">
-          <span className="hero__badge">Atelier couleur</span>
           <h1>{BRAND_NAME}</h1>
           <p>
             Dépose, colle ou importe une image de référence pour capturer instantanément les teintes qui
@@ -277,45 +277,61 @@ export default function Home() {
 
           <div className="palette">
             <div className="palette__header">
-              <h2>Palette extraite</h2>
-              {isProcessing ? <span className="badge badge--pulse">Analyse en cours…</span> : null}
+              <div className="palette__title">
+                <h2>Palette extraite</h2>
+                <p className="palette__caption">Cliquer sur une nuance copie le code sélectionné.</p>
+              </div>
+              <div className="palette__actions">
+                {isProcessing ? <span className="badge badge--pulse">Analyse en cours…</span> : null}
+                <div className="palette__format" role="radiogroup" aria-label="Format des codes couleur">
+                  <button
+                    type="button"
+                    className={`format-toggle${codeFormat === "hex" ? " is-active" : ""}`}
+                    onClick={() => setCodeFormat("hex")}
+                    role="radio"
+                    aria-checked={codeFormat === "hex"}
+                  >
+                    Hexa
+                  </button>
+                  <button
+                    type="button"
+                    className={`format-toggle${codeFormat === "rgb" ? " is-active" : ""}`}
+                    onClick={() => setCodeFormat("rgb")}
+                    role="radio"
+                    aria-checked={codeFormat === "rgb"}
+                  >
+                    RGB
+                  </button>
+                </div>
+              </div>
             </div>
             {error ? <p className="palette__error">{error}</p> : null}
             {colors.length > 0 ? (
               <ul className="palette__list">
-                {colors.map((color) => (
-                  <li key={color.hex} className="swatch">
-                    <div
-                      className="swatch__preview"
-                      style={{ backgroundColor: color.hex }}
-                      aria-hidden="true"
-                    />
-                    <div className="swatch__codes">
+                {colors.map((color) => {
+                  const value = codeFormat === "hex" ? color.hex : color.rgb;
+                  return (
+                    <li key={color.hex} className="swatch">
+                      <div
+                        className="swatch__preview"
+                        style={{ backgroundColor: color.hex }}
+                        aria-hidden="true"
+                      />
                       <button
                         type="button"
                         className="code"
-                        onClick={() => handleCopy(color.hex)}
+                        onClick={() => handleCopy(value)}
                       >
-                        <span className="code__label">Hex</span>
-                        <span className="code__value">{color.hex}</span>
-                        {copiedCode === color.hex ? (
-                          <span className="code__copied">Copié !</span>
-                        ) : null}
+                        <span className="code__info">
+                          <span className="code__label">{codeFormat === "hex" ? "Hex" : "RGB"}</span>
+                          <span className="code__value">{value}</span>
+                        </span>
+                        <span className="code__hint">Cliquer pour copier</span>
+                        {copiedCode === value ? <span className="code__copied">Copié !</span> : null}
                       </button>
-                      <button
-                        type="button"
-                        className="code code--ghost"
-                        onClick={() => handleCopy(color.rgb)}
-                      >
-                        <span className="code__label">RGB</span>
-                        <span className="code__value">{color.rgb}</span>
-                        {copiedCode === color.rgb ? (
-                          <span className="code__copied">Copié !</span>
-                        ) : null}
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
               <div className="palette__empty">
