@@ -6,6 +6,25 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 
+const DEFAULT_PIPED_HOSTS = [
+  "https://piped.video",
+  "https://piped.videoapi.fr",
+  "https://piped.minionflo.net",
+  "https://piped.darkness.services",
+  "https://piped.projectsegfau.lt",
+  "https://piped.us.projectsegfau.lt",
+  "https://piped.lunar.icu",
+  "https://piped.privacydev.net",
+];
+
+const DEFAULT_INVIDIOUS_HOSTS = [
+  "https://yewtu.be",
+  "https://invidious.fdn.fr",
+  "https://vid.puffyan.us",
+  "https://inv.nadeko.net",
+  "https://invidious.projectsegfau.lt",
+];
+
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 export const config = { runtime: "nodejs", api: { bodyParser: false } };
 
@@ -19,6 +38,23 @@ const {
   detectStuffMoments
 } = require("../../lib/util");
 
+function parseHostList(raw, fallback = []) {
+  const base = typeof raw === "string" && raw.trim() ? raw : "";
+  const list = base
+    ? base
+        .split(/[\s,]+/)
+        .map((h) => h.trim())
+        .filter(Boolean)
+    : [];
+  if (list.length) return list;
+  return [...fallback];
+}
+
+function flagDisabled(value) {
+  if (!value) return false;
+  return /^(1|true|yes|on)$/i.test(String(value).trim());
+}
+
 // ---------- Fetch helpers ----------
 async function fetchJSON(url) {
   try {
@@ -31,6 +67,65 @@ async function fetchTEXT(url) {
     const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
     return r.ok ? await r.text() : "";
   } catch { return ""; }
+}
+
+function friendlyAttemptError(err) {
+  if (!err) return "erreur inconnue";
+  const str = typeof err === "string" ? err : err.message || String(err);
+  if (/ECONNREFUSED/i.test(str)) return "connexion refusée";
+  if (/(ENOTFOUND|DNS|getaddrinfo)/i.test(str)) return "hôte introuvable";
+  if (/(ETIMEDOUT|timeout)/i.test(str)) return "délai dépassé";
+  if (/fetch failed|Failed to fetch|network/i.test(str)) return "erreur réseau";
+  if (/unexpected token\s*["'`]?<|not valid json/i.test(str)) {
+    return "réponse illisible (HTML)";
+  }
+  if (/invalid json|json parse/i.test(str)) {
+    return "réponse JSON invalide";
+  }
+  return str
+    .replace(/^TypeError:\s*/i, "")
+    .replace(/^Error:\s*/i, "")
+    .replace(/^SyntaxError:\s*/i, "")
+    .trim();
+}
+
+function summarizeAttempts(attempts = [], hint = null) {
+  const shortHost = (value) => {
+    if (!value) return "?";
+    try {
+      const u = new URL(value);
+      return u.host || value;
+    } catch {
+      return value.replace(/^https?:\/\//, "");
+    }
+  };
+  const summary = attempts
+    .map((attempt) => {
+      if (!attempt) return null;
+      const host = shortHost(attempt.host || "?");
+      if (attempt.error && attempt.status !== "invalid_json") return `${host}: ${attempt.error}`;
+      if (attempt.status === "invalid_json") {
+        const detail = attempt.statusText ? ` (${attempt.statusText})` : "";
+        return `${host}: réponse non JSON${detail}`;
+      }
+      if (attempt.status === "empty") return `${host}: réponse vide`;
+      if (typeof attempt.status === "number") {
+        const suffix = attempt.statusText ? ` ${attempt.statusText}` : "";
+        if (attempt.status === 429) {
+          return `${host}: limite de requêtes (HTTP 429${suffix})`;
+        }
+        return `${host}: HTTP ${attempt.status}${suffix}`;
+      }
+      if (attempt.status) return `${host}: ${attempt.status}`;
+      return `${host}: inconnu`;
+    })
+    .filter(Boolean)
+    .join(" | ")
+    .slice(0, 400);
+
+  if (hint && summary) return `${hint} | ${summary}`;
+  if (hint) return hint;
+  return summary;
 }
 
 // ---------- Meta YouTube ----------
@@ -52,17 +147,53 @@ async function getMeta(url) {
 
 // ---------- Piped / Invidious (desc + captions + streams sans clé) ----------
 async function getPipedVideo(id) {
-  const hosts = [
-    "https://piped.video",
-    "https://piped.videoapi.fr",
-    "https://piped.minionflo.net",
-    "https://piped.darkness.services"
-  ];
-  for (const h of hosts) {
-    const v = await fetchJSON(`${h}/api/v1/video/${id}`);
-    if (v && (v.description || v.captions?.length || v.videoStreams?.length)) return { host: h, data: v };
+  const attempts = [];
+  if (flagDisabled(process.env.DISABLE_PIPED)) {
+    return { host: null, data: null, status: "disabled", attempts, hint: "Désactivé via DISABLE_PIPED=1" };
   }
-  return { host: null, data: null };
+
+  const hosts = parseHostList(process.env.PIPED_HOSTS, DEFAULT_PIPED_HOSTS);
+  if (!hosts.length) {
+    return {
+      host: null,
+      data: null,
+      status: "disabled",
+      attempts,
+      hint: "Aucun miroir Piped configuré. Ajoute PIPED_HOSTS=mon.instance pour activer ce flux.",
+    };
+  }
+
+  for (const h of hosts) {
+    try {
+      const res = await fetch(`${h}/api/v1/video/${id}`, { headers: { "User-Agent": "Mozilla/5.0" } });
+      if (!res.ok) {
+        attempts.push({ host: h, status: res.status, statusText: res.statusText || null });
+        continue;
+      }
+      const body = await res.text();
+      let v;
+      try {
+        v = JSON.parse(body);
+      } catch {
+        const contentType = (res.headers.get("content-type") || "").split(";")[0] || null;
+        const reason = contentType && /html/i.test(contentType)
+          ? "réponse HTML inattendue"
+          : "réponse non JSON";
+        attempts.push({ host: h, error: contentType ? `${reason} (${contentType})` : reason, status: "invalid_json", statusText: contentType });
+        continue;
+      }
+      if (v && (v.description || v.captions?.length || v.videoStreams?.length)) {
+        return { host: h, data: v, status: "ok", attempts };
+      }
+      attempts.push({ host: h, status: "empty" });
+    } catch (err) {
+      attempts.push({ host: h, error: friendlyAttemptError(err) });
+    }
+  }
+  const hint = attempts.length
+    ? "Configure ton propre miroir via PIPED_HOSTS ou masque ce flux avec DISABLE_PIPED=1."
+    : null;
+  return { host: null, data: null, status: "failed", attempts, hint };
 }
 async function getPipedCaptions(host, id, label) {
   const url = `${host}/api/v1/captions/${id}?label=${encodeURIComponent(label)}`;
@@ -71,12 +202,53 @@ async function getPipedCaptions(host, id, label) {
 }
 
 async function getInvidiousVideo(id) {
-  const hosts = ["https://yewtu.be", "https://invidious.fdn.fr", "https://vid.puffyan.us"];
-  for (const h of hosts) {
-    const v = await fetchJSON(`${h}/api/v1/videos/${id}`);
-    if (v && (v.description || v.captions?.length || v.formatStreams?.length)) return { host: h, data: v };
+  const attempts = [];
+  if (flagDisabled(process.env.DISABLE_INVIDIOUS)) {
+    return { host: null, data: null, status: "disabled", attempts, hint: "Désactivé via DISABLE_INVIDIOUS=1" };
   }
-  return { host: null, data: null };
+
+  const hosts = parseHostList(process.env.INVIDIOUS_HOSTS, DEFAULT_INVIDIOUS_HOSTS);
+  if (!hosts.length) {
+    return {
+      host: null,
+      data: null,
+      status: "disabled",
+      attempts,
+      hint: "Aucun miroir Invidious configuré. Défini INVIDIOUS_HOSTS=... pour l'activer.",
+    };
+  }
+
+  for (const h of hosts) {
+    try {
+      const res = await fetch(`${h}/api/v1/videos/${id}`, { headers: { "User-Agent": "Mozilla/5.0" } });
+      if (!res.ok) {
+        attempts.push({ host: h, status: res.status, statusText: res.statusText || null });
+        continue;
+      }
+      const body = await res.text();
+      let v;
+      try {
+        v = JSON.parse(body);
+      } catch {
+        const contentType = (res.headers.get("content-type") || "").split(";")[0] || null;
+        const reason = contentType && /html/i.test(contentType)
+          ? "réponse HTML inattendue"
+          : "réponse non JSON";
+        attempts.push({ host: h, error: contentType ? `${reason} (${contentType})` : reason, status: "invalid_json", statusText: contentType });
+        continue;
+      }
+      if (v && (v.description || v.captions?.length || v.formatStreams?.length)) {
+        return { host: h, data: v, status: "ok", attempts };
+      }
+      attempts.push({ host: h, status: "empty" });
+    } catch (err) {
+      attempts.push({ host: h, error: friendlyAttemptError(err) });
+    }
+  }
+  const hint = attempts.length
+    ? "Installe ton instance Invidious (INVIDIOUS_HOSTS) ou cache ce test via DISABLE_INVIDIOUS=1."
+    : null;
+  return { host: null, data: null, status: "failed", attempts, hint };
 }
 async function getInvidiousCaptions(host, id, labelOrLang) {
   const caps = await fetchJSON(`${host}/api/v1/captions/${id}`);
@@ -89,7 +261,17 @@ async function getInvidiousCaptions(host, id, labelOrLang) {
 
 // ---------- Watch page lisible ----------
 async function getReadableWatchPage(id) {
-  return await fetchTEXT(`https://r.jina.ai/http://www.youtube.com/watch?v=${id}`);
+  const url = `https://r.jina.ai/http://www.youtube.com/watch?v=${id}`;
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+    if (!res.ok) {
+      return { ok: false, text: "", status: res.status, statusText: res.statusText || null, url };
+    }
+    const text = await res.text();
+    return { ok: !!text, text, status: "ok", url };
+  } catch (err) {
+    return { ok: false, text: "", error: String(err), url };
+  }
 }
 
 // ---------- Captions helpers ----------
@@ -419,14 +601,15 @@ function getAsrConfig() {
     };
   }
 
-  if (process.env.OPENAI_API_KEY) {
+  const openaiKey = (process.env.OPENAI_API_KEY || "").trim();
+  if (openaiKey) {
     return {
       provider: "openai",
       provider_label: "OpenAI Whisper",
-      model: process.env.OPENAI_TRANSCRIBE_MODEL || "gpt-4o-mini-transcribe",
+      model: process.env.OPENAI_TRANSCRIBE_MODEL || "whisper-1",
       baseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
       endpoint: "/audio/transcriptions",
-      key: process.env.OPENAI_API_KEY,
+      key: openaiKey,
       headers: {},
     };
   }
@@ -463,62 +646,107 @@ async function transcribeAudioWithConfig(audioFile, config, warns) {
   if (!url) return null;
 
   try {
-    const form = new FormData();
-    form.append("file", fs.createReadStream(audioFile), path.basename(audioFile));
-    if (config.model) form.append("model", config.model);
-    form.append("response_format", "verbose_json");
-    form.append("temperature", "0");
-    if (process.env.ASR_PROMPT) form.append("prompt", process.env.ASR_PROMPT);
-
-    const headers = { Authorization: `Bearer ${config.key}` };
-    for (const [key, value] of Object.entries(config.headers || {})) {
-      headers[key] = value;
-    }
-
-    const res = await fetch(url, { method: "POST", headers, body: form });
-    if (!res.ok) {
-      const text = await res.text();
-      warns.push(`ASR ${config.provider} HTTP ${res.status}: ${text.slice(0, 180)}`);
-      return null;
-    }
-    const data = await res.json();
-    const segments = Array.isArray(data.segments) ? data.segments : [];
-    const cues = segments
-      .map((seg) => ({
-        start: typeof seg.start === "number" ? seg.start : null,
-        end: typeof seg.end === "number" ? seg.end : null,
-        text: normalize(seg.text || seg.transcript || ""),
-        confidence: typeof seg.confidence === "number"
-          ? seg.confidence
-          : typeof seg.avg_logprob === "number"
-            ? Number((1 + seg.avg_logprob / 5).toFixed(3))
-            : typeof seg.no_speech_prob === "number"
-              ? Number((1 - seg.no_speech_prob).toFixed(3))
-              : null,
-      }))
-      .filter((cue) => cue.text);
-
-    const text = cues.length
-      ? cues.map((c) => c.text).join("\n")
-      : normalize(data.text || "");
-
-    const confidenceValues = cues
-      .map((c) => (typeof c.confidence === "number" ? c.confidence : null))
-      .filter((v) => v != null && !Number.isNaN(v));
-    const avgConfidence = confidenceValues.length
-      ? Number((confidenceValues.reduce((acc, val) => acc + val, 0) / confidenceValues.length).toFixed(3))
-      : null;
-
-    return {
-      text,
-      cues,
-      lang: data.language || null,
-      duration: typeof data.duration === "number" ? data.duration : null,
-      avg_confidence: avgConfidence,
+    const pickModels = () => {
+      if (config.provider !== "openai") {
+        return config.model ? [config.model] : [null];
+      }
+      const chain = [config.model, "whisper-1", "gpt-4o-mini-transcribe", "gpt-4o-transcribe"];
+      const seen = new Set();
+      return chain
+        .filter(Boolean)
+        .filter((model) => {
+          const key = model.toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
     };
+
+    const models = pickModels();
+    const attempts = models.length ? models : [null];
+    let lastError = null;
+
+    for (const modelName of attempts) {
+      const form = new FormData();
+      form.append("file", fs.createReadStream(audioFile), path.basename(audioFile));
+      if (modelName) form.append("model", modelName);
+      form.append("response_format", "verbose_json");
+      form.append("temperature", "0");
+      if (process.env.ASR_PROMPT) form.append("prompt", process.env.ASR_PROMPT);
+
+      const headers = { Authorization: `Bearer ${config.key}` };
+      for (const [key, value] of Object.entries(config.headers || {})) {
+        headers[key] = value;
+      }
+
+      const res = await fetch(url, { method: "POST", headers, body: form });
+      if (!res.ok) {
+        const text = await res.text();
+        const detail = text ? `: ${text.slice(0, 160)}` : "";
+        lastError = `HTTP ${res.status}${detail}`;
+        const retriable = config.provider === "openai" && [404, 410, 422].includes(res.status);
+        if (retriable && modelName !== attempts[attempts.length - 1]) {
+          warns.push(`ASR OpenAI modèle ${modelName} indisponible (${res.status}). Nouveau modèle…`);
+          continue;
+        }
+        warns.push(`ASR ${config.provider} HTTP ${res.status}${detail}`);
+        return { error: true, status: res.status, model: modelName || config.model || null, message: detail.trim() };
+      }
+
+      const data = await res.json();
+      if (!data) {
+        lastError = "réponse vide";
+        continue;
+      }
+
+      if (config.provider === "openai" && modelName && modelName !== config.model) {
+        warns.push(`ASR OpenAI fallback sur ${modelName}`);
+      }
+
+      const segments = Array.isArray(data.segments) ? data.segments : [];
+      const cues = segments
+        .map((seg) => ({
+          start: typeof seg.start === "number" ? seg.start : null,
+          end: typeof seg.end === "number" ? seg.end : null,
+          text: normalize(seg.text || seg.transcript || ""),
+          confidence: typeof seg.confidence === "number"
+            ? seg.confidence
+            : typeof seg.avg_logprob === "number"
+              ? Number((1 + seg.avg_logprob / 5).toFixed(3))
+              : typeof seg.no_speech_prob === "number"
+                ? Number((1 - seg.no_speech_prob).toFixed(3))
+                : null,
+        }))
+        .filter((cue) => cue.text);
+
+      const text = cues.length
+        ? cues.map((c) => c.text).join("\n")
+        : normalize(data.text || "");
+
+      const confidenceValues = cues
+        .map((c) => (typeof c.confidence === "number" ? c.confidence : null))
+        .filter((v) => v != null && !Number.isNaN(v));
+      const avgConfidence = confidenceValues.length
+        ? Number((confidenceValues.reduce((acc, val) => acc + val, 0) / confidenceValues.length).toFixed(3))
+        : null;
+
+      return {
+        text,
+        cues,
+        lang: data.language || data.lang || null,
+        duration: typeof data.duration === "number" ? data.duration : null,
+        avg_confidence: avgConfidence,
+        model: modelName || config.model || null,
+      };
+    }
+
+    if (lastError) {
+      warns.push(`ASR ${config.provider} sans réponse exploitable (${lastError})`);
+    }
+    return { error: true, model: config.model || null, message: lastError };
   } catch (err) {
     warns.push(`ASR ${config.provider} fetch fail: ${String(err).slice(0, 180)}`);
-    return null;
+    return { error: true, model: config.model || null, message: String(err) };
   }
 }
 
@@ -590,13 +818,16 @@ async function transcribeAudioFromVideo({ config, url, maxSeconds, warns }) {
     download = await downloadWithYtdlToTemp(url);
     audioFile = await convertVideoToAudio(download.tmpFile, { maxSeconds });
     const asr = await transcribeAudioWithConfig(audioFile, config, warns);
-    if (!asr || !asr.text) {
+    if (!asr || asr.error || !asr.text) {
+      const baseNote = asr?.message
+        ? `ASR indisponible ${asr.message}`
+        : "Aucun texte renvoyé par le service ASR.";
       return {
-        status: "empty",
+        status: asr?.error ? "error" : "empty",
         provider: config.provider,
         provider_label: config.provider_label,
-        model: config.model,
-        notes: ["Aucun texte renvoyé par le service ASR."],
+        model: asr?.model || config.model,
+        notes: [baseNote],
       };
     }
 
@@ -617,7 +848,7 @@ async function transcribeAudioFromVideo({ config, url, maxSeconds, warns }) {
       status: "ok",
       provider: config.provider,
       provider_label: config.provider_label,
-      model: config.model,
+      model: asr.model || config.model,
       text: asr.text,
       cues,
       lang: asr.lang,
@@ -678,9 +909,66 @@ function extractItemCandidates(textPool) {
   return cand;
 }
 function normalizeItems(candidates) {
-  const fuzzy = (candidates || []).map(c => fuzzyMatchItem(c)).filter(Boolean).filter(m => m.confidence >= 0.5);
+  const fuzzy = (candidates || [])
+    .map((candidate) => {
+      const match = fuzzyMatchItem(candidate);
+      if (!match || match.confidence < 0.5) return null;
+      return {
+        ...match,
+        source: match.source || "texte flou",
+        proof: match.proof || candidate,
+      };
+    })
+    .filter(Boolean);
   fuzzy.sort((a, b) => b.confidence - a.confidence);
   return dedupeByName(fuzzy).slice(0, 25);
+}
+
+function collectTextMatches(text) {
+  if (!text) return [];
+  const aliasHits = scanAliases(text);
+  const directHits = scanKnownItemsBySubstring(text);
+  const slotCapHits = scanSlotNamePatterns(text);
+  const textCand = extractItemCandidates(text);
+  const matchedText = normalizeItems(textCand);
+  return dedupeByName([
+    ...(slotCapHits || []),
+    ...(aliasHits || []),
+    ...(directHits || []),
+    ...(matchedText || []),
+  ]);
+}
+
+function shapeItems(matches = [], { fallbackSource = "texte" } = {}) {
+  return dedupeByName(matches)
+    .map((m) => ({
+      slot: m.slot,
+      name: m.name,
+      confidence: typeof m.confidence === "number" ? m.confidence : 0.5,
+      source: m.source || fallbackSource,
+      raw: m.raw,
+      proof: m.proof || null,
+    }))
+    .sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+}
+
+function collectContextWindow(sources = [], seconds, window = 14) {
+  if (!Array.isArray(sources) || typeof seconds !== "number") return "";
+  const start = Math.max(0, seconds - window / 2);
+  const end = seconds + window / 2;
+  const lines = [];
+  for (const source of sources) {
+    const cues = Array.isArray(source?.cues) ? source.cues : [];
+    for (const cue of cues) {
+      const cueStart = typeof cue.start === "number" ? cue.start : null;
+      if (cueStart == null) continue;
+      if (cueStart >= start && cueStart <= end) {
+        const text = normalize(cue.text || "");
+        if (text) lines.push(text);
+      }
+    }
+  }
+  return lines.join("\n");
 }
 
 // ================== HANDLER ==================
@@ -705,9 +993,26 @@ export default async function handler(req, res) {
 
     // 2) Sources textuelles + streams alternatifs
     const readable = await getReadableWatchPage(id);
-    const piped    = await getPipedVideo(id);
-    const invid    = await getInvidiousVideo(id);
-
+    const piped = await getPipedVideo(id);
+    const invid = await getInvidiousVideo(id);
+    const pipedSummary = summarizeAttempts(piped.attempts, piped.hint) || null;
+    const invidSummary = summarizeAttempts(invid.attempts, invid.hint) || null;
+    const readableSummary = readable.ok
+      ? null
+      : readable.error
+      ? readable.error
+      : readable.status
+      ? `HTTP ${readable.status}${readable.statusText ? ` ${readable.statusText}` : ""}`
+      : null;
+    if (!piped.data && pipedSummary) {
+      warns.push(`Piped KO: ${pipedSummary}`);
+    }
+    if (!invid.data && invidSummary) {
+      warns.push(`Invidious KO: ${invidSummary}`);
+    }
+    if (!readable.ok && readableSummary) {
+      warns.push(`Readable KO: ${readableSummary}`);
+    }
     // 3) Captions — multi-voies (lib, ytdl, timedtext, piped, invidious)
     let transcript = { text: "", lang: null, source: null, cues: [] };
 
@@ -767,8 +1072,8 @@ export default async function handler(req, res) {
       const label = `Description (${(invid.host || "invidious").replace(/^https?:\/\//, "")})`;
       textSources.push({ id: "invid-desc", type: "description", label, text: invidDesc, weight: 0.9 });
     }
-    if (readable) {
-      textSources.push({ id: "readable", type: "readable", label: "Page YouTube lisible", text: readable, weight: 0.8 });
+    if (readable.text) {
+      textSources.push({ id: "readable", type: "readable", label: "Page YouTube lisible", text: readable.text, weight: 0.8 });
     }
     if (transcript.text) {
       const langLabel = transcript.lang ? `Transcript (${transcript.lang})` : "Transcript";
@@ -821,7 +1126,7 @@ export default async function handler(req, res) {
     const assembled = textSources.map(src => src.text || "").filter(Boolean).join("\n");
 
     // 7) DofusBook + évidences
-    const dofusbooks = findDofusbookLinks(assembled);
+    const dofusbooks = Array.from(new Set(findDofusbookLinks(assembled)));
     const evidences  = gatherEvidences(textSources, 32);
     const presentationMoments = detectStuffMoments(textSources, { limit: 5 });
 
@@ -830,8 +1135,13 @@ export default async function handler(req, res) {
     const directHits  = scanKnownItemsBySubstring(assembled);
     const slotCapHits = scanSlotNamePatterns(assembled);
     const textCand    = extractItemCandidates(assembled);
-    let   matchedText = normalizeItems(textCand);
-    let   matched     = dedupeByName([ ...slotCapHits, ...aliasHits, ...directHits, ...matchedText ]);
+    const matchedText = normalizeItems(textCand);
+    const textMatches = dedupeByName([
+      ...(slotCapHits || []),
+      ...(aliasHits || []),
+      ...(directHits || []),
+      ...(matchedText || []),
+    ]);
 
     // 9) Exos + éléments (sur TOUT le texte consolidé)
     const exos = detectExos(assembled);
@@ -839,17 +1149,67 @@ export default async function handler(req, res) {
     const klass = inferClassFromText(assembled);
 
     // 10) Fusion finale items (priorité OCR)
-    const items = dedupeByName([
+    const aggregateMatches = dedupeByName([
       ...(ocrMatches || []),
-      ...(slotCapHits || []),
-      ...(aliasHits || []),
-      ...(directHits || []),
-      ...(matchedText || [])
-    ]).map(m => ({
-      slot: m.slot, name: m.name, confidence: m.confidence,
-      source: m.source || (ocrMatches.some(ocrHit => ocrHit.name === m.name) ? "ocr+fuzzy" : "text+fuzzy"),
-      raw: m.raw, proof: m.proof || null
-    }));
+      ...(textMatches || []),
+    ]);
+    const items = shapeItems(aggregateMatches, { fallbackSource: "texte" });
+
+    const stuffSets = [];
+    const seenSignatures = new Set();
+    const makeSignature = (collection = []) =>
+      collection
+        .map((item) => (item?.name || "").toLowerCase())
+        .filter(Boolean)
+        .sort()
+        .join("|");
+
+    const pushStuffSet = (entry) => {
+      if (!entry || !Array.isArray(entry.items) || !entry.items.length) return;
+      const signature = makeSignature(entry.items);
+      if (!signature) return;
+      if (seenSignatures.has(signature)) return;
+      seenSignatures.add(signature);
+      stuffSets.push({
+        ...entry,
+        items: entry.items,
+        item_count: entry.items.length,
+      });
+    };
+
+    pushStuffSet({
+      id: "aggregate",
+      label: "Synthèse générale",
+      origin: "aggregate",
+      source: "Transcript + OCR",
+      note: "Combinaison de toutes les sources textuelles",
+      timestamp: null,
+      items,
+    });
+
+    presentationMoments.slice(0, 6).forEach((moment, idx) => {
+      if (!moment || typeof moment.seconds !== "number") return;
+      let windowText = collectContextWindow(textSources, moment.seconds, 18);
+      if (moment.text && (!windowText || windowText.toLowerCase().indexOf(moment.text.toLowerCase()) === -1)) {
+        windowText = `${moment.text}\n${windowText || ""}`.trim();
+      }
+      if (!windowText) return;
+      const matches = collectTextMatches(windowText);
+      if (!matches.length) return;
+      const shaped = shapeItems(matches, { fallbackSource: moment.source || "Transcript" });
+      if (shaped.length < 2) return;
+      pushStuffSet({
+        id: `moment-${idx}`,
+        label: moment.timestamp ? `Moment ${moment.timestamp}` : `Moment ${idx + 1}`,
+        origin: "moment",
+        source: moment.source || "Transcript",
+        timestamp: moment.timestamp || null,
+        seconds: moment.seconds,
+        note: "Sélection autour de ce passage",
+        context_excerpt: windowText.slice(0, 400),
+        items: shaped,
+      });
+    });
 
     const transcriptPublic = {
       text: transcript.text,
@@ -870,7 +1230,20 @@ export default async function handler(req, res) {
         embed_url: ytEmbed(id)
       },
       sources: {
-        piped: !!piped.data, invidious: !!invid.data, readable: !!readable,
+        piped: !!piped.data, invidious: !!invid.data, readable: !!readable.text,
+        piped_host: piped.host,
+        piped_status: piped.status || (piped.data ? "ok" : piped.attempts?.length ? "failed" : null),
+        piped_note: pipedSummary,
+        piped_hint: piped.hint || null,
+        piped_attempts: Array.isArray(piped.attempts) ? piped.attempts.length : 0,
+        invidious_host: invid.host,
+        invidious_status: invid.status || (invid.data ? "ok" : invid.attempts?.length ? "failed" : null),
+        invidious_note: invidSummary,
+        invidious_hint: invid.hint || null,
+        invidious_attempts: Array.isArray(invid.attempts) ? invid.attempts.length : 0,
+        readable_status: readable.ok ? "ok" : "failed",
+        readable_note: readableSummary,
+        readable_url: readable.url,
         transcript_source: transcript.source, transcript_lang: transcript.lang,
         transcript_has_timing: transcriptPublic.has_timing,
         transcript_is_translation: transcriptPublic.is_translation,
@@ -879,11 +1252,13 @@ export default async function handler(req, res) {
         speech_model: speech?.model || (asrConfig?.model ?? null)
       },
       dofusbook_url: dofusbooks[0] || null,
+      dofusbook_urls: dofusbooks,
       class: klass,
       element_build: elements,
       element_signals: elementSignals,
       level: null,
       items,
+      stuffs: stuffSets,
       exos,
       stats_synthese: {},
       evidences,
@@ -903,7 +1278,17 @@ export default async function handler(req, res) {
         asr_model: speech?.model || (asrConfig?.model ?? null),
         speech_segments: speech?.segment_count ?? 0,
         speech_keywords: speech?.keywords?.length ?? 0,
-        warns
+        aggregate_items: items.length,
+        stuff_sets: stuffSets.length,
+        warns,
+        piped_attempts: piped.attempts || [],
+        invidious_attempts: invid.attempts || [],
+        readable_status: {
+          ok: readable.ok,
+          status: readable.status || null,
+          statusText: readable.statusText || null,
+          error: readable.error || null
+        }
       }
     };
 
