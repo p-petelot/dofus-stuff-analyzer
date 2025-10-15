@@ -82,18 +82,19 @@ a:hover { color: #c084fc; }
 
 .search-card {
   margin-top: 12px;
-  padding: 18px 20px;
+  padding: 12px 16px;
 }
 
 .search-bar {
   display: flex;
-  gap: 12px;
-  align-items: center;
+  gap: 10px;
+  align-items: stretch;
 }
 
 .search-bar__input {
   flex: 1 1 auto;
-  padding: 10px 14px;
+  padding: 0 14px;
+  height: 44px;
   border-radius: 12px;
   border: 1px solid var(--border);
   background: rgba(15, 23, 42, 0.7);
@@ -111,8 +112,9 @@ a:hover { color: #c084fc; }
 }
 
 .search-bar__button {
-  padding: 10px 18px;
+  padding: 0 18px;
   min-width: 120px;
+  height: 44px;
 }
 
 .btn {
@@ -514,17 +516,17 @@ a:hover { color: #c084fc; }
 
 .equipment-board__grid {
   display: grid;
-  gap: 14px;
+  gap: 18px;
   justify-content: center;
-  grid-template-columns: repeat(5, minmax(80px, 1fr));
-  grid-template-rows: repeat(5, minmax(80px, auto));
+  grid-template-columns: repeat(5, minmax(110px, 1fr));
+  grid-template-rows: repeat(5, minmax(100px, auto));
   grid-template-areas:
     ". head head cape weapon"
     "amulet ringLeft preview preview ringRight"
     "amulet belt preview preview ringRight"
     "shield boots preview preview dofus"
     "pet mount preview preview extras";
-  max-width: 620px;
+  max-width: 680px;
   margin: 0 auto;
 }
 
@@ -534,11 +536,11 @@ a:hover { color: #c084fc; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 16px;
+  gap: 14px;
+  padding: 20px;
   border-radius: 22px;
-  background: rgba(15, 23, 42, 0.55);
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .equipment-preview img,
@@ -571,61 +573,75 @@ a:hover { color: #c084fc; }
   position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 8px;
-  padding: 12px;
-  border-radius: 16px;
-  background: rgba(15, 23, 42, 0.5);
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  min-height: 110px;
+  align-items: stretch;
+  text-align: left;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.52);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  min-width: 0;
 }
 
 .equip-slot__label {
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   color: var(--muted);
 }
 
 .equip-slot__content {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 6px;
+  align-items: stretch;
+  gap: 8px;
   width: 100%;
 }
 
 .equip-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   width: 100%;
   border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(15, 23, 42, 0.75);
-  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.78);
+  padding: 10px 12px;
   font-size: 13px;
   line-height: 1.35;
 }
 
 .equip-item--primary {
   font-weight: 600;
+  border-color: rgba(168, 85, 247, 0.35);
+  background: rgba(76, 29, 149, 0.24);
+  box-shadow: 0 12px 24px -20px rgba(168, 85, 247, 0.7);
+}
+
+.equip-item--secondary {
+  font-weight: 500;
+  color: rgba(226, 232, 240, 0.85);
+  background: rgba(15, 23, 42, 0.6);
+}
+
+.equip-item__name {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .equip-item__confidence {
-  display: block;
-  margin-top: 4px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 
-.equip-item--more {
-  font-size: 11px;
-  color: rgba(148, 163, 184, 0.75);
-  border: 1px dashed rgba(148, 163, 184, 0.35);
-  background: transparent;
-  padding: 6px 10px;
-}
-
 .equip-item--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 1px dashed rgba(148, 163, 184, 0.32);
   color: rgba(148, 163, 184, 0.7);
   background: transparent;

@@ -55,7 +55,19 @@ const EQUIPMENT_LAYOUT = [
 
 function normalizeDofusbookLink(link) {
   if (!link) return link;
-  let current = link.trim();
+  let current = String(link).trim();
+
+  const candidates = current.match(/https?:\/\/[^\s)\]]+/gi);
+  if (candidates?.length) {
+    const preferred = candidates.find((candidate) => /(dofusbook|d-bk)\.net/i.test(candidate));
+    if (preferred) {
+      current = preferred;
+    } else if (!current.startsWith("http")) {
+      current = candidates[0];
+    }
+  }
+
+  current = current.replace(/^[([<]+/, "").replace(/[)>\]]+$/, "");
 
   for (let i = 0; i < 4; i += 1) {
     try {
@@ -352,20 +364,28 @@ function EquipmentBoard({ items, preview }) {
     if (!bucket.length) {
       return <div className="equip-item equip-item--empty">Vide</div>;
     }
-    const [primary, ...rest] = bucket;
-    return (
-      <>
-        <div className="equip-item equip-item--primary">
-          <span className="equip-item__name">{primary.name}</span>
-          {typeof primary.confidence === "number" ? (
-            <span className="equip-item__confidence">{Math.round(primary.confidence * 100)}%</span>
+    return bucket.map((entry, idx) => {
+      const confidenceValue = (() => {
+        if (typeof entry.confidence !== "number" || !Number.isFinite(entry.confidence)) {
+          return null;
+        }
+        const safe = Math.max(0, Math.min(1, entry.confidence));
+        return `${Math.round(safe * 100)}%`;
+      })();
+      return (
+        <div
+          key={entry.id || entry.name || `${entry.slot || "slot"}-${idx}`}
+          className={`equip-item ${idx === 0 ? "equip-item--primary" : "equip-item--secondary"}`}
+        >
+          <span className="equip-item__name" title={entry.name}>
+            {entry.name}
+          </span>
+          {confidenceValue ? (
+            <span className="equip-item__confidence">{confidenceValue}</span>
           ) : null}
         </div>
-        {rest.length ? (
-          <div className="equip-item equip-item--more">+{rest.length}</div>
-        ) : null}
-      </>
-    );
+      );
+    });
   };
 
   return (
