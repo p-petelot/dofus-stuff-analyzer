@@ -93,10 +93,11 @@ function Tag({ children, tone = "neutral", icon, subtle, title }) {
   );
 }
 
-function SourceBadges({ sources, speech }) {
+function SourceBadges({ sources }) {
   if (!sources) return null;
   const {
     piped,
+    piped_host,
     piped_note,
     piped_status,
     piped_hint,
@@ -105,6 +106,7 @@ function SourceBadges({ sources, speech }) {
     readable_status,
     readable_note,
     invidious,
+    invidious_host,
     invidious_note,
     invidious_status,
     invidious_hint,
@@ -113,17 +115,14 @@ function SourceBadges({ sources, speech }) {
     transcript_lang,
     transcript_has_timing,
     transcript_is_translation,
-    speech_status,
-    speech_provider,
-    speech_model,
   } = sources;
 
   const compact = (value) => {
     if (!value) return null;
-    const [first] = value.split("|");
+    const [first] = value.split('|');
     if (!first) return null;
-    const parts = first.split(":");
-    const base = parts.length > 1 ? parts.slice(1).join(":").trim() : first.trim();
+    const parts = first.split(':');
+    const base = parts.length > 1 ? parts.slice(1).join(':').trim() : first.trim();
     return base || null;
   };
 
@@ -131,119 +130,90 @@ function SourceBadges({ sources, speech }) {
     const parts = [];
     if (detail) parts.push(detail);
     if (attempts > 0) {
-      parts.push(`${attempts} tentative${attempts > 1 ? "s" : ""}`);
+      parts.push(`${attempts} tentative${attempts > 1 ? 's' : ''}`);
     }
-    return parts.length ? parts.join(" • ") : null;
+    return parts.length ? parts.join(' • ') : null;
   };
+
+  const hostLabel = (host) => (host ? host.replace(/^https?:\/\//, '') : null);
 
   const badges = [
     {
-      key: "readable",
-      icon: "📰",
-      label: "Page lisible",
+      key: 'readable',
+      icon: '📰',
+      label: 'Page lisible',
       ok: !!readable,
-      warning: readable_status === "failed",
-      tone: readable ? "ok" : readable_status === "failed" ? "warn" : "idle",
-      message: readable ? "Disponible" : "Indisponible",
+      warning: readable_status === 'failed',
+      tone: readable ? 'ok' : readable_status === 'failed' ? 'warn' : 'idle',
+      message: readable ? 'Disponible' : 'Indisponible',
       detail: compact(readable_note),
     },
     {
-      key: "piped",
-      icon: "🚰",
-      label: "Flux Piped",
-      ok: piped_status === "ok" || !!piped,
-      warning: piped_status !== "ok" && piped_status !== "disabled",
+      key: 'piped',
+      icon: '🚰',
+      label: 'Flux Piped',
+      ok: piped_status === 'ok' || !!piped,
+      warning: piped_status !== 'ok' && piped_status !== 'disabled',
       tone:
-        piped_status === "disabled"
-          ? "idle"
-          : piped_status === "ok" || piped
-          ? "ok"
-          : "warn",
+        piped_status === 'disabled'
+          ? 'idle'
+          : piped_status === 'ok' || piped
+          ? 'ok'
+          : 'warn',
       message:
-        piped_status === "disabled"
-          ? "Désactivé"
-          : piped
-          ? "OK"
-          : "Hors service",
-      detail: withAttempts(piped_hint || compact(piped_note), piped_attempts || 0),
+        piped_status === 'disabled'
+          ? 'Désactivé'
+          : piped_status === 'ok' || piped
+          ? 'Opérationnel'
+          : 'Hors service',
+      detail:
+        piped_status === 'ok' && hostLabel(piped_host)
+          ? hostLabel(piped_host)
+          : withAttempts(piped_hint || compact(piped_note), piped_attempts || 0),
     },
     {
-      key: "invidious",
-      icon: "🌀",
-      label: "Flux Invidious",
-      ok: invidious_status === "ok" || !!invidious,
-      warning: invidious_status !== "ok" && invidious_status !== "disabled",
+      key: 'invidious',
+      icon: '🌀',
+      label: 'Flux Invidious',
+      ok: invidious_status === 'ok' || !!invidious,
+      warning: invidious_status !== 'ok' && invidious_status !== 'disabled',
       tone:
-        invidious_status === "disabled"
-          ? "idle"
-          : invidious_status === "ok" || invidious
-          ? "ok"
-          : "warn",
+        invidious_status === 'disabled'
+          ? 'idle'
+          : invidious_status === 'ok' || invidious
+          ? 'ok'
+          : 'warn',
       message:
-        invidious_status === "disabled"
-          ? "Désactivé"
-          : invidious
-          ? "OK"
-          : "Hors service",
-      detail: withAttempts(invidious_hint || compact(invidious_note), invidious_attempts || 0),
+        invidious_status === 'disabled'
+          ? 'Désactivé'
+          : invidious_status === 'ok' || invidious
+          ? 'Opérationnel'
+          : 'Hors service',
+      detail:
+        invidious_status === 'ok' && hostLabel(invidious_host)
+          ? hostLabel(invidious_host)
+          : withAttempts(invidious_hint || compact(invidious_note), invidious_attempts || 0),
     },
     {
-      key: "captions",
-      icon: "💬",
-      label: "Sous-titres",
+      key: 'captions',
+      icon: '💬',
+      label: 'Sous-titres',
       ok: !!transcript_source,
       warning: !transcript_source,
-      tone: transcript_source ? "ok" : "warn",
-      message: transcript_source ? (transcript_lang ? transcript_lang : "Présents") : "Absents",
+      tone: transcript_source ? 'ok' : 'warn',
+      message: transcript_source ? (transcript_lang ? transcript_lang : 'Présents') : 'Absents',
       detail: transcript_is_translation
-        ? "Traduction automatique"
+        ? 'Traduction automatique'
         : transcript_has_timing
-        ? "Horodatage détecté"
+        ? 'Horodatage détecté'
         : null,
-    },
-    {
-      key: "asr",
-      icon: "🎙️",
-      label: "Analyse audio",
-      ok: speech_status === "ok",
-      warning:
-        speech_status === "error" ||
-        speech_status === "empty" ||
-        speech_status === "missing" ||
-        speech_status === "not_configured",
-      tone:
-        speech_status === "ok"
-          ? "ok"
-          : speech_status === "error"
-          ? "warn"
-          : speech_status === "empty"
-          ? "idle"
-          : "warn",
-      message:
-        speech_status === "ok"
-          ? speech_provider || "ASR"
-          : speech_status === "configured"
-          ? "Prêt"
-          : speech_status === "empty"
-          ? "Aucun texte"
-          : speech_status === "error"
-          ? "Erreur"
-          : speech_status === "missing" || speech_status === "not_configured"
-          ? "À configurer"
-          : "Inactif",
-      detail:
-        speech_status === "ok"
-          ? speech_model || speech_provider || null
-          : Array.isArray(speech?.notes) && speech.notes.length
-          ? speech.notes[0]
-          : speech_model || null,
     },
   ];
 
   return (
     <div className="status-grid">
       {badges.map((badge) => {
-        const tone = badge.tone || (badge.ok ? "ok" : badge.warning ? "warn" : "idle");
+        const tone = badge.tone || (badge.ok ? 'ok' : badge.warning ? 'warn' : 'idle');
         return (
           <div key={badge.key} className={`status-card status-card--${tone}`}>
             <span className="status-card__icon" aria-hidden="true">
@@ -257,165 +227,6 @@ function SourceBadges({ sources, speech }) {
           </div>
         );
       })}
-    </div>
-  );
-}
-
-function StuffSwitcher({ stuffs, activeIndex, onSelect }) {
-  if (!Array.isArray(stuffs) || !stuffs.length) return null;
-  const active = stuffs[activeIndex] || stuffs[0];
-  return (
-    <div className="stuff-switcher">
-      <div className="stuff-switcher__list">
-        {stuffs.map((set, idx) => {
-          const isActive = idx === activeIndex;
-          return (
-            <button
-              key={set.id || `${set.label}-${idx}`}
-              type="button"
-              className={`stuff-pill${isActive ? " stuff-pill--active" : ""}`}
-              onClick={() => onSelect(idx)}
-            >
-              <span className="stuff-pill__label">{set.label || `Variante ${idx + 1}`}</span>
-              {typeof set.item_count === "number" ? (
-                <span className="stuff-pill__count">{set.item_count} pièce{set.item_count > 1 ? "s" : ""}</span>
-              ) : null}
-              {set.timestamp ? <span className="stuff-pill__tag">{set.timestamp}</span> : null}
-            </button>
-          );
-        })}
-      </div>
-      {active ? (
-        <div className="stuff-switcher__meta">
-          <div className="stuff-switcher__tags">
-            {active.source ? (
-              <Tag tone="neutral" subtle icon="🧭">
-                {active.source}
-              </Tag>
-            ) : null}
-            {active.timestamp ? (
-              <Tag tone="info" subtle icon="⏱️">
-                {active.timestamp}
-              </Tag>
-            ) : null}
-          </div>
-          {active.note ? <p className="caption stuff-switcher__note">{active.note}</p> : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function EquipmentBoard({ items, preview }) {
-  const areaMap = new Map(EQUIPMENT_LAYOUT.map((area) => [area.id, []]));
-
-  const normalise = (value) => (value || "").toLowerCase();
-
-  const assign = (areaId, item) => {
-    if (!areaMap.has(areaId)) {
-      areaMap.set(areaId, []);
-    }
-    areaMap.get(areaId).push(item);
-  };
-
-  const ringsBuffer = [];
-
-  for (const item of items || []) {
-    const slot = normalise(item.slot);
-    if (!slot) {
-      assign("extras", item);
-      continue;
-    }
-    let placed = false;
-    for (const area of EQUIPMENT_LAYOUT) {
-      if (area.slots.some((candidate) => normalise(candidate) === slot)) {
-        assign(area.id, item);
-        placed = true;
-        break;
-      }
-    }
-    if (placed) continue;
-    if (slot.includes("anneau")) {
-      ringsBuffer.push(item);
-      continue;
-    }
-    assign("extras", item);
-  }
-
-  if (ringsBuffer.length) {
-    assign("ring-left", ringsBuffer[0]);
-    if (ringsBuffer[1]) assign("ring-right", ringsBuffer[1]);
-    for (let i = 2; i < ringsBuffer.length; i += 1) {
-      assign("extras", ringsBuffer[i]);
-    }
-  }
-
-  const renderItems = (bucket = []) => {
-    if (!bucket.length) {
-      return <span className="equip-slot__empty">—</span>;
-    }
-    return bucket.map((item, idx) => (
-      <div key={`${item.name}-${idx}`} className="equip-item">
-        <span className="equip-item__name">{item.name}</span>
-        <ConfidenceBar value={item.confidence} />
-        <div className="equip-item__meta">
-          <span className="equip-item__source">{item.source}</span>
-          {item.proof ? (
-            <span className="equip-item__proof" title={item.proof}>
-              Preuve
-            </span>
-          ) : null}
-        </div>
-      </div>
-    ));
-  };
-
-  return (
-    <div className="equipment-board">
-      <div className="equipment-board__preview">
-        {preview?.thumbnail ? (
-          <div className="equipment-preview" style={{ backgroundImage: `url(${preview.thumbnail})` }} aria-hidden="true" />
-        ) : (
-          <div className="equipment-preview equipment-preview--placeholder" aria-hidden="true">
-            <span>{preview?.icon || "🧙"}</span>
-          </div>
-        )}
-        <span className="equipment-preview__caption">{preview?.label || "Aperçu"}</span>
-      </div>
-      {EQUIPMENT_LAYOUT.map((area) => (
-        <div key={area.id} className={`equip-slot equip-slot--${area.id}`}>
-          <span className="equip-slot__label">{area.label}</span>
-          <div className="equip-slot__items">{renderItems(areaMap.get(area.id))}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function MomentsList({ moments }) {
-  if (!moments?.length) return null;
-  return (
-    <div className="moments">
-      <span className="caption caption--label">Moments où le stuff est présenté</span>
-      <ul className="moments__list">
-        {moments.map((moment, idx) => (
-          <li key={idx} className="moments__item">
-            <div className="moments__meta">
-              {moment.timestamp ? (
-                <Tag tone="info" icon="⏱️">
-                  {moment.timestamp}
-                </Tag>
-              ) : null}
-              {moment.source ? (
-                <Tag tone="neutral" subtle icon="📄">
-                  {moment.source}
-                </Tag>
-              ) : null}
-            </div>
-            <p className="moments__text">{moment.text}</p>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
@@ -578,229 +389,6 @@ function EvidenceList({ evidences }) {
   );
 }
 
-function SpeechInsights({ speech }) {
-  if (!speech) {
-    return <p className="caption">Analyse audio indisponible.</p>;
-  }
-
-  const status = speech.status || "missing";
-  const providerLabel = speech.provider_label || (speech.provider ? `ASR ${speech.provider}` : "Analyse audio");
-  const isNotConfigured = status === "not_configured" || status === "missing";
-  const statusTone =
-    status === "ok"
-      ? "success"
-      : status === "error"
-      ? "warning"
-      : isNotConfigured
-      ? "warning"
-      : "muted";
-  const statusText =
-    {
-      ok: "Analyse audio activée",
-      empty: "Aucun segment exploitable",
-      error: "Erreur de transcription",
-      not_configured: "ASR non configuré",
-      missing: "ASR non configuré",
-      configured: "ASR prêt",
-    }[status] || status;
-
-  const providerTone =
-    status === "ok"
-      ? "success"
-      : status === "error"
-      ? "warning"
-      : isNotConfigured
-      ? "warning"
-      : "muted";
-
-  const ratio = typeof speech.coverage_ratio === "number" ? Math.round(Math.max(0, Math.min(1, speech.coverage_ratio)) * 100) : null;
-  const rawConfidence = typeof speech.avg_confidence === "number" ? Math.max(0, Math.min(1, speech.avg_confidence)) : null;
-  const avgConfidence = rawConfidence != null ? Math.round(rawConfidence * 100) : null;
-  const segments = speech.segment_count ?? (speech.cues?.length ?? 0);
-  const keywords = Array.isArray(speech.keywords) ? speech.keywords : [];
-  const highlights = Array.isArray(speech.highlights) ? speech.highlights.slice(0, 6) : [];
-  const notes = Array.isArray(speech.notes) ? speech.notes : [];
-  const moments = Array.isArray(speech.moments) ? speech.moments.slice(0, 4) : [];
-
-  const formatDuration = (seconds) => {
-    if (typeof seconds !== "number" || Number.isNaN(seconds)) return null;
-    const total = Math.round(seconds);
-    const minutes = Math.floor(total / 60);
-    const secs = total % 60;
-    if (minutes > 0) {
-      return `${minutes}m${secs.toString().padStart(2, "0")}s`;
-    }
-    return `${secs}s`;
-  };
-
-  const durationLabel = formatDuration(speech.duration_seconds);
-
-  return (
-    <div className="speech-panel">
-      <div className="speech-header">
-        <div className="speech-badges">
-          <Tag tone={providerTone} icon="🎙️">
-            {providerLabel}
-            {speech.model ? <span className="tag__meta tag__meta--soft">{speech.model}</span> : null}
-          </Tag>
-          <Tag tone={statusTone} subtle icon={status === "ok" ? "✅" : "⚠️"}>
-            {statusText}
-          </Tag>
-        </div>
-        {status === "ok" ? (
-          <div className="speech-metrics">
-            <div className="metric">
-              <span className="metric__label">Segments</span>
-              <strong>{segments}</strong>
-            </div>
-            <div className="metric">
-              <span className="metric__label">Couverture</span>
-              <strong>{ratio != null ? `${ratio}%` : "—"}</strong>
-            </div>
-            <div className="metric">
-              <span className="metric__label">Confiance</span>
-              <strong>{avgConfidence != null ? `${avgConfidence}%` : "—"}</strong>
-            </div>
-            <div className="metric">
-              <span className="metric__label">Durée</span>
-              <strong>{durationLabel || "—"}</strong>
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      {status === "ok" ? (
-        <>
-          <div className="speech-keywords">
-            <span className="caption caption--label">Mots-clés audio</span>
-            {keywords.length ? (
-              <div className="tagrow tagrow--wrap" style={{ marginTop: 8 }}>
-                {keywords.map((kw) => (
-                  <Tag key={kw.term} tone="accent" subtle icon="🔑">
-                    {kw.term}
-                    <span className="tag__meta">×{kw.count}</span>
-                  </Tag>
-                ))}
-              </div>
-            ) : (
-              <p className="caption">Aucun mot-clé distinct n’a été détecté.</p>
-            )}
-          </div>
-
-          {highlights.length ? (
-            <div className="speech-highlights">
-              <span className="caption caption--label">Phrases probantes (audio)</span>
-              <ul>
-                {highlights.map((h, idx) => (
-                  <li key={`${h.source || "highlight"}-${idx}`} className="speech-highlight">
-                    <div className="speech-highlight__meta">
-                      {h.timestamp ? (
-                        <Tag tone="info" subtle icon="⏱️">
-                          {h.timestamp}
-                        </Tag>
-                      ) : null}
-                      {h.source ? (
-                        <Tag tone="neutral" subtle icon="🧾">
-                          {h.source}
-                        </Tag>
-                      ) : null}
-                      {typeof h.score === "number" ? (
-                        <Tag tone="accent" subtle icon="📈">
-                          {h.score.toFixed(1)}
-                        </Tag>
-                      ) : null}
-                    </div>
-                    <p>{h.text}</p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          {moments.length ? (
-            <div className="speech-moments">
-              <span className="caption caption--label">Timecodes audio</span>
-              <div className="speech-moments__row">
-                {moments.map((m, idx) => (
-                  <div key={`${m.timestamp || idx}`} className="speech-moment">
-                    <Tag tone="info" subtle icon="🎯">
-                      {m.timestamp || "—"}
-                    </Tag>
-                    <p>{m.text}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {notes.length ? (
-            <ul className="speech-notes">
-              {notes.map((note, idx) => (
-                <li key={idx}>{note}</li>
-              ))}
-            </ul>
-          ) : null}
-
-          {speech.text ? (
-            <details className="speech-raw">
-              <summary>Transcript audio détaillé</summary>
-              <div className="speech-raw__actions">
-                <CopyButton text={speech.text} label="Copier l'audio" />
-              </div>
-              <pre className="pre speech__text">{speech.text}</pre>
-            </details>
-          ) : null}
-        </>
-      ) : (
-        <div className="speech-empty">
-          <p className="caption">{statusText}.</p>
-          {notes.length ? (
-            <ul className="speech-notes">
-              {notes.map((note, idx) => (
-                <li key={idx}>{note}</li>
-              ))}
-            </ul>
-          ) : null}
-          {isNotConfigured ? (
-            <details className="speech-help">
-              <summary>Configurer l'analyse audio</summary>
-              <p className="caption">Pour activer l'ASR&nbsp;:</p>
-              <ol className="speech-help__list">
-                <li>
-                  <strong>Crée un fichier <code>.env.local</code></strong> à la racine du projet (ou utilise les variables d'environnement de ton hébergeur).
-                </li>
-                <li>
-                  <strong>Choisis un fournisseur</strong> et renseigne l'une des configurations ci-dessous.
-                </li>
-                <li>
-                  <strong>Redémarre ton <code>npm run dev</code></strong> pour appliquer les changements.
-                </li>
-              </ol>
-              <p className="caption">Exemples de configuration&nbsp;:</p>
-              <pre className="pre speech__text">
-                {`# Whisper officiel OpenAI
-OPENAI_API_KEY=votre_cle
-
-# Whisper Groq (rapide)
-GROQ_API_KEY=votre_cle
-ASR_MODEL=whisper-large-v3
-
-# Endpoint personnalisé (Whisper.cpp, OpenAI compatible, etc.)
-ASR_ENDPOINT=https://votre-service.example/transcribe
-ASR_API_KEY=votre_cle
-ASR_MODEL=whisper-small
-ASR_LABEL=Mon ASR`}
-              </pre>
-              <p className="speech-help__hint">
-                Tu peux aussi préciser <code>ASR_PROVIDER</code> pour le nom technique et <code>ASR_EXTRA_HEADERS</code> (JSON) si ton service exige des en-têtes supplémentaires.
-              </p>
-            </details>
-          ) : null}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function ConfidenceBar({ value }) {
   const pct = Math.round((value || 0) * 100);
@@ -958,15 +546,9 @@ export default function Home() {
                     <Tag tone={hasDofusbook ? "success" : "muted"} icon="📘">
                       {hasDofusbook ? `DofusBook ×${dofusbookCount}` : "DofusBook manquant"}
                     </Tag>
-                    <Tag
-                      tone={out.speech?.status === "ok" ? "success" : out.speech?.status === "error" ? "warning" : "muted"}
-                      icon="🎧"
-                    >
-                      {out.speech?.status === "ok" ? "Audio analysé" : "Audio inactif"}
-                    </Tag>
                   </div>
                   <ElementBadges elements={out.element_build} signals={out.element_signals} />
-                  <SourceBadges sources={out.sources} speech={out.speech} />
+                  <SourceBadges sources={out.sources} />
                   <MomentsList moments={out.presentation_moments} />
                   <ExoBadges exos={out.exos} />
                   {hasDofusbook ? (
@@ -1078,10 +660,6 @@ export default function Home() {
                 <EvidenceList evidences={out.evidences} />
               </div>
 
-              <div className="card card--speech">
-                <h2>🎧 Analyse audio</h2>
-                <SpeechInsights speech={out.speech} />
-              </div>
             </section>
 
             <section className="grid">
@@ -1164,7 +742,7 @@ export default function Home() {
         )}
 
         <footer className="caption" style={{ textAlign: "center", margin: "32px 0" }}>
-          Front V8 — interface remaniée, badges dynamiques, barre de chargement et signaux d’éléments enrichis.
+          Front V9 — flux secondaires réparés, thème Dofus modernisé et interface plus claire.
         </footer>
       </main>
     </>

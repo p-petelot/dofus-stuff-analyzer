@@ -10,9 +10,17 @@ import os from "os";
 // de protection (Cloudflare, pages d'attente, etc.). Afin d'éviter de brider
 // l'analyse avec des erreurs bruitées, aucun miroir n'est activé par défaut ;
 // l'utilisateur peut fournir les siens via les variables d'environnement.
-const DEFAULT_PIPED_HOSTS = [];
+const DEFAULT_PIPED_HOSTS = [
+  "https://pipedapi.kavin.rocks",
+  "https://piped.video",
+  "https://piped.lunar.icu",
+];
 
-const DEFAULT_INVIDIOUS_HOSTS = [];
+const DEFAULT_INVIDIOUS_HOSTS = [
+  "https://invidious.fdn.fr",
+  "https://yewtu.be",
+  "https://inv.tux.pizza",
+];
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 export const config = { runtime: "nodejs", api: { bodyParser: false } };
@@ -35,8 +43,16 @@ function parseHostList(raw, fallback = []) {
         .map((h) => h.trim())
         .filter(Boolean)
     : [];
-  if (list.length) return list;
-  return [...fallback];
+  const source = list.length ? list : fallback;
+  const normalized = source
+    .map((host) => host ? host.replace(/\/$/, "") : host)
+    .map((host) => {
+      if (!host) return host;
+      if (/^https?:\/\//i.test(host)) return host;
+      return `https://${host}`;
+    })
+    .filter(Boolean);
+  return Array.from(new Set(normalized));
 }
 
 function flagDisabled(value) {
@@ -165,7 +181,12 @@ async function getPipedVideo(id) {
 
   for (const h of hosts) {
     try {
-      const res = await fetch(`${h}/api/v1/video/${id}`, { headers: { "User-Agent": "Mozilla/5.0" } });
+      const res = await fetch(`${h}/api/v1/video/${id}`, {
+        headers: {
+          "User-Agent": "Mozilla/5.0",
+          Accept: "application/json",
+        },
+      });
       if (!res.ok) {
         attempts.push({ host: h, status: res.status, statusText: res.statusText || null });
         continue;
@@ -220,7 +241,12 @@ async function getInvidiousVideo(id) {
 
   for (const h of hosts) {
     try {
-      const res = await fetch(`${h}/api/v1/videos/${id}`, { headers: { "User-Agent": "Mozilla/5.0" } });
+      const res = await fetch(`${h}/api/v1/videos/${id}`, {
+        headers: {
+          "User-Agent": "Mozilla/5.0",
+          Accept: "application/json",
+        },
+      });
       if (!res.ok) {
         attempts.push({ host: h, status: res.status, statusText: res.statusText || null });
         continue;
@@ -655,317 +681,6 @@ async function tryFramesAnySource({ id, ytFormats, piped, invid, opts, warns }) 
   throw new Error("No suitable format");
 }
 
-// ---------- Audio ASR helpers ----------
-function getAsrConfig() {
-  const parseJSON = (value) => {
-    if (!value) return {};
-    try { return JSON.parse(value); } catch { return {}; }
-  };
-
-  if (process.env.ASR_ENDPOINT && process.env.ASR_API_KEY) {
-    return {
-      provider: process.env.ASR_PROVIDER || "custom",
-      provider_label: process.env.ASR_LABEL || "ASR personnalisé",
-      model: process.env.ASR_MODEL || "custom-asr",
-      endpoint: process.env.ASR_ENDPOINT,
-      baseUrl: null,
-      key: process.env.ASR_API_KEY,
-      headers: parseJSON(process.env.ASR_EXTRA_HEADERS || process.env.ASR_HEADERS_JSON),
-    };
-  }
-
-  if (process.env.GROQ_API_KEY) {
-    return {
-      provider: "groq",
-      provider_label: "Groq Whisper",
-      model: process.env.GROQ_TRANSCRIBE_MODEL || "whisper-large-v3",
-      baseUrl: process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1",
-      endpoint: "/audio/transcriptions",
-      key: process.env.GROQ_API_KEY,
-      headers: {},
-    };
-  }
-
-  const openaiKey = (process.env.OPENAI_API_KEY || "").trim();
-  if (openaiKey) {
-    return {
-      provider: "openai",
-      provider_label: "OpenAI Whisper",
-      model: process.env.OPENAI_TRANSCRIBE_MODEL || "whisper-1",
-      baseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
-      endpoint: "/audio/transcriptions",
-      key: openaiKey,
-      headers: {},
-    };
-  }
-
-  return null;
-}
-
-function buildAsrUrl(config) {
-  if (!config) return null;
-  const endpoint = (config.endpoint || "/audio/transcriptions").trim();
-  if (config.baseUrl) {
-    const base = config.baseUrl.replace(/\/$/, "");
-    const pathPart = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-    return `${base}${pathPart}`;
-  }
-  return endpoint;
-}
-
-async function convertVideoToAudio(tmpFile, { maxSeconds }) {
-  const audioFile = path.join(path.dirname(tmpFile), "audio.mp3");
-  await new Promise((resolve, reject) => {
-    ffmpeg(tmpFile)
-      .outputOptions([`-t ${maxSeconds}`, "-vn", "-ac 1", "-ar 16000", "-b:a 96k"])
-      .on("error", reject)
-      .on("end", resolve)
-      .save(audioFile);
-  });
-  return audioFile;
-}
-
-async function transcribeAudioWithConfig(audioFile, config, warns) {
-  if (!config) return null;
-  const url = buildAsrUrl(config);
-  if (!url) return null;
-
-  try {
-    const pickModels = () => {
-      if (config.provider !== "openai") {
-        return config.model ? [config.model] : [null];
-      }
-      const chain = [config.model, "whisper-1", "gpt-4o-mini-transcribe", "gpt-4o-transcribe"];
-      const seen = new Set();
-      return chain
-        .filter(Boolean)
-        .filter((model) => {
-          const key = model.toLowerCase();
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-    };
-
-    const models = pickModels();
-    const attempts = models.length ? models : [null];
-    let lastError = null;
-
-    for (const modelName of attempts) {
-      const form = new FormData();
-      form.append("file", fs.createReadStream(audioFile), path.basename(audioFile));
-      if (modelName) form.append("model", modelName);
-      form.append("response_format", "verbose_json");
-      form.append("temperature", "0");
-      if (process.env.ASR_PROMPT) form.append("prompt", process.env.ASR_PROMPT);
-
-      const headers = { Authorization: `Bearer ${config.key}` };
-      for (const [key, value] of Object.entries(config.headers || {})) {
-        headers[key] = value;
-      }
-
-      const res = await fetch(url, { method: "POST", headers, body: form });
-      if (!res.ok) {
-        const text = await res.text();
-        const detail = text ? `: ${text.slice(0, 160)}` : "";
-        lastError = `HTTP ${res.status}${detail}`;
-        const retriable = config.provider === "openai" && [404, 410, 422].includes(res.status);
-        if (retriable && modelName !== attempts[attempts.length - 1]) {
-          warns.push(`ASR OpenAI modèle ${modelName} indisponible (${res.status}). Nouveau modèle…`);
-          continue;
-        }
-        warns.push(`ASR ${config.provider} HTTP ${res.status}${detail}`);
-        return { error: true, status: res.status, model: modelName || config.model || null, message: detail.trim() };
-      }
-
-      const data = await res.json();
-      if (!data) {
-        lastError = "réponse vide";
-        continue;
-      }
-
-      if (config.provider === "openai" && modelName && modelName !== config.model) {
-        warns.push(`ASR OpenAI fallback sur ${modelName}`);
-      }
-
-      const segments = Array.isArray(data.segments) ? data.segments : [];
-      const cues = segments
-        .map((seg) => ({
-          start: typeof seg.start === "number" ? seg.start : null,
-          end: typeof seg.end === "number" ? seg.end : null,
-          text: normalize(seg.text || seg.transcript || ""),
-          confidence: typeof seg.confidence === "number"
-            ? seg.confidence
-            : typeof seg.avg_logprob === "number"
-              ? Number((1 + seg.avg_logprob / 5).toFixed(3))
-              : typeof seg.no_speech_prob === "number"
-                ? Number((1 - seg.no_speech_prob).toFixed(3))
-                : null,
-        }))
-        .filter((cue) => cue.text);
-
-      const text = cues.length
-        ? cues.map((c) => c.text).join("\n")
-        : normalize(data.text || "");
-
-      const confidenceValues = cues
-        .map((c) => (typeof c.confidence === "number" ? c.confidence : null))
-        .filter((v) => v != null && !Number.isNaN(v));
-      const avgConfidence = confidenceValues.length
-        ? Number((confidenceValues.reduce((acc, val) => acc + val, 0) / confidenceValues.length).toFixed(3))
-        : null;
-
-      return {
-        text,
-        cues,
-        lang: data.language || data.lang || null,
-        duration: typeof data.duration === "number" ? data.duration : null,
-        avg_confidence: avgConfidence,
-        model: modelName || config.model || null,
-      };
-    }
-
-    if (lastError) {
-      warns.push(`ASR ${config.provider} sans réponse exploitable (${lastError})`);
-    }
-    return { error: true, model: config.model || null, message: lastError };
-  } catch (err) {
-    warns.push(`ASR ${config.provider} fetch fail: ${String(err).slice(0, 180)}`);
-    return { error: true, model: config.model || null, message: String(err) };
-  }
-}
-
-const SPEECH_STOPWORDS = new Set([
-  "je","tu","il","elle","on","nous","vous","ils","elles","les","des","une","dans","pour","avec","que","qui","pas",
-  "mais","donc","alors","comme","plus","tout","tous","toutes","cette","cet","mon","ton","son","leur","mes","tes",
-  "ses","vos","nos","est","suis","sont","sera","étais","été","sur","par","aux","chez","quoi","avez","avoir",
-  "faire","fais","fait","très","bien","mal","mode","stuff","build","genre","niveau","vraiment","juste","dofus",
-  "c'est","cest","quand","aussi","ok","donc","voilà","trop","super","bah","oui","non","une","des","les"
-]);
-
-function computeSpeechKeywords(cues, limit = 10) {
-  if (!Array.isArray(cues) || !cues.length) return [];
-  const freq = new Map();
-  for (const cue of cues) {
-    const text = (cue?.text || "").toLowerCase();
-    if (!text) continue;
-    const tokens = text
-      .replace(/[^a-zàâäçéèêëîïôöùûü0-9\s'-]/gi, " ")
-      .split(/\s+/)
-      .map((t) => t.trim())
-      .filter(Boolean);
-    for (const token of tokens) {
-      const clean = token.replace(/^['’\-]+|['’\-]+$/g, "");
-      if (clean.length < 3) continue;
-      if (SPEECH_STOPWORDS.has(clean)) continue;
-      freq.set(clean, (freq.get(clean) || 0) + 1);
-    }
-  }
-  return Array.from(freq.entries())
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, limit)
-    .map(([term, count]) => ({ term, count }));
-}
-
-function summariseSpeech(asr, { maxSeconds }) {
-  if (!asr) return { coverageSeconds: 0, coverageRatio: null, suggestions: [] };
-  const cues = Array.isArray(asr.cues) ? asr.cues : [];
-  let coverageSeconds = 0;
-  for (const cue of cues) {
-    const start = typeof cue.start === "number" ? cue.start : null;
-    const end = typeof cue.end === "number" ? cue.end : null;
-    if (start != null && end != null && end >= start) {
-      coverageSeconds += end - start;
-    } else if (start != null) {
-      coverageSeconds += 2.5;
-    }
-  }
-  const target = typeof asr.duration === "number" && asr.duration > 0 ? asr.duration : maxSeconds;
-  const coverageRatio = target ? Number(Math.min(1, coverageSeconds / target).toFixed(3)) : null;
-  const suggestions = [];
-  if (coverageRatio != null && coverageRatio < 0.45) {
-    suggestions.push("Couverture audio partielle : augmente la durée analysée ou cible un extrait plus précis.");
-  }
-  if (typeof asr.avg_confidence === "number" && asr.avg_confidence < 0.55) {
-    suggestions.push("Confiance moyenne faible : bruit de fond élevé ou diction peu claire.");
-  }
-  return { coverageSeconds: Number(coverageSeconds.toFixed(1)), coverageRatio, suggestions };
-}
-
-async function transcribeAudioFromVideo({ config, url, maxSeconds, warns }) {
-  if (!config) {
-    return { status: "not_configured", notes: [], provider: null, provider_label: null, model: null };
-  }
-
-  let download = null;
-  let audioFile = null;
-  try {
-    download = await downloadWithYtdlToTemp(url);
-    audioFile = await convertVideoToAudio(download.tmpFile, { maxSeconds });
-    const asr = await transcribeAudioWithConfig(audioFile, config, warns);
-    if (!asr || asr.error || !asr.text) {
-      const baseNote = asr?.message
-        ? `ASR indisponible ${asr.message}`
-        : "Aucun texte renvoyé par le service ASR.";
-      return {
-        status: asr?.error ? "error" : "empty",
-        provider: config.provider,
-        provider_label: config.provider_label,
-        model: asr?.model || config.model,
-        notes: [baseNote],
-      };
-    }
-
-    const cues = asr.cues.map((cue) => ({
-      start: cue.start,
-      end: cue.end,
-      text: cue.text,
-      confidence: cue.confidence ?? null,
-    }));
-
-    const keywords = computeSpeechKeywords(cues, 12);
-    const speechSource = [{ id: "speech", label: config.provider_label || "Audio (ASR)", text: asr.text, cues, weight: 3 }];
-    const highlights = gatherEvidences(speechSource, 12);
-    const moments = detectStuffMoments(speechSource, { limit: 6, dedupeSeconds: 10 });
-    const summary = summariseSpeech(asr, { maxSeconds });
-
-    return {
-      status: "ok",
-      provider: config.provider,
-      provider_label: config.provider_label,
-      model: asr.model || config.model,
-      text: asr.text,
-      cues,
-      lang: asr.lang,
-      duration_seconds: asr.duration,
-      avg_confidence: asr.avg_confidence,
-      keywords,
-      highlights,
-      moments,
-      coverage_seconds: summary.coverageSeconds,
-      coverage_ratio: summary.coverageRatio,
-      notes: summary.suggestions,
-      segment_count: cues.length,
-    };
-  } catch (err) {
-    const message = `ASR ${config.provider} failure: ${String(err).slice(0, 180)}`;
-    warns.push(message);
-    return {
-      status: "error",
-      provider: config.provider,
-      provider_label: config.provider_label,
-      model: config.model,
-      notes: [message],
-    };
-  } finally {
-    try {
-      if (audioFile && fs.existsSync(audioFile)) fs.unlinkSync(audioFile);
-      if (download?.tmpFile && fs.existsSync(download.tmpFile)) fs.unlinkSync(download.tmpFile);
-      if (download?.tmpDir && fs.existsSync(download.tmpDir)) fs.rmSync(download.tmpDir, { recursive: true, force: true });
-    } catch {}
-  }
-}
-
 // OCR (dynamic)
 let _tess = null;
 async function getTesseract() { if (_tess) return _tess; const mod = await import("tesseract.js"); _tess = mod; return _tess; }
@@ -1069,8 +784,6 @@ export default async function handler(req, res) {
     const id = getYouTubeId(url);
     if (!id) return res.status(400).json({ error: "Invalid YouTube URL" });
 
-    const asrConfig = getAsrConfig();
-
     // 1) Meta
     const meta = await getMeta(url);
     const maxSeconds = Math.min(540, meta.lengthSeconds || 480);
@@ -1089,12 +802,12 @@ export default async function handler(req, res) {
       : readable.status
       ? `HTTP ${readable.status}${readable.statusText ? ` ${readable.statusText}` : ""}`
       : null;
-      if (!piped.data && pipedSummary && piped.status !== "disabled") {
-        warns.push(`Piped KO: ${pipedSummary}`);
-      }
-      if (!invid.data && invidSummary && invid.status !== "disabled") {
-        warns.push(`Invidious KO: ${invidSummary}`);
-      }
+    if (!piped.data && pipedSummary && piped.status !== "disabled") {
+      warns.push(`Piped KO: ${pipedSummary}`);
+    }
+    if (!invid.data && invidSummary && invid.status !== "disabled") {
+      warns.push(`Invidious KO: ${invidSummary}`);
+    }
     if (!readable.ok && readableSummary) {
       warns.push(`Readable KO: ${readableSummary}`);
     }
@@ -1127,21 +840,6 @@ export default async function handler(req, res) {
     }
     transcript.cues = Array.isArray(transcript.cues) ? transcript.cues.filter(c => c && c.text) : [];
 
-    let speech = null;
-    if (asrConfig) {
-      speech = await transcribeAudioFromVideo({ config: asrConfig, url, maxSeconds, warns });
-    } else {
-      speech = {
-        status: "not_configured",
-        provider: null,
-        provider_label: null,
-        model: null,
-        notes: [
-          "Configure OPENAI_API_KEY, GROQ_API_KEY ou ASR_ENDPOINT pour activer la transcription audio.",
-        ],
-      };
-    }
-
     // 4) Sources textuelles agrégées
     const textSources = [];
     if (meta.title) {
@@ -1164,16 +862,6 @@ export default async function handler(req, res) {
       const langLabel = transcript.lang ? `Transcript (${transcript.lang})` : "Transcript";
       textSources.push({ id: "transcript", type: "transcript", label: langLabel, text: transcript.text, cues: transcript.cues, weight: 2.3 });
     }
-    if (speech?.text) {
-      const cues = Array.isArray(speech.cues) ? speech.cues.slice(0, 600).map((cue) => ({
-        start: cue.start,
-        end: cue.end,
-        text: cue.text,
-      })) : [];
-      const label = speech.provider_label || (speech.provider ? `Audio (${speech.provider})` : "Audio (ASR)");
-      textSources.push({ id: "speech", type: "speech", label, text: speech.text, cues, weight: 3.2 });
-    }
-
     // 5) OCR best-effort (sur flux Piped/Invidious/YouTube + fallback local ytdl)
     let tmpDir = null, usedFormat = null, ocr = [], ocrCandidates = [], ocrMatches = [], ocrText = "";
     try {
@@ -1332,10 +1020,7 @@ export default async function handler(req, res) {
         readable_url: readable.url,
         transcript_source: transcript.source, transcript_lang: transcript.lang,
         transcript_has_timing: transcriptPublic.has_timing,
-        transcript_is_translation: transcriptPublic.is_translation,
-        speech_status: speech?.status || (asrConfig ? "configured" : "missing"),
-        speech_provider: speech?.provider || (asrConfig?.provider ?? null),
-        speech_model: speech?.model || (asrConfig?.model ?? null)
+        transcript_is_translation: transcriptPublic.is_translation
       },
       dofusbook_url: dofusbooks[0] || null,
       dofusbook_urls: dofusbooks,
@@ -1350,7 +1035,6 @@ export default async function handler(req, res) {
       evidences,
       presentation_moments: presentationMoments,
       transcript: transcriptPublic,
-      speech,
       explanation: null,
       debug: {
         used_format: usedFormat,
@@ -1360,10 +1044,6 @@ export default async function handler(req, res) {
         evidence_count: evidences.length,
         presentation_moments: presentationMoments.length,
         text_sources: textSources.length,
-        asr_provider: speech?.provider || (asrConfig?.provider ?? null),
-        asr_model: speech?.model || (asrConfig?.model ?? null),
-        speech_segments: speech?.segment_count ?? 0,
-        speech_keywords: speech?.keywords?.length ?? 0,
         aggregate_items: items.length,
         stuff_sets: stuffSets.length,
         warns,
