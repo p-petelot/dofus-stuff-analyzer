@@ -279,21 +279,25 @@ function normalizeDofusItem(item, type) {
 
   const slugSource = normalizeTextContent(item?.slug) || name;
   const fallbackSlug = slugify(slugSource) || slugify(name) || name;
-  const ankamaId = item?.ankamaId ?? item?.id ?? item?._id ?? fallbackSlug;
-  const encyclopediaUrl = buildEncyclopediaUrl(item, ankamaId) ??
+  const rawIdentifier = item?.ankamaId ?? item?.id ?? item?._id ?? fallbackSlug;
+  const identifierString = rawIdentifier != null ? String(rawIdentifier) : fallbackSlug;
+  const numericIdentifier = Number(rawIdentifier);
+  const ankamaId = Number.isFinite(numericIdentifier) ? numericIdentifier : null;
+  const encyclopediaUrl = buildEncyclopediaUrl(item, rawIdentifier ?? fallbackSlug) ??
     "https://www.dofus.com/fr/mmorpg/encyclopedie";
   const imageUrl = resolveItemImageUrl(item);
   const palette = extractPaletteFromItemData(item);
   const paletteSource = palette.length ? "api" : "unknown";
 
   return {
-    id: `${type}-${ankamaId}`,
+    id: `${type}-${identifierString}`,
     name,
     type,
     palette,
     url: encyclopediaUrl,
     imageUrl,
     paletteSource,
+    ankamaId,
   };
 }
 
@@ -309,6 +313,126 @@ const ITEM_TYPE_LABELS = {
   familier: "Familier",
   bouclier: "Bouclier",
 };
+
+const BARBOFUS_BASE_URL = "https://barbofus.com/skinator";
+const BARBOFUS_DEFAULTS = {
+  gender: 1,
+  classId: 7,
+  lookId: 405,
+};
+const BARBOFUS_EQUIPMENT_SLOTS = ["6", "7", "8", "9", "10", "11", "12", "13"];
+
+const LZ_KEY_STR_URI_SAFE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-$";
+
+function getUriSafeCharFromInt(value) {
+  return LZ_KEY_STR_URI_SAFE.charAt(value);
+}
+
+function _compress(uncompressed, bitsPerChar, getCharFromInt) {
+  if (uncompressed == null) {
+    return "";
+  }
+
+  let i;
+  const dictionary = Object.create(null);
+  const dictionaryToCreate = Object.create(null);
+  let c = "";
+  let wc = "";
+  let w = "";
+  let enlargeIn = 2;
+  let dictSize = 3;
+  let numBits = 2;
+  const data = [];
+  let data_val = 0;
+  let data_position = 0;
+
+  const pushBits = (value, bits) => {
+    for (i = 0; i < bits; i += 1) {
+      data_val = (data_val << 1) | (value & 1);
+      if (data_position === bitsPerChar - 1) {
+        data_position = 0;
+        data.push(getCharFromInt(data_val));
+        data_val = 0;
+      } else {
+        data_position += 1;
+      }
+      value >>= 1;
+    }
+  };
+
+  const writeDictionaryEntry = (entry) => {
+    if (entry.charCodeAt(0) < 256) {
+      pushBits(0, numBits);
+      pushBits(entry.charCodeAt(0), 8);
+    } else {
+      pushBits(1, numBits);
+      pushBits(entry.charCodeAt(0), 16);
+    }
+    enlargeIn -= 1;
+    if (enlargeIn === 0) {
+      enlargeIn = 1 << numBits;
+      numBits += 1;
+    }
+    delete dictionaryToCreate[entry];
+  };
+
+  for (let ii = 0; ii < uncompressed.length; ii += 1) {
+    c = uncompressed.charAt(ii);
+    if (!Object.prototype.hasOwnProperty.call(dictionary, c)) {
+      dictionary[c] = dictSize;
+      dictSize += 1;
+      dictionaryToCreate[c] = true;
+    }
+    wc = w + c;
+    if (Object.prototype.hasOwnProperty.call(dictionary, wc)) {
+      w = wc;
+    } else {
+      if (Object.prototype.hasOwnProperty.call(dictionaryToCreate, w)) {
+        writeDictionaryEntry(w);
+      } else {
+        pushBits(dictionary[w], numBits);
+      }
+
+      enlargeIn -= 1;
+      if (enlargeIn === 0) {
+        enlargeIn = 1 << numBits;
+        numBits += 1;
+      }
+
+      dictionary[wc] = dictSize;
+      dictSize += 1;
+      w = String(c);
+    }
+  }
+
+  if (w !== "") {
+    if (Object.prototype.hasOwnProperty.call(dictionaryToCreate, w)) {
+      writeDictionaryEntry(w);
+    } else {
+      pushBits(dictionary[w], numBits);
+    }
+  }
+
+  pushBits(2, numBits);
+
+  while (true) {
+    data_val <<= 1;
+    if (data_position === bitsPerChar - 1) {
+      data.push(getCharFromInt(data_val));
+      break;
+    }
+    data_position += 1;
+  }
+
+  return data.join("");
+}
+
+function compressToEncodedURIComponent(input) {
+  if (input == null) {
+    return "";
+  }
+  return _compress(input, 6, getUriSafeCharFromInt);
+}
 
 function componentToHex(value) {
   const hex = value.toString(16).padStart(2, "0");
@@ -547,6 +671,55 @@ export default function Home() {
       return accumulator;
     }, {});
   }, [colors, itemsCatalog]);
+
+  const barbofusLink = useMemo(() => {
+    if (!colors.length || !recommendations || !recommendations.coiffe?.length) {
+      return null;
+    }
+
+    const topCoiffe = recommendations.coiffe[0];
+    if (!topCoiffe?.ankamaId) {
+      return null;
+    }
+
+    const colorValues = colors
+      .map((entry) => {
+        if (!entry?.hex) return null;
+        const numeric = parseInt(entry.hex.replace(/#/g, ""), 16);
+        return Number.isFinite(numeric) ? numeric : null;
+      })
+      .filter((value) => value !== null);
+
+    if (!colorValues.length) {
+      return null;
+    }
+
+    const equipment = BARBOFUS_EQUIPMENT_SLOTS.reduce((accumulator, slot) => {
+      accumulator[slot] = null;
+      return accumulator;
+    }, {});
+
+    equipment["6"] = topCoiffe.ankamaId;
+
+    const payload = {
+      1: BARBOFUS_DEFAULTS.gender,
+      2: BARBOFUS_DEFAULTS.classId,
+      3: BARBOFUS_DEFAULTS.lookId,
+      4: colorValues,
+      5: equipment,
+    };
+
+    try {
+      const encoded = compressToEncodedURIComponent(JSON.stringify(payload));
+      if (!encoded) {
+        return null;
+      }
+      return `${BARBOFUS_BASE_URL}?s=${encoded}`;
+    } catch (err) {
+      console.error(err);
+      return null;
+    }
+  }, [colors, recommendations]);
 
   const inputRef = useRef(null);
 
@@ -969,13 +1142,30 @@ export default function Home() {
               </div>
             )}
           </div>
-          <div className="suggestions">
+        </section>
+
+        <section className="suggestions">
           <div className="suggestions__header">
-            <h2>Correspondances Dofus</h2>
-            <p>
-              Une sélection d&apos;objets inspirée des couleurs extraites afin d&apos;harmoniser ton skin avec l&apos;image de
-              référence.
-            </p>
+            <div className="suggestions__intro">
+              <h2>Correspondances Dofus</h2>
+              <p>
+                Une sélection d&apos;objets inspirée des couleurs extraites afin d&apos;harmoniser ton skin avec l&apos;image de
+                référence.
+              </p>
+            </div>
+            {barbofusLink ? (
+              <a
+                className="suggestions__cta"
+                href={barbofusLink}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Tester sur Barbofus
+                <span aria-hidden="true" className="suggestions__cta-icon">
+                  ↗
+                </span>
+              </a>
+            ) : null}
           </div>
           {colors.length === 0 ? (
             <div className="suggestions__empty">
@@ -1089,7 +1279,6 @@ export default function Home() {
               </div>
             </>
           )}
-        </div>
         </section>
       </main>
     </>
