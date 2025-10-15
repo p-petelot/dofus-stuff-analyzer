@@ -4,7 +4,7 @@ import Head from "next/head";
 const ITEM_TYPES = ["coiffe", "cape", "familier", "bouclier"];
 const DOFUS_API_HOST = "https://api.dofusdb.fr";
 const DOFUS_API_BASE_URL = `${DOFUS_API_HOST}/items`;
-const DEFAULT_LIMIT = 10;
+const DEFAULT_LIMIT = 40;
 const DEFAULT_DOFUS_QUERY_PARAMS = {
   "typeId[$ne]": "203",
   "$sort": "-id",
@@ -14,10 +14,10 @@ const DEFAULT_DOFUS_QUERY_PARAMS = {
 };
 
 const ITEM_TYPE_CONFIG = {
-  coiffe: { typeIds: [82, 16], skip: 10, encyclopediaPath: "equipements" },
-  cape: { typeIds: [17], skip: 10, encyclopediaPath: "equipements" },
-  familier: { typeIds: [18], skip: 20, encyclopediaPath: "familiers" },
-  bouclier: { typeIds: [82], skip: 0, encyclopediaPath: "equipements" },
+  coiffe: { typeIds: [82, 16], skip: 0, limit: 48 },
+  cape: { typeIds: [17], skip: 0, limit: 48 },
+  familier: { typeIds: [18], skip: 0, limit: 48 },
+  bouclier: { typeIds: [82], skip: 0, limit: 48 },
 };
 
 const MAX_ITEM_PALETTE_COLORS = 6;
@@ -263,16 +263,12 @@ function buildDofusApiUrl(type) {
   return `${DOFUS_API_BASE_URL}?${params.toString()}`;
 }
 
-function buildEncyclopediaUrl(type, item, slug, fallbackId) {
-  const config = ITEM_TYPE_CONFIG[type];
+function buildEncyclopediaUrl(item, fallbackId) {
   const ankamaId = item?.ankamaId ?? item?.id ?? item?._id ?? fallbackId;
   if (!ankamaId) {
     return null;
   }
-  const slugCandidate = slug || slugify(pickLocalizedValue(item?.slug) || pickLocalizedValue(item?.name) || ankamaId);
-  const safeSlug = slugCandidate || String(ankamaId);
-  const basePath = config?.encyclopediaPath ?? "equipements";
-  return `https://www.dofus.com/fr/mmorpg/encyclopedie/${basePath}/${ankamaId}-${safeSlug}`;
+  return `https://dofusdb.fr/fr/database/object/${ankamaId}`;
 }
 
 function normalizeDofusItem(item, type) {
@@ -282,9 +278,9 @@ function normalizeDofusItem(item, type) {
   }
 
   const slugSource = normalizeTextContent(item?.slug) || name;
-  const slug = slugify(slugSource) || slugify(name);
-  const ankamaId = item?.ankamaId ?? item?.id ?? item?._id ?? slug;
-  const encyclopediaUrl = buildEncyclopediaUrl(type, item, slug, ankamaId) ??
+  const fallbackSlug = slugify(slugSource) || slugify(name) || name;
+  const ankamaId = item?.ankamaId ?? item?.id ?? item?._id ?? fallbackSlug;
+  const encyclopediaUrl = buildEncyclopediaUrl(item, ankamaId) ??
     "https://www.dofus.com/fr/mmorpg/encyclopedie";
   const imageUrl = resolveItemImageUrl(item);
   const palette = extractPaletteFromItemData(item);
@@ -305,6 +301,14 @@ const BRAND_NAME = "KrosPalette";
 const MAX_COLORS = 6;
 const MAX_DIMENSION = 280;
 const BUCKET_SIZE = 24;
+const MAX_RECOMMENDATIONS = 4;
+
+const ITEM_TYPE_LABELS = {
+  coiffe: "Coiffe",
+  cape: "Cape",
+  familier: "Familier",
+  bouclier: "Bouclier",
+};
 
 function componentToHex(value) {
   const hex = value.toString(16).padStart(2, "0");
@@ -539,7 +543,7 @@ export default function Home() {
       const finiteScores = scoredItems.filter(({ score }) => Number.isFinite(score));
       const ranked = finiteScores.length > 0 ? finiteScores : scoredItems;
 
-      accumulator[type] = ranked.slice(0, 2).map(({ item }) => item);
+      accumulator[type] = ranked.slice(0, MAX_RECOMMENDATIONS).map(({ item }) => item);
       return accumulator;
     }, {});
   }, [colors, itemsCatalog]);
@@ -1005,38 +1009,53 @@ export default function Home() {
                   return (
                     <section key={type} className="suggestions__group">
                       <header className="suggestions__group-header">
-                        <span className="suggestions__group-type">{type}</span>
+                        <span className="suggestions__group-type">{ITEM_TYPE_LABELS[type] ?? type}</span>
                       </header>
                       {items.length === 0 ? (
                         <p className="suggestions__group-empty">Aucune correspondance probante pour cette teinte.</p>
                       ) : (
-                        <ul className="suggestions__list">
+                        <ul className="suggestions__deck">
                           {items.map((item) => {
                             const hasPalette = item.palette.length > 0;
                             const paletteFromImage = item.paletteSource === "image" && hasPalette;
-                            let paletteNote = null;
+                            const notes = [];
                             if (!hasPalette) {
-                              paletteNote = "Palette non détectée sur l'illustration.";
+                              notes.push("Palette non détectée sur l'illustration.");
                             } else if (!paletteFromImage) {
-                              paletteNote = "Palette estimée à partir des données DofusDB.";
+                              notes.push("Palette estimée à partir des données DofusDB.");
+                            }
+                            if (!item.imageUrl) {
+                              notes.push("Illustration manquante sur DofusDB.");
                             }
 
                             return (
-                              <li key={item.id} className="suggestions__item">
-                                <div className="suggestions__media">
+                              <li key={item.id} className="suggestions__card">
+                                <div className="suggestions__thumb">
                                   {item.imageUrl ? (
                                     <img
                                       src={item.imageUrl}
                                       alt={`Illustration de ${item.name}`}
-                                      className="suggestions__image"
                                       loading="lazy"
                                     />
                                   ) : (
-                                    <div className="suggestions__image suggestions__image--placeholder" aria-hidden="true">
+                                    <div className="suggestions__thumb-placeholder" aria-hidden="true">
                                       Aperçu indisponible
                                     </div>
                                   )}
-                                  <div className="suggestions__swatches" aria-hidden={hasPalette}>
+                                </div>
+                                <div className="suggestions__card-body">
+                                  <a
+                                    href={item.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="suggestions__title"
+                                  >
+                                    {item.name}
+                                  </a>
+                                  <div
+                                    className={`suggestions__swatches${hasPalette ? "" : " suggestions__swatches--empty"}`}
+                                    aria-hidden={hasPalette}
+                                  >
                                     {hasPalette ? (
                                       item.palette.map((hex) => (
                                         <span
@@ -1049,19 +1068,14 @@ export default function Home() {
                                       <span className="suggestions__swatch-note">Palette indisponible</span>
                                     )}
                                   </div>
-                                </div>
-                                <div className="suggestions__content">
-                                  <a
-                                    href={item.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="suggestions__title"
-                                  >
-                                    {item.name}
-                                  </a>
-                                  {paletteNote ? <span className="suggestions__note">{paletteNote}</span> : null}
-                                  {!item.imageUrl ? (
-                                    <span className="suggestions__note">Illustration manquante sur DofusDB.</span>
+                                  {notes.length ? (
+                                    <div className="suggestions__notes">
+                                      {notes.map((note, index) => (
+                                        <span key={`${item.id}-note-${index}`} className="suggestions__note">
+                                          {note}
+                                        </span>
+                                      ))}
+                                    </div>
                                   ) : null}
                                 </div>
                               </li>

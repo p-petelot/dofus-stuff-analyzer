@@ -437,11 +437,11 @@ a {
   background: var(--card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--card-border);
-  padding: 32px;
+  padding: 28px;
   box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
 }
 
 .suggestions__header h2 {
@@ -498,18 +498,18 @@ a {
 
 .suggestions__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 20px;
 }
 
 .suggestions__group {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  background: rgba(10, 17, 40, 0.6);
+  gap: 16px;
+  background: rgba(10, 17, 40, 0.58);
   border-radius: var(--radius-md);
   border: 1px solid rgba(148, 163, 184, 0.16);
-  padding: 18px 20px;
+  padding: 20px;
 }
 
 .suggestions__group-header {
@@ -532,67 +532,88 @@ a {
 }
 
 
-.suggestions__list {
+
+.suggestions__deck {
   margin: 0;
   padding: 0;
   list-style: none;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
   gap: 16px;
 }
 
-.suggestions__item {
-  display: grid;
-  grid-template-columns: 112px 1fr;
-  gap: 18px;
-  align-items: stretch;
+.suggestions__card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.6);
+  transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
 }
 
-.suggestions__media {
+.suggestions__card:hover,
+.suggestions__card:focus-within {
+  border-color: rgba(139, 92, 246, 0.55);
+  transform: translateY(-3px);
+  box-shadow: 0 18px 32px -24px rgba(15, 23, 42, 0.9);
+}
+
+.suggestions__thumb {
+  position: relative;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.45);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  aspect-ratio: 1 / 1;
+}
+
+.suggestions__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 6px;
+}
+
+.suggestions__thumb-placeholder {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  padding: 12px;
+  text-align: center;
+}
+
+.suggestions__card-body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  align-items: center;
-}
-
-.suggestions__image {
-  width: 100%;
-  max-width: 96px;
-  aspect-ratio: 1 / 1;
-  border-radius: var(--radius-sm);
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(15, 23, 42, 0.55);
-  object-fit: contain;
-  padding: 8px;
-  display: block;
-}
-
-.suggestions__image--placeholder {
-  display: grid;
-  place-items: center;
-  text-align: center;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  padding: 8px;
 }
 
 .suggestions__swatches {
   display: inline-flex;
   gap: 4px;
   padding: 6px;
-  border-radius: var(--radius-sm);
+  border-radius: 12px;
   background: rgba(15, 23, 42, 0.5);
   border: 1px solid rgba(148, 163, 184, 0.16);
   min-height: 32px;
-  justify-content: center;
+  justify-content: flex-start;
+  width: max-content;
+  max-width: 100%;
+}
+
+.suggestions__swatches--empty {
   width: 100%;
+  justify-content: center;
 }
 
 .suggestions__swatch {
   width: 16px;
   height: 16px;
-  border-radius: 4px;
-  border: 1px solid rgba(15, 23, 42, 0.4);
+  border-radius: 50%;
+  border: 1px solid rgba(15, 23, 42, 0.35);
 }
 
 .suggestions__swatch-note {
@@ -605,10 +626,10 @@ a {
   border: 1px dashed rgba(148, 163, 184, 0.2);
 }
 
-.suggestions__content {
+.suggestions__notes {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .suggestions__title {
@@ -641,25 +662,17 @@ a {
 }
 
 @media (max-width: 520px) {
-  .suggestions__item {
-    grid-template-columns: 1fr;
-    gap: 12px;
+  .suggestions__deck {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
 
-  .suggestions__media {
-    flex-direction: row;
-    justify-content: flex-start;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .suggestions__image {
-    max-width: 88px;
-    padding: 6px;
+  .suggestions__card {
+    padding: 14px;
   }
 
   .suggestions__swatches {
-    width: auto;
+    width: 100%;
+    justify-content: center;
   }
 }
 
