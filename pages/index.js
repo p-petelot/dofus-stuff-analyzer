@@ -93,13 +93,14 @@ function Tag({ children, tone = "neutral", icon, subtle, title }) {
   );
 }
 
-function SourceBadges({ sources }) {
+function SourceBadges({ sources, speech }) {
   if (!sources) return null;
   const {
     piped,
     piped_note,
     piped_status,
     piped_hint,
+    piped_attempts,
     readable,
     readable_status,
     readable_note,
@@ -107,6 +108,7 @@ function SourceBadges({ sources }) {
     invidious_note,
     invidious_status,
     invidious_hint,
+    invidious_attempts,
     transcript_source,
     transcript_lang,
     transcript_has_timing,
@@ -123,6 +125,15 @@ function SourceBadges({ sources }) {
     const parts = first.split(":");
     const base = parts.length > 1 ? parts.slice(1).join(":").trim() : first.trim();
     return base || null;
+  };
+
+  const withAttempts = (detail, attempts) => {
+    const parts = [];
+    if (detail) parts.push(detail);
+    if (attempts > 0) {
+      parts.push(`${attempts} tentative${attempts > 1 ? "s" : ""}`);
+    }
+    return parts.length ? parts.join(" • ") : null;
   };
 
   const badges = [
@@ -153,7 +164,7 @@ function SourceBadges({ sources }) {
           : piped
           ? "OK"
           : "Hors service",
-      detail: piped_hint || compact(piped_note),
+      detail: withAttempts(piped_hint || compact(piped_note), piped_attempts || 0),
     },
     {
       key: "invidious",
@@ -173,7 +184,7 @@ function SourceBadges({ sources }) {
           : invidious
           ? "OK"
           : "Hors service",
-      detail: invidious_hint || compact(invidious_note),
+      detail: withAttempts(invidious_hint || compact(invidious_note), invidious_attempts || 0),
     },
     {
       key: "captions",
@@ -218,7 +229,12 @@ function SourceBadges({ sources }) {
           : speech_status === "missing" || speech_status === "not_configured"
           ? "À configurer"
           : "Inactif",
-      detail: speech_model || null,
+      detail:
+        speech_status === "ok"
+          ? speech_model || speech_provider || null
+          : Array.isArray(speech?.notes) && speech.notes.length
+          ? speech.notes[0]
+          : speech_model || null,
     },
   ];
 
@@ -879,6 +895,7 @@ export default function Home() {
   const hasDofusbook = dofusbookCount > 0;
   const activeItemCount = activeStuff?.item_count ?? activeStuff?.items?.length ?? 0;
   const variantCount = stuffs.length;
+  const debugWarns = Array.isArray(out?.debug?.warns) ? out.debug.warns : [];
 
   return (
     <>
@@ -947,7 +964,7 @@ export default function Home() {
                     </Tag>
                   </div>
                   <ElementBadges elements={out.element_build} signals={out.element_signals} />
-                  <SourceBadges sources={out.sources} />
+                  <SourceBadges sources={out.sources} speech={out.speech} />
                   <MomentsList moments={out.presentation_moments} />
                   <ExoBadges exos={out.exos} />
                   {hasDofusbook ? (
@@ -1116,7 +1133,18 @@ export default function Home() {
                 <p className="caption">
                   format: {out.debug?.used_format || "—"} · ocr_frames: {out.debug?.ocr_frames ?? 0} · text_candidates: {out.debug?.text_candidates ?? 0} · ocr_candidates: {out.debug?.ocr_candidates ?? 0}
                 </p>
-                {out.debug?.warns?.length ? <pre className="pre">{JSON.stringify(out.debug.warns, null, 2)}</pre> : null}
+                {debugWarns.length ? (
+                  <ul className="warn-list">
+                    {debugWarns.map((warn, idx) => (
+                      <li key={`${warn}-${idx}`} className="warn-list__item">
+                        <span className="warn-list__icon" aria-hidden="true">⚠️</span>
+                        <span>{warn}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="caption">Aucun avertissement de traitement.</p>
+                )}
               </div>
             </section>
 
