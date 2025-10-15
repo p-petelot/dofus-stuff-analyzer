@@ -328,6 +328,7 @@ function normalizeDofusItem(item, type) {
     imageUrl,
     paletteSource,
     ankamaId,
+    signature: null,
   };
 }
 
@@ -335,6 +336,10 @@ const BRAND_NAME = "KrosPalette";
 const MAX_COLORS = 6;
 const MAX_DIMENSION = 280;
 const BUCKET_SIZE = 24;
+const SIGNATURE_GRID_SIZE = 6;
+const PALETTE_SCORE_WEIGHT = 0.45;
+const SIGNATURE_SCORE_WEIGHT = 0.55;
+const MIN_ALPHA_WEIGHT = 0.05;
 const MAX_RECOMMENDATIONS = 1;
 
 const ITEM_TYPE_LABELS = {
@@ -554,6 +559,35 @@ function extractPalette(image) {
     });
 }
 
+function computeImageSignature(image, gridSize = SIGNATURE_GRID_SIZE) {
+  if (!image || gridSize <= 0 || typeof document === "undefined") {
+    return [];
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = gridSize;
+  canvas.height = gridSize;
+
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) {
+    return [];
+  }
+
+  context.drawImage(image, 0, 0, gridSize, gridSize);
+  const { data } = context.getImageData(0, 0, gridSize, gridSize);
+
+  const signature = [];
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const alpha = data[i + 3] / 255;
+    signature.push({ r, g, b, a: alpha });
+  }
+
+  return signature;
+}
+
 function hexToRgb(hex) {
   if (!hex) {
     return null;
@@ -579,34 +613,101 @@ function colorDistance(colorA, colorB) {
   return Math.sqrt(dr * dr + dg * dg + db * db);
 }
 
-function scoreItemAgainstPalette(item, palette) {
-  if (palette.length === 0 || !item.palette || item.palette.length === 0) {
+function computeSignatureDistance(signatureA, signatureB) {
+  if (!Array.isArray(signatureA) || !Array.isArray(signatureB)) {
     return Number.POSITIVE_INFINITY;
   }
 
-  const paletteRgb = palette.map((color) => ({ r: color.r, g: color.g, b: color.b }));
-  const itemRgb = item.palette
-    .map((hex) => hexToRgb(hex))
-    .filter((value) => value !== null);
-
-  if (itemRgb.length === 0) {
+  const length = Math.min(signatureA.length, signatureB.length);
+  if (length === 0) {
     return Number.POSITIVE_INFINITY;
   }
 
-  const totalDistance = itemRgb.reduce((accumulator, itemColor) => {
-    const closestDistance = paletteRgb.reduce((best, paletteColor) => {
-      const distance = colorDistance(itemColor, paletteColor);
-      return Math.min(best, distance);
-    }, Number.POSITIVE_INFINITY);
-    return accumulator + closestDistance;
-  }, 0);
+  let total = 0;
+  let weightTotal = 0;
 
-  return totalDistance / itemRgb.length;
+  for (let i = 0; i < length; i += 1) {
+    const pointA = signatureA[i];
+    const pointB = signatureB[i];
+    if (!pointA || !pointB) {
+      continue;
+    }
+
+    const alphaA = typeof pointA.a === "number" ? Math.max(pointA.a, 0) : 1;
+    const alphaB = typeof pointB.a === "number" ? Math.max(pointB.a, 0) : 1;
+    if (alphaA < MIN_ALPHA_WEIGHT && alphaB < MIN_ALPHA_WEIGHT) {
+      continue;
+    }
+
+    const weight = Math.max((alphaA + alphaB) / 2, MIN_ALPHA_WEIGHT);
+    const dr = (pointA.r ?? 0) - (pointB.r ?? 0);
+    const dg = (pointA.g ?? 0) - (pointB.g ?? 0);
+    const db = (pointA.b ?? 0) - (pointB.b ?? 0);
+    const distance = Math.sqrt(dr * dr + dg * dg + db * db);
+    total += distance * weight;
+    weightTotal += weight;
+  }
+
+  if (weightTotal <= 0) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return total / weightTotal;
+}
+
+function scoreItemAgainstPalette(item, palette, referenceSignature) {
+  let paletteScore = Number.POSITIVE_INFINITY;
+  if (palette.length > 0 && item.palette && item.palette.length > 0) {
+    const paletteRgb = palette.map((color) => ({ r: color.r, g: color.g, b: color.b }));
+    const itemRgb = item.palette
+      .map((hex) => hexToRgb(hex))
+      .filter((value) => value !== null);
+
+    if (itemRgb.length > 0) {
+      const totalDistance = itemRgb.reduce((accumulator, itemColor) => {
+        const closestDistance = paletteRgb.reduce((best, paletteColor) => {
+          const distance = colorDistance(itemColor, paletteColor);
+          return Math.min(best, distance);
+        }, Number.POSITIVE_INFINITY);
+        return accumulator + closestDistance;
+      }, 0);
+
+      paletteScore = totalDistance / itemRgb.length;
+    }
+  }
+
+  let signatureScore = Number.POSITIVE_INFINITY;
+  if (referenceSignature && Array.isArray(referenceSignature) && referenceSignature.length) {
+    const itemSignature = Array.isArray(item.signature) ? item.signature : null;
+    if (itemSignature && itemSignature.length) {
+      signatureScore = computeSignatureDistance(referenceSignature, itemSignature);
+    }
+  }
+
+  const paletteFinite = Number.isFinite(paletteScore);
+  const signatureFinite = Number.isFinite(signatureScore);
+
+  if (!paletteFinite && !signatureFinite) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  if (!paletteFinite) {
+    return signatureScore;
+  }
+
+  if (!signatureFinite) {
+    return paletteScore;
+  }
+
+  const totalWeight = PALETTE_SCORE_WEIGHT + SIGNATURE_SCORE_WEIGHT;
+  return (
+    paletteScore * PALETTE_SCORE_WEIGHT + signatureScore * SIGNATURE_SCORE_WEIGHT
+  ) / totalWeight;
 }
 
 function analyzePaletteFromUrl(imageUrl) {
   if (!imageUrl || typeof window === "undefined" || typeof Image === "undefined") {
-    return Promise.resolve([]);
+    return Promise.resolve({ palette: [], signature: [] });
   }
 
   return new Promise((resolve) => {
@@ -616,14 +717,15 @@ function analyzePaletteFromUrl(imageUrl) {
     image.onload = () => {
       try {
         const palette = extractPalette(image);
-        resolve(palette);
+        const signature = computeImageSignature(image);
+        resolve({ palette, signature });
       } catch (err) {
         console.error(err);
-        resolve([]);
+        resolve({ palette: [], signature: [] });
       }
     };
     image.onerror = () => {
-      resolve([]);
+      resolve({ palette: [], signature: [] });
     };
     image.src = imageUrl;
   });
@@ -644,7 +746,7 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
         return { ...item, palette: [] };
       }
 
-      const paletteEntries = await analyzePaletteFromUrl(item.imageUrl);
+      const { palette: paletteEntries, signature } = await analyzePaletteFromUrl(item.imageUrl);
       if (shouldCancel?.()) {
         return item;
       }
@@ -654,15 +756,15 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
         .filter((hex, index, array) => hex && array.indexOf(hex) === index)
         .slice(0, MAX_ITEM_PALETTE_COLORS);
 
-      if (!paletteHex.length) {
-        return {
-          ...item,
-          palette: item.palette ?? [],
-          paletteSource: item.paletteSource ?? "unknown",
-        };
-      }
+      const nextPalette = paletteHex.length ? paletteHex : item.palette ?? [];
+      const nextSource = paletteHex.length ? "image" : item.paletteSource ?? "unknown";
+      const nextSignature = Array.isArray(signature) && signature.length
+        ? signature
+        : Array.isArray(item.signature) && item.signature.length
+        ? item.signature
+        : null;
 
-      return { ...item, palette: paletteHex, paletteSource: "image" };
+      return { ...item, palette: nextPalette, paletteSource: nextSource, signature: nextSignature };
     })
   );
 
@@ -672,6 +774,7 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
 export default function Home() {
   const [imageSrc, setImageSrc] = useState(null);
   const [colors, setColors] = useState([]);
+  const [imageSignature, setImageSignature] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
@@ -702,7 +805,7 @@ export default function Home() {
       const scoredItems = catalogItems
         .map((item) => ({
           item,
-          score: scoreItemAgainstPalette(item, colors),
+          score: scoreItemAgainstPalette(item, colors, imageSignature),
         }))
         .sort((a, b) => a.score - b.score);
 
@@ -712,7 +815,7 @@ export default function Home() {
       accumulator[type] = ranked.slice(0, MAX_RECOMMENDATIONS).map(({ item }) => item);
       return accumulator;
     }, {});
-  }, [colors, itemsCatalog]);
+  }, [colors, imageSignature, itemsCatalog]);
 
   const barbofusLink = useMemo(() => {
     if (!colors.length || !recommendations) {
@@ -903,6 +1006,7 @@ export default function Home() {
     setIsProcessing(true);
     setError(null);
     setCopiedCode(null);
+    setImageSignature(null);
 
     const image = new Image();
     image.crossOrigin = "anonymous";
@@ -910,6 +1014,8 @@ export default function Home() {
       try {
         const palette = extractPalette(image);
         setColors(palette);
+        const signature = computeImageSignature(image);
+        setImageSignature(signature.length ? signature : null);
         if (palette.length === 0) {
           setError("Aucune couleur dominante détectée.");
         }
@@ -917,6 +1023,7 @@ export default function Home() {
         console.error(err);
         setError("Impossible d'extraire les couleurs de cette image.");
         setColors([]);
+        setImageSignature(null);
       } finally {
         setIsProcessing(false);
       }
@@ -925,6 +1032,7 @@ export default function Home() {
       setError("L'image semble corrompue ou illisible.");
       setIsProcessing(false);
       setColors([]);
+      setImageSignature(null);
     };
     image.src = dataUrl;
   }, []);
@@ -933,6 +1041,7 @@ export default function Home() {
     (file) => {
       if (!file || !file.type.startsWith("image/")) {
         setError("Merci de choisir un fichier image.");
+        setImageSignature(null);
         return;
       }
 
@@ -1301,6 +1410,9 @@ export default function Home() {
                               notes.push("Palette non détectée sur l'illustration.");
                             } else if (!paletteFromImage) {
                               notes.push("Palette estimée à partir des données DofusDB.");
+                            }
+                            if (Array.isArray(item.signature) && item.signature.length) {
+                              notes.push("Comparaison affinée à partir de l'illustration.");
                             }
                             if (!item.imageUrl) {
                               notes.push("Illustration manquante sur DofusDB.");
