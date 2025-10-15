@@ -14,7 +14,7 @@ const DEFAULT_DOFUS_QUERY_PARAMS = {
 };
 
 const ITEM_TYPE_CONFIG = {
-  coiffe: { typeIds: [82, 16], skip: 0, limit: 48 },
+  coiffe: { typeIds: [16], skip: 10, limit: 48 },
   cape: { typeIds: [17], skip: 0, limit: 48 },
   familier: { typeIds: [18], skip: 0, limit: 48 },
   bouclier: { typeIds: [82], skip: 0, limit: 48 },
