@@ -1,6 +1,225 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
-import DOFUS_ITEMS, { ITEM_TYPES } from "../data/dofusItems";
+
+const ITEM_TYPES = ["coiffe", "cape", "familier", "bouclier"];
+const DOFUS_API_BASE_URL = "https://api.dofusdb.fr/items";
+const DEFAULT_LIMIT = 40;
+const DEFAULT_DOFUS_QUERY_PARAMS = {
+  "typeId[$ne]": "203",
+  "$sort": "-id",
+  "level[$gte]": "0",
+  "level[$lte]": "200",
+  lang: "fr",
+};
+
+const ITEM_TYPE_CONFIG = {
+  coiffe: { typeIds: [82, 16], skip: 10, encyclopediaPath: "equipements" },
+  cape: { typeIds: [17], skip: 10, encyclopediaPath: "equipements" },
+  familier: { typeIds: [18], skip: 20, encyclopediaPath: "familiers" },
+  bouclier: { typeIds: [82], skip: 0, encyclopediaPath: "equipements" },
+};
+
+const MAX_ITEM_PALETTE_COLORS = 6;
+
+function slugify(value) {
+  if (!value) return "";
+  return value
+    .toString()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-+/g, "-");
+}
+
+function stripHtml(value) {
+  if (!value) return "";
+  return value.replace(/<[^>]*>/g, " ");
+}
+
+function normalizeWhitespace(value) {
+  if (!value) return "";
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function pickLocalizedValue(value) {
+  if (!value) return "";
+  if (typeof value === "string") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => pickLocalizedValue(entry)).filter(Boolean).join(" ");
+  }
+  if (typeof value === "object") {
+    const priorityKeys = ["fr", "fr_fr", "frFr", "en", "en_us", "enUs"];
+    for (const key of priorityKeys) {
+      if (value[key]) {
+        const candidate = pickLocalizedValue(value[key]);
+        if (candidate) {
+          return candidate;
+        }
+      }
+    }
+    const first = Object.values(value)[0];
+    return pickLocalizedValue(first);
+  }
+  return "";
+}
+
+function normalizeTextContent(value) {
+  const extracted = pickLocalizedValue(value);
+  if (!extracted) {
+    return "";
+  }
+  return normalizeWhitespace(stripHtml(extracted));
+}
+
+function normalizeColorToHex(color) {
+  if (color === null || color === undefined) {
+    return null;
+  }
+
+  if (typeof color === "number" && Number.isFinite(color)) {
+    const hex = Math.max(0, Math.floor(color)).toString(16).padStart(6, "0").slice(-6);
+    return `#${hex.toUpperCase()}`;
+  }
+
+  if (typeof color === "string") {
+    const trimmed = color.trim();
+    if (!trimmed) return null;
+    if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) {
+      return trimmed.toUpperCase();
+    }
+    const hexMatch = trimmed.match(/[0-9a-fA-F]{6}/);
+    if (hexMatch) {
+      return `#${hexMatch[0].toUpperCase()}`;
+    }
+    if (/^\d+$/.test(trimmed)) {
+      return normalizeColorToHex(Number(trimmed));
+    }
+  }
+
+  if (typeof color === "object") {
+    if (color.hex) return normalizeColorToHex(color.hex);
+    if (color.value) return normalizeColorToHex(color.value);
+    if (color.color) return normalizeColorToHex(color.color);
+  }
+
+  return null;
+}
+
+function extractPaletteFromItemData(item) {
+  const palette = [];
+  const seen = new Set();
+
+  const register = (value) => {
+    const hex = normalizeColorToHex(value);
+    if (!hex || seen.has(hex)) {
+      return;
+    }
+    seen.add(hex);
+    palette.push(hex);
+  };
+
+  const sources = [
+    item?.appearance?.colors,
+    item?.look?.colors,
+    item?.colors,
+    item?.palette,
+    item?.color,
+    item?.visual?.colors,
+  ];
+
+  sources.forEach((source) => {
+    if (!source) return;
+    if (Array.isArray(source)) {
+      source.forEach(register);
+      return;
+    }
+    if (typeof source === "object") {
+      Object.values(source).forEach(register);
+      return;
+    }
+    register(source);
+  });
+
+  if (typeof item?.look === "string") {
+    const hexMatches = item.look.match(/#?[0-9a-fA-F]{6}/g);
+    if (hexMatches) {
+      hexMatches.forEach(register);
+    } else {
+      const numericMatches = item.look.match(/\b\d{3,}\b/g);
+      if (numericMatches) {
+        numericMatches.forEach((match) => register(Number(match)));
+      }
+    }
+  }
+
+  return palette.slice(0, MAX_ITEM_PALETTE_COLORS);
+}
+
+function buildDofusApiUrl(type) {
+  const config = ITEM_TYPE_CONFIG[type];
+  if (!config) {
+    throw new Error(`Type d'objet inconnu: ${type}`);
+  }
+
+  const params = new URLSearchParams();
+  Object.entries(DEFAULT_DOFUS_QUERY_PARAMS).forEach(([key, value]) => {
+    params.set(key, value);
+  });
+  params.set("$limit", String(config.limit ?? DEFAULT_LIMIT));
+  if (typeof config.skip === "number") {
+    params.set("$skip", String(config.skip));
+  }
+  config.typeIds.forEach((id) => {
+    params.append("typeId[$in][]", String(id));
+  });
+  if (config.query) {
+    Object.entries(config.query).forEach(([key, value]) => {
+      params.set(key, value);
+    });
+  }
+
+  return `${DOFUS_API_BASE_URL}?${params.toString()}`;
+}
+
+function buildEncyclopediaUrl(type, item, slug, fallbackId) {
+  const config = ITEM_TYPE_CONFIG[type];
+  const ankamaId = item?.ankamaId ?? item?.id ?? item?._id ?? fallbackId;
+  if (!ankamaId) {
+    return null;
+  }
+  const slugCandidate = slug || slugify(pickLocalizedValue(item?.slug) || pickLocalizedValue(item?.name) || ankamaId);
+  const safeSlug = slugCandidate || String(ankamaId);
+  const basePath = config?.encyclopediaPath ?? "equipements";
+  return `https://www.dofus.com/fr/mmorpg/encyclopedie/${basePath}/${ankamaId}-${safeSlug}`;
+}
+
+function normalizeDofusItem(item, type) {
+  const name = normalizeTextContent(item?.name) || normalizeTextContent(item?.title);
+  if (!name) {
+    return null;
+  }
+
+  const slugSource = normalizeTextContent(item?.slug) || name;
+  const slug = slugify(slugSource) || slugify(name);
+  const description = normalizeTextContent(item?.description);
+  const palette = extractPaletteFromItemData(item);
+  const ankamaId = item?.ankamaId ?? item?.id ?? item?._id ?? slug;
+  const encyclopediaUrl = buildEncyclopediaUrl(type, item, slug, ankamaId) ??
+    "https://www.dofus.com/fr/mmorpg/encyclopedie";
+
+  return {
+    id: `${type}-${ankamaId}`,
+    name,
+    type,
+    description,
+    palette,
+    url: encyclopediaUrl,
+  };
+}
 
 const BRAND_NAME = "KrosPalette";
 const MAX_COLORS = 6;
@@ -86,8 +305,17 @@ function extractPalette(image) {
 }
 
 function hexToRgb(hex) {
+  if (!hex) {
+    return null;
+  }
   const value = hex.replace("#", "");
+  if (value.length !== 6) {
+    return null;
+  }
   const bigint = parseInt(value, 16);
+  if (Number.isNaN(bigint)) {
+    return null;
+  }
   const r = (bigint >> 16) & 255;
   const g = (bigint >> 8) & 255;
   const b = bigint & 255;
@@ -102,12 +330,18 @@ function colorDistance(colorA, colorB) {
 }
 
 function scoreItemAgainstPalette(item, palette) {
-  if (palette.length === 0) {
+  if (palette.length === 0 || !item.palette || item.palette.length === 0) {
     return Number.POSITIVE_INFINITY;
   }
 
   const paletteRgb = palette.map((color) => ({ r: color.r, g: color.g, b: color.b }));
-  const itemRgb = item.palette.map(hexToRgb);
+  const itemRgb = item.palette
+    .map((hex) => hexToRgb(hex))
+    .filter((value) => value !== null);
+
+  if (itemRgb.length === 0) {
+    return Number.POSITIVE_INFINITY;
+  }
 
   const totalDistance = itemRgb.reduce((accumulator, itemColor) => {
     const closestDistance = paletteRgb.reduce((best, paletteColor) => {
@@ -129,6 +363,14 @@ export default function Home() {
   const [copiedCode, setCopiedCode] = useState(null);
   const [codeFormat, setCodeFormat] = useState("hex");
   const [toast, setToast] = useState(null);
+  const [itemsCatalog, setItemsCatalog] = useState({});
+  const [itemsLoading, setItemsLoading] = useState(false);
+  const [itemsError, setItemsError] = useState(null);
+
+  const hasCatalogData = useMemo(
+    () => ITEM_TYPES.some((type) => (itemsCatalog[type] ?? []).length > 0),
+    [itemsCatalog]
+  );
 
   const recommendations = useMemo(() => {
     if (!colors.length) {
@@ -136,20 +378,115 @@ export default function Home() {
     }
 
     return ITEM_TYPES.reduce((accumulator, type) => {
-      const scoredItems = DOFUS_ITEMS.filter((item) => item.type === type)
+      const catalogItems = itemsCatalog[type] ?? [];
+      if (!catalogItems.length) {
+        accumulator[type] = [];
+        return accumulator;
+      }
+
+      const scoredItems = catalogItems
         .map((item) => ({
           item,
           score: scoreItemAgainstPalette(item, colors),
         }))
-        .sort((a, b) => a.score - b.score)
-        .slice(0, 2)
-        .map(({ item }) => item);
+        .sort((a, b) => a.score - b.score);
 
-      return { ...accumulator, [type]: scoredItems };
+      const finiteScores = scoredItems.filter(({ score }) => Number.isFinite(score));
+      const ranked = finiteScores.length > 0 ? finiteScores : scoredItems;
+
+      accumulator[type] = ranked.slice(0, 2).map(({ item }) => item);
+      return accumulator;
     }, {});
-  }, [colors]);
+  }, [colors, itemsCatalog]);
 
   const inputRef = useRef(null);
+
+  useEffect(() => {
+    let isCancelled = false;
+    const controllers = [];
+
+    const loadItems = async () => {
+      setItemsLoading(true);
+      setItemsError(null);
+      const errors = [];
+
+      try {
+        const entries = await Promise.all(
+          ITEM_TYPES.map(async (type) => {
+            const controller = new AbortController();
+            controllers.push(controller);
+
+            try {
+              const response = await fetch(buildDofusApiUrl(type), {
+                signal: controller.signal,
+                headers: { Accept: "application/json" },
+              });
+
+              if (!response.ok) {
+                throw new Error(`Requête DofusDB échouée (${response.status})`);
+              }
+
+              const payload = await response.json();
+              const rawItems = Array.isArray(payload)
+                ? payload
+                : Array.isArray(payload?.data)
+                ? payload.data
+                : Array.isArray(payload?.items)
+                ? payload.items
+                : [];
+
+              const normalizedItems = rawItems
+                .map((rawItem) => normalizeDofusItem(rawItem, type))
+                .filter((item) => item !== null);
+
+              return [type, normalizedItems];
+            } catch (err) {
+              if (err.name === "AbortError") {
+                return [type, []];
+              }
+
+              console.error(err);
+              errors.push({ type, error: err });
+              return [type, []];
+            }
+          })
+        );
+
+        if (isCancelled) {
+          return;
+        }
+
+        setItemsCatalog(Object.fromEntries(entries));
+
+        if (errors.length) {
+          const message =
+            errors.length === ITEM_TYPES.length
+              ? "Impossible de récupérer les objets Dofus pour le moment."
+              : "Certaines catégories d'objets n'ont pas pu être chargées.";
+          setItemsError(message);
+        }
+      } catch (err) {
+        if (isCancelled) {
+          return;
+        }
+
+        console.error(err);
+        setItemsCatalog({});
+        setItemsError("Impossible de récupérer les objets Dofus pour le moment.");
+      } finally {
+        if (!isCancelled) {
+          setItemsLoading(false);
+        }
+      }
+    };
+
+    loadItems();
+
+    return () => {
+      isCancelled = true;
+      controllers.forEach((controller) => controller.abort());
+    };
+  }, []);
 
   const handleDataUrl = useCallback((dataUrl) => {
     if (!dataUrl) return;
@@ -482,18 +819,39 @@ export default function Home() {
             )}
           </div>
           <div className="suggestions">
-            <div className="suggestions__header">
-              <h2>Correspondances Dofus</h2>
-              <p>
-                Une sélection d&apos;objets inspirée des couleurs extraites afin d&apos;harmoniser ton skin avec l&apos;image de
-                référence.
-              </p>
+          <div className="suggestions__header">
+            <h2>Correspondances Dofus</h2>
+            <p>
+              Une sélection d&apos;objets inspirée des couleurs extraites afin d&apos;harmoniser ton skin avec l&apos;image de
+              référence.
+            </p>
+          </div>
+          {colors.length === 0 ? (
+            <div className="suggestions__empty">
+              <p>Importe d&apos;abord une image pour générer des propositions personnalisées.</p>
             </div>
-            {colors.length === 0 ? (
-              <div className="suggestions__empty">
-                <p>Importe d&apos;abord une image pour générer des propositions personnalisées.</p>
-              </div>
-            ) : (
+          ) : !hasCatalogData && itemsLoading ? (
+            <div className="suggestions__status suggestions__status--loading">
+              Chargement des objets Dofus…
+            </div>
+          ) : !hasCatalogData && itemsError ? (
+            <div className="suggestions__status suggestions__status--error">{itemsError}</div>
+          ) : !hasCatalogData ? (
+            <div className="suggestions__status suggestions__status--empty">
+              <p>Aucun objet n&apos;a pu être récupéré pour le moment.</p>
+            </div>
+          ) : (
+            <>
+              {itemsError ? (
+                <p className="suggestions__status suggestions__status--error suggestions__status--inline">
+                  {itemsError}
+                </p>
+              ) : null}
+              {itemsLoading ? (
+                <p className="suggestions__status suggestions__status--loading suggestions__status--inline">
+                  Mise à jour des suggestions…
+                </p>
+              ) : null}
               <div className="suggestions__grid">
                 {ITEM_TYPES.map((type) => {
                   const items = recommendations?.[type] ?? [];
@@ -506,38 +864,53 @@ export default function Home() {
                         <p className="suggestions__group-empty">Aucune correspondance probante pour cette teinte.</p>
                       ) : (
                         <ul className="suggestions__list">
-                          {items.map((item) => (
-                            <li key={item.id} className="suggestions__item">
-                              <div className="suggestions__swatches" aria-hidden="true">
-                                {item.palette.map((hex) => (
-                                  <span
-                                    key={hex}
-                                    className="suggestions__swatch"
-                                    style={{ backgroundColor: hex }}
-                                  />
-                                ))}
-                              </div>
-                              <div className="suggestions__content">
-                                <a
-                                  href={item.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="suggestions__title"
-                                >
-                                  {item.name}
-                                </a>
-                                <p className="suggestions__description">{item.description}</p>
-                              </div>
-                            </li>
-                          ))}
+                          {items.map((item) => {
+                            const hasPalette = item.palette.length > 0;
+                            return (
+                              <li key={item.id} className="suggestions__item">
+                                <div className="suggestions__swatches" aria-hidden={hasPalette}>
+                                  {hasPalette ? (
+                                    item.palette.map((hex) => (
+                                      <span
+                                        key={hex}
+                                        className="suggestions__swatch"
+                                        style={{ backgroundColor: hex }}
+                                      />
+                                    ))
+                                  ) : (
+                                    <span className="suggestions__swatch-note">Palette indisponible</span>
+                                  )}
+                                </div>
+                                <div className="suggestions__content">
+                                  <a
+                                    href={item.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="suggestions__title"
+                                  >
+                                    {item.name}
+                                  </a>
+                                  {item.description ? (
+                                    <p className="suggestions__description">{item.description}</p>
+                                  ) : null}
+                                  {!hasPalette ? (
+                                    <span className="suggestions__note">
+                                      Palette couleur non fournie par DofusDB.
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </li>
+                            );
+                          })}
                         </ul>
                       )}
                     </section>
                   );
                 })}
               </div>
-            )}
-          </div>
+            </>
+          )}
+        </div>
         </section>
       </main>
     </>
