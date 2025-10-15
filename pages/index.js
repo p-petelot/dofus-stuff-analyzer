@@ -339,6 +339,13 @@ const BUCKET_SIZE = 24;
 const SIGNATURE_GRID_SIZE = 6;
 const PALETTE_SCORE_WEIGHT = 0.45;
 const SIGNATURE_SCORE_WEIGHT = 0.55;
+const MAX_COLOR_DISTANCE = Math.sqrt(255 * 255 * 3);
+const PALETTE_COVERAGE_THRESHOLD = 64;
+const PALETTE_COVERAGE_WEIGHT = 0.35;
+const SIGNATURE_CONFIDENCE_DISTANCE = 180;
+const SIGNATURE_CONFIDENCE_WEIGHT = 0.25;
+const SIGNATURE_STRONG_THRESHOLD = 28;
+const SIGNATURE_PERFECT_THRESHOLD = 18;
 const MIN_ALPHA_WEIGHT = 0.05;
 const MAX_RECOMMENDATIONS = 1;
 
@@ -657,6 +664,7 @@ function computeSignatureDistance(signatureA, signatureB) {
 
 function scoreItemAgainstPalette(item, palette, referenceSignature) {
   let paletteScore = Number.POSITIVE_INFINITY;
+  let paletteCoverage = 0;
   if (palette.length > 0 && item.palette && item.palette.length > 0) {
     const paletteRgb = palette.map((color) => ({ r: color.r, g: color.g, b: color.b }));
     const itemRgb = item.palette
@@ -664,15 +672,20 @@ function scoreItemAgainstPalette(item, palette, referenceSignature) {
       .filter((value) => value !== null);
 
     if (itemRgb.length > 0) {
+      let matchCount = 0;
       const totalDistance = itemRgb.reduce((accumulator, itemColor) => {
         const closestDistance = paletteRgb.reduce((best, paletteColor) => {
           const distance = colorDistance(itemColor, paletteColor);
           return Math.min(best, distance);
         }, Number.POSITIVE_INFINITY);
+        if (closestDistance <= PALETTE_COVERAGE_THRESHOLD) {
+          matchCount += 1;
+        }
         return accumulator + closestDistance;
       }, 0);
 
       paletteScore = totalDistance / itemRgb.length;
+      paletteCoverage = matchCount / itemRgb.length;
     }
   }
 
@@ -691,18 +704,50 @@ function scoreItemAgainstPalette(item, palette, referenceSignature) {
     return Number.POSITIVE_INFINITY;
   }
 
-  if (!paletteFinite) {
-    return signatureScore;
+  const paletteNormalized = paletteFinite
+    ? Math.min(paletteScore / MAX_COLOR_DISTANCE, 1)
+    : Number.POSITIVE_INFINITY;
+  const signatureNormalized = signatureFinite
+    ? Math.min(signatureScore / MAX_COLOR_DISTANCE, 1)
+    : Number.POSITIVE_INFINITY;
+
+  let weightedScore = 0;
+  let totalWeight = 0;
+
+  if (paletteFinite) {
+    weightedScore += paletteNormalized * PALETTE_SCORE_WEIGHT;
+    totalWeight += PALETTE_SCORE_WEIGHT;
   }
 
-  if (!signatureFinite) {
-    return paletteScore;
+  if (signatureFinite) {
+    weightedScore += signatureNormalized * SIGNATURE_SCORE_WEIGHT;
+    totalWeight += SIGNATURE_SCORE_WEIGHT;
   }
 
-  const totalWeight = PALETTE_SCORE_WEIGHT + SIGNATURE_SCORE_WEIGHT;
-  return (
-    paletteScore * PALETTE_SCORE_WEIGHT + signatureScore * SIGNATURE_SCORE_WEIGHT
-  ) / totalWeight;
+  if (totalWeight <= 0) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  let finalScore = weightedScore / totalWeight;
+
+  if (paletteCoverage > 0) {
+    finalScore -= paletteCoverage * PALETTE_COVERAGE_WEIGHT;
+  }
+
+  if (signatureFinite) {
+    const signatureConfidence = Math.max(0, 1 - signatureScore / SIGNATURE_CONFIDENCE_DISTANCE);
+    if (signatureConfidence > 0) {
+      finalScore -= signatureConfidence * SIGNATURE_CONFIDENCE_WEIGHT;
+    }
+    if (signatureScore < SIGNATURE_STRONG_THRESHOLD) {
+      finalScore -= 0.08;
+    }
+    if (signatureScore < SIGNATURE_PERFECT_THRESHOLD) {
+      finalScore -= 0.12;
+    }
+  }
+
+  return Number.isFinite(finalScore) ? finalScore : Number.POSITIVE_INFINITY;
 }
 
 function analyzePaletteFromUrl(imageUrl) {
@@ -1225,10 +1270,6 @@ export default function Home() {
         </div>
         <header className="hero">
           <h1>{BRAND_NAME}</h1>
-          <p>
-            Dépose, colle ou importe une image de référence pour capturer instantanément les teintes qui
-            sublimeront ton prochain skin Dofus.
-          </p>
         </header>
 
         <section className="workspace">
@@ -1270,9 +1311,7 @@ export default function Home() {
             <div className="palette__header">
               <div className="palette__title">
                 <h2>Palette extraite</h2>
-                <p className="palette__caption">
-                  Sélectionne un format et clique sur une nuance pour la copier.
-                </p>
+                <p className="palette__caption">Choisis un format et copie la nuance idéale.</p>
               </div>
               <div className="palette__actions">
                 {isProcessing ? <span className="badge badge--pulse">Analyse en cours…</span> : null}
@@ -1342,10 +1381,6 @@ export default function Home() {
           <div className="suggestions__header">
             <div className="suggestions__intro">
               <h2>Correspondances Dofus</h2>
-              <p>
-                Une sélection d&apos;objets inspirée des couleurs extraites afin d&apos;harmoniser ton skin avec l&apos;image de
-                référence.
-              </p>
             </div>
             {barbofusLink ? (
               <a
