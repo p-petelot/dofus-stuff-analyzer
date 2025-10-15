@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
 
-const ITEM_TYPES = ["coiffe", "cape", "familier", "bouclier"];
+const ITEM_TYPES = ["coiffe", "cape", "bouclier", "familier"];
 const DOFUS_API_HOST = "https://api.dofusdb.fr";
 const DOFUS_API_BASE_URL = `${DOFUS_API_HOST}/items`;
-const DEFAULT_LIMIT = 1000;
+const DEFAULT_LIMIT = 1200;
 const DEFAULT_DOFUS_QUERY_PARAMS = {
   "typeId[$ne]": "203",
   "$sort": "-id",
@@ -16,23 +16,26 @@ const DEFAULT_DOFUS_QUERY_PARAMS = {
 const ITEM_TYPE_CONFIG = {
   coiffe: {
     requests: [
-      { typeIds: [16], skip: 10, limit: 1000 },
-      { typeIds: [246], skip: 10, limit: 1000 },
+      { typeIds: [16], skip: 0, limit: 1200 },
+      { typeIds: [246], skip: 0, limit: 1200 },
     ],
   },
   cape: {
     requests: [
-      { typeIds: [17], skip: 0, limit: 1000 },
-      { typeIds: [247], skip: 10, limit: 1000 },
+      { typeIds: [17], skip: 0, limit: 1200 },
+      { typeIds: [247], skip: 0, limit: 1200 },
     ],
   },
   familier: {
-    requests: [{ typeIds: [18], skip: 0, limit: 1000 }],
+    requests: [
+      { typeIds: [18], skip: 0, limit: 1200 },
+      { typeIds: [249], skip: 0, limit: 1200 },
+    ],
   },
   bouclier: {
     requests: [
-      { typeIds: [82], skip: 0, limit: 1000 },
-      { typeIds: [248], skip: 10, limit: 1000 },
+      { typeIds: [82], skip: 0, limit: 1200 },
+      { typeIds: [248], skip: 0, limit: 1200 },
     ],
   },
 };
@@ -329,6 +332,7 @@ function normalizeDofusItem(item, type) {
     paletteSource,
     ankamaId,
     signature: null,
+    shape: null,
   };
 }
 
@@ -336,16 +340,22 @@ const BRAND_NAME = "KrosPalette";
 const MAX_COLORS = 6;
 const MAX_DIMENSION = 280;
 const BUCKET_SIZE = 24;
-const SIGNATURE_GRID_SIZE = 6;
-const PALETTE_SCORE_WEIGHT = 0.45;
-const SIGNATURE_SCORE_WEIGHT = 0.55;
+const SIGNATURE_GRID_SIZE = 10;
+const SHAPE_PROFILE_SIZE = 28;
+const PALETTE_SCORE_WEIGHT = 0.38;
+const SIGNATURE_SCORE_WEIGHT = 0.37;
+const SHAPE_SCORE_WEIGHT = 0.25;
 const MAX_COLOR_DISTANCE = Math.sqrt(255 * 255 * 3);
-const PALETTE_COVERAGE_THRESHOLD = 64;
-const PALETTE_COVERAGE_WEIGHT = 0.35;
-const SIGNATURE_CONFIDENCE_DISTANCE = 180;
-const SIGNATURE_CONFIDENCE_WEIGHT = 0.25;
-const SIGNATURE_STRONG_THRESHOLD = 28;
-const SIGNATURE_PERFECT_THRESHOLD = 18;
+const PALETTE_COVERAGE_THRESHOLD = 56;
+const PALETTE_COVERAGE_WEIGHT = 0.32;
+const SIGNATURE_CONFIDENCE_DISTANCE = 160;
+const SIGNATURE_CONFIDENCE_WEIGHT = 0.22;
+const SIGNATURE_STRONG_THRESHOLD = 24;
+const SIGNATURE_PERFECT_THRESHOLD = 14;
+const MAX_SHAPE_DISTANCE = 1;
+const SHAPE_CONFIDENCE_DISTANCE = 0.32;
+const SHAPE_CONFIDENCE_WEIGHT = 0.16;
+const SHAPE_STRONG_THRESHOLD = 0.18;
 const MIN_ALPHA_WEIGHT = 0.05;
 const MAX_RECOMMENDATIONS = 1;
 
@@ -595,6 +605,93 @@ function computeImageSignature(image, gridSize = SIGNATURE_GRID_SIZE) {
   return signature;
 }
 
+function computeShapeProfile(image, gridSize = SHAPE_PROFILE_SIZE) {
+  if (!image || gridSize <= 0 || typeof document === "undefined") {
+    return null;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = gridSize;
+  canvas.height = gridSize;
+
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) {
+    return null;
+  }
+
+  context.drawImage(image, 0, 0, gridSize, gridSize);
+  const { data } = context.getImageData(0, 0, gridSize, gridSize);
+
+  const rows = new Array(gridSize).fill(0);
+  const columns = new Array(gridSize).fill(0);
+
+  for (let y = 0; y < gridSize; y += 1) {
+    for (let x = 0; x < gridSize; x += 1) {
+      const index = (y * gridSize + x) * 4;
+      const alpha = data[index + 3] / 255;
+      rows[y] += alpha;
+      columns[x] += alpha;
+    }
+  }
+
+  const normalize = (values) =>
+    values.map((sum) => {
+      const normalized = sum / gridSize;
+      return Number.isFinite(normalized) ? Math.min(Math.max(normalized, 0), 1) : 0;
+    });
+
+  const normalizedRows = normalize(rows);
+  const normalizedColumns = normalize(columns);
+  const occupancy =
+    normalizedRows.reduce((accumulator, value) => accumulator + value, 0) / gridSize;
+
+  return {
+    rows: normalizedRows,
+    columns: normalizedColumns,
+    occupancy: Number.isFinite(occupancy) ? Math.min(Math.max(occupancy, 0), 1) : 0,
+  };
+}
+
+function computeShapeDistance(shapeA, shapeB) {
+  if (!shapeA || !shapeB) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const compareArrays = (a = [], b = []) => {
+    const length = Math.min(a.length, b.length);
+    if (length === 0) {
+      return Number.POSITIVE_INFINITY;
+    }
+
+    let total = 0;
+    for (let i = 0; i < length; i += 1) {
+      const valueA = a[i] ?? 0;
+      const valueB = b[i] ?? 0;
+      total += Math.abs(valueA - valueB);
+    }
+    return total / length;
+  };
+
+  const rowDistance = compareArrays(shapeA.rows, shapeB.rows);
+  const columnDistance = compareArrays(shapeA.columns, shapeB.columns);
+
+  if (!Number.isFinite(rowDistance) && !Number.isFinite(columnDistance)) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const occupancyA = typeof shapeA.occupancy === "number" ? shapeA.occupancy : 0;
+  const occupancyB = typeof shapeB.occupancy === "number" ? shapeB.occupancy : 0;
+  const occupancyDistance = Math.abs(occupancyA - occupancyB);
+
+  const finiteComponents = [];
+  if (Number.isFinite(rowDistance)) finiteComponents.push(rowDistance);
+  if (Number.isFinite(columnDistance)) finiteComponents.push(columnDistance);
+  finiteComponents.push(occupancyDistance);
+
+  const total = finiteComponents.reduce((accumulator, value) => accumulator + value, 0);
+  return total / finiteComponents.length;
+}
+
 function hexToRgb(hex) {
   if (!hex) {
     return null;
@@ -662,7 +759,7 @@ function computeSignatureDistance(signatureA, signatureB) {
   return total / weightTotal;
 }
 
-function scoreItemAgainstPalette(item, palette, referenceSignature) {
+function scoreItemAgainstPalette(item, palette, referenceSignature, referenceShape) {
   let paletteScore = Number.POSITIVE_INFINITY;
   let paletteCoverage = 0;
   if (palette.length > 0 && item.palette && item.palette.length > 0) {
@@ -697,10 +794,17 @@ function scoreItemAgainstPalette(item, palette, referenceSignature) {
     }
   }
 
+  let shapeScore = Number.POSITIVE_INFINITY;
+  if (referenceShape && item.shape) {
+    shapeScore = computeShapeDistance(referenceShape, item.shape);
+  }
+
   const paletteFinite = Number.isFinite(paletteScore);
   const signatureFinite = Number.isFinite(signatureScore);
 
-  if (!paletteFinite && !signatureFinite) {
+  const shapeFinite = Number.isFinite(shapeScore);
+
+  if (!paletteFinite && !signatureFinite && !shapeFinite) {
     return Number.POSITIVE_INFINITY;
   }
 
@@ -709,6 +813,9 @@ function scoreItemAgainstPalette(item, palette, referenceSignature) {
     : Number.POSITIVE_INFINITY;
   const signatureNormalized = signatureFinite
     ? Math.min(signatureScore / MAX_COLOR_DISTANCE, 1)
+    : Number.POSITIVE_INFINITY;
+  const shapeNormalized = shapeFinite
+    ? Math.min(shapeScore / MAX_SHAPE_DISTANCE, 1)
     : Number.POSITIVE_INFINITY;
 
   let weightedScore = 0;
@@ -722,6 +829,11 @@ function scoreItemAgainstPalette(item, palette, referenceSignature) {
   if (signatureFinite) {
     weightedScore += signatureNormalized * SIGNATURE_SCORE_WEIGHT;
     totalWeight += SIGNATURE_SCORE_WEIGHT;
+  }
+
+  if (shapeFinite) {
+    weightedScore += shapeNormalized * SHAPE_SCORE_WEIGHT;
+    totalWeight += SHAPE_SCORE_WEIGHT;
   }
 
   if (totalWeight <= 0) {
@@ -747,12 +859,22 @@ function scoreItemAgainstPalette(item, palette, referenceSignature) {
     }
   }
 
+  if (shapeFinite) {
+    const shapeConfidence = Math.max(0, 1 - shapeScore / SHAPE_CONFIDENCE_DISTANCE);
+    if (shapeConfidence > 0) {
+      finalScore -= shapeConfidence * SHAPE_CONFIDENCE_WEIGHT;
+    }
+    if (shapeScore < SHAPE_STRONG_THRESHOLD) {
+      finalScore -= 0.06;
+    }
+  }
+
   return Number.isFinite(finalScore) ? finalScore : Number.POSITIVE_INFINITY;
 }
 
 function analyzePaletteFromUrl(imageUrl) {
   if (!imageUrl || typeof window === "undefined" || typeof Image === "undefined") {
-    return Promise.resolve({ palette: [], signature: [] });
+    return Promise.resolve({ palette: [], signature: [], shape: null });
   }
 
   return new Promise((resolve) => {
@@ -763,14 +885,15 @@ function analyzePaletteFromUrl(imageUrl) {
       try {
         const palette = extractPalette(image);
         const signature = computeImageSignature(image);
-        resolve({ palette, signature });
+        const shape = computeShapeProfile(image);
+        resolve({ palette, signature, shape });
       } catch (err) {
         console.error(err);
-        resolve({ palette: [], signature: [] });
+        resolve({ palette: [], signature: [], shape: null });
       }
     };
     image.onerror = () => {
-      resolve({ palette: [], signature: [] });
+      resolve({ palette: [], signature: [], shape: null });
     };
     image.src = imageUrl;
   });
@@ -791,7 +914,7 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
         return { ...item, palette: [] };
       }
 
-      const { palette: paletteEntries, signature } = await analyzePaletteFromUrl(item.imageUrl);
+      const { palette: paletteEntries, signature, shape } = await analyzePaletteFromUrl(item.imageUrl);
       if (shouldCancel?.()) {
         return item;
       }
@@ -808,8 +931,15 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
         : Array.isArray(item.signature) && item.signature.length
         ? item.signature
         : null;
+      const nextShape = shape ?? item.shape ?? null;
 
-      return { ...item, palette: nextPalette, paletteSource: nextSource, signature: nextSignature };
+      return {
+        ...item,
+        palette: nextPalette,
+        paletteSource: nextSource,
+        signature: nextSignature,
+        shape: nextShape,
+      };
     })
   );
 
@@ -820,6 +950,7 @@ export default function Home() {
   const [imageSrc, setImageSrc] = useState(null);
   const [colors, setColors] = useState([]);
   const [imageSignature, setImageSignature] = useState(null);
+  const [imageShape, setImageShape] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
@@ -829,11 +960,70 @@ export default function Home() {
   const [itemsCatalog, setItemsCatalog] = useState({});
   const [itemsLoading, setItemsLoading] = useState(false);
   const [itemsError, setItemsError] = useState(null);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const progressHandles = useRef({ frame: null, timeout: null, value: 0 });
 
   const hasCatalogData = useMemo(
     () => ITEM_TYPES.some((type) => (itemsCatalog[type] ?? []).length > 0),
     [itemsCatalog]
   );
+
+  const colorsCount = colors.length;
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const handles = progressHandles.current;
+
+    if (handles.frame) {
+      window.cancelAnimationFrame(handles.frame);
+      handles.frame = null;
+    }
+    if (handles.timeout) {
+      window.clearTimeout(handles.timeout);
+      handles.timeout = null;
+    }
+
+    if (isProcessing) {
+      let value = typeof handles.value === "number" && handles.value > 0 ? handles.value : 6;
+      value = Math.min(value, 90);
+      handles.value = value;
+      setAnalysisProgress(value);
+
+      const tick = () => {
+        value = Math.min(value + Math.random() * 6 + 2, 94);
+        handles.value = value;
+        setAnalysisProgress(value);
+        handles.frame = window.requestAnimationFrame(tick);
+      };
+
+      handles.frame = window.requestAnimationFrame(tick);
+    } else if (imageSrc && colorsCount > 0) {
+      handles.value = 100;
+      setAnalysisProgress(100);
+      handles.timeout = window.setTimeout(() => {
+        setAnalysisProgress(0);
+        handles.value = 0;
+        handles.timeout = null;
+      }, 700);
+    } else {
+      handles.value = 0;
+      setAnalysisProgress(0);
+    }
+
+    return () => {
+      if (handles.frame) {
+        window.cancelAnimationFrame(handles.frame);
+        handles.frame = null;
+      }
+      if (handles.timeout) {
+        window.clearTimeout(handles.timeout);
+        handles.timeout = null;
+      }
+    };
+  }, [colorsCount, imageSrc, isProcessing]);
 
   const recommendations = useMemo(() => {
     if (!colors.length) {
@@ -850,7 +1040,7 @@ export default function Home() {
       const scoredItems = catalogItems
         .map((item) => ({
           item,
-          score: scoreItemAgainstPalette(item, colors, imageSignature),
+          score: scoreItemAgainstPalette(item, colors, imageSignature, imageShape),
         }))
         .sort((a, b) => a.score - b.score);
 
@@ -860,7 +1050,7 @@ export default function Home() {
       accumulator[type] = ranked.slice(0, MAX_RECOMMENDATIONS).map(({ item }) => item);
       return accumulator;
     }, {});
-  }, [colors, imageSignature, itemsCatalog]);
+  }, [colors, imageSignature, imageShape, itemsCatalog]);
 
   const barbofusLink = useMemo(() => {
     if (!colors.length || !recommendations) {
@@ -1052,15 +1242,18 @@ export default function Home() {
     setError(null);
     setCopiedCode(null);
     setImageSignature(null);
+    setImageShape(null);
 
     const image = new Image();
     image.crossOrigin = "anonymous";
     image.onload = () => {
       try {
         const palette = extractPalette(image);
-        setColors(palette);
         const signature = computeImageSignature(image);
+        const shape = computeShapeProfile(image);
+        setColors(palette);
         setImageSignature(signature.length ? signature : null);
+        setImageShape(shape);
         if (palette.length === 0) {
           setError("Aucune couleur dominante détectée.");
         }
@@ -1069,6 +1262,7 @@ export default function Home() {
         setError("Impossible d'extraire les couleurs de cette image.");
         setColors([]);
         setImageSignature(null);
+        setImageShape(null);
       } finally {
         setIsProcessing(false);
       }
@@ -1078,6 +1272,7 @@ export default function Home() {
       setIsProcessing(false);
       setColors([]);
       setImageSignature(null);
+      setImageShape(null);
     };
     image.src = dataUrl;
   }, []);
@@ -1087,6 +1282,7 @@ export default function Home() {
       if (!file || !file.type.startsWith("image/")) {
         setError("Merci de choisir un fichier image.");
         setImageSignature(null);
+        setImageShape(null);
         return;
       }
 
@@ -1273,6 +1469,26 @@ export default function Home() {
         </header>
 
         <section className="workspace">
+          {(isProcessing || analysisProgress > 0) && (
+            <div className="workspace__progress" role="status" aria-live="polite">
+              <div className={`progress-bar${isProcessing ? " progress-bar--active" : ""}`}>
+                <div className="progress-bar__track">
+                  <div
+                    className="progress-bar__indicator"
+                    style={{ width: `${Math.min(100, Math.max(analysisProgress, 0))}%` }}
+                  />
+                  <span className="progress-bar__glow" />
+                </div>
+                <span className="progress-bar__label">
+                  {isProcessing
+                    ? "Analyse de l'image…"
+                    : analysisProgress >= 100
+                    ? "Analyse terminée"
+                    : "Analyse prête"}
+                </span>
+              </div>
+            </div>
+          )}
           <div
             className={`dropzone${isDragging ? " dropzone--active" : ""}${imageSrc ? " dropzone--filled" : ""}`}
             onDrop={onDrop}
@@ -1311,7 +1527,6 @@ export default function Home() {
             <div className="palette__header">
               <div className="palette__title">
                 <h2>Palette extraite</h2>
-                <p className="palette__caption">Choisis un format et copie la nuance idéale.</p>
               </div>
               <div className="palette__actions">
                 {isProcessing ? <span className="badge badge--pulse">Analyse en cours…</span> : null}
@@ -1445,9 +1660,6 @@ export default function Home() {
                               notes.push("Palette non détectée sur l'illustration.");
                             } else if (!paletteFromImage) {
                               notes.push("Palette estimée à partir des données DofusDB.");
-                            }
-                            if (Array.isArray(item.signature) && item.signature.length) {
-                              notes.push("Comparaison affinée à partir de l'illustration.");
                             }
                             if (!item.imageUrl) {
                               notes.push("Illustration manquante sur DofusDB.");
