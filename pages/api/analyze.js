@@ -6,24 +6,13 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 
-const DEFAULT_PIPED_HOSTS = [
-  "https://piped.video",
-  "https://piped.videoapi.fr",
-  "https://piped.minionflo.net",
-  "https://piped.darkness.services",
-  "https://piped.projectsegfau.lt",
-  "https://piped.us.projectsegfau.lt",
-  "https://piped.lunar.icu",
-  "https://piped.privacydev.net",
-];
+// Les miroirs publics changent souvent de configuration ou renvoient des pages HTML
+// de protection (Cloudflare, pages d'attente, etc.). Afin d'éviter de brider
+// l'analyse avec des erreurs bruitées, aucun miroir n'est activé par défaut ;
+// l'utilisateur peut fournir les siens via les variables d'environnement.
+const DEFAULT_PIPED_HOSTS = [];
 
-const DEFAULT_INVIDIOUS_HOSTS = [
-  "https://yewtu.be",
-  "https://invidious.fdn.fr",
-  "https://vid.puffyan.us",
-  "https://inv.nadeko.net",
-  "https://invidious.projectsegfau.lt",
-];
+const DEFAULT_INVIDIOUS_HOSTS = [];
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 export const config = { runtime: "nodejs", api: { bodyParser: false } };
@@ -87,6 +76,17 @@ function friendlyAttemptError(err) {
     .replace(/^Error:\s*/i, "")
     .replace(/^SyntaxError:\s*/i, "")
     .trim();
+}
+
+function friendlyYtdlError(err) {
+  if (!err) return "erreur inconnue";
+  const str = typeof err === "string" ? err : err.message || String(err);
+  if (/410/.test(str)) return "flux retiré par YouTube (HTTP 410)";
+  if (/403/.test(str)) return "accès refusé par YouTube (HTTP 403)";
+  if (/not enough data|premature close/i.test(str)) return "flux interrompu";
+  if (/ENOTFOUND|getaddrinfo/i.test(str)) return "serveur YouTube introuvable";
+  if (/signature/i.test(str)) return "signature YouTube invalide";
+  return str.replace(/^Error:\s*/i, "").trim();
 }
 
 function summarizeAttempts(attempts = [], hint = null) {
@@ -498,18 +498,102 @@ async function downloadWithYtdlToTemp(urlOrId) {
   const url = /^https?:/.test(urlOrId) ? urlOrId : `https://www.youtube.com/watch?v=${urlOrId}`;
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ytvid-"));
   const tmpFile = path.join(tmpDir, "video.mp4");
-  await new Promise((resolve, reject) => {
-    const stream = ytdl(url, {
-      quality: 18,               // MP4 360p muxed
-      filter: "audioandvideo",
-      highWaterMark: 1 << 25     // 32MB buffer
-    })
-    .on("error", reject)
-    .pipe(fs.createWriteStream(tmpFile))
-    .on("error", reject)
-    .on("finish", resolve);
-  });
-  return { tmpDir, tmpFile };
+
+  const baseOptions = {
+    filter: "audioandvideo",
+    highWaterMark: 1 << 25,
+    requestOptions: {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        "Accept-Language": "fr-FR,fr;q=0.9",
+      },
+    },
+  };
+
+  const strategies = [
+    { label: "itag18", options: { quality: 18 } },
+    { label: "itag22", options: { quality: 22 } },
+    { label: "progressive-lowest", options: { quality: "lowest" } },
+    { label: "progressive-highest", options: { quality: "highest" } },
+  ];
+
+  const attemptDownload = (options) => {
+    return new Promise((resolve, reject) => {
+      let fileStream = null;
+      let stream = null;
+      const cleanup = (err) => {
+        try {
+          if (stream) {
+            stream.removeAllListeners();
+            stream.destroy();
+          }
+        } catch {}
+        try {
+          if (fileStream) {
+            fileStream.removeAllListeners();
+            fileStream.destroy();
+          }
+        } catch {}
+        try { fs.rmSync(tmpFile, { force: true }); } catch {}
+        reject(err);
+      };
+      try {
+        fileStream = fs.createWriteStream(tmpFile);
+        stream = ytdl(url, options);
+      } catch (err) {
+        cleanup(err);
+        return;
+      }
+      stream.on("error", cleanup);
+      fileStream.on("error", cleanup);
+      fileStream.on("finish", () => {
+        try {
+          if (stream) stream.removeListener("error", cleanup);
+          if (fileStream) fileStream.removeListener("error", cleanup);
+        } catch {}
+        resolve();
+      });
+      stream.pipe(fileStream);
+    });
+  };
+
+  let lastError = null;
+  for (const strat of strategies) {
+    try {
+      try { fs.rmSync(tmpFile, { force: true }); } catch {}
+      await attemptDownload({ ...baseOptions, ...strat.options });
+      const stats = fs.existsSync(tmpFile) ? fs.statSync(tmpFile) : null;
+      if (stats && stats.size > 128 * 1024) {
+        return { tmpDir, tmpFile, strategy: strat.label };
+      }
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  try {
+    const info = await ytdl.getInfo(url);
+    const progressive = (info.formats || [])
+      .filter((f) => f.hasVideo && f.hasAudio && f.isHLS === false && f.isDashMPD === false)
+      .sort((a, b) => (Number(a.contentLength || 0) || 0) - (Number(b.contentLength || 0) || 0));
+
+    for (const format of progressive.slice(0, 6)) {
+      try {
+        try { fs.rmSync(tmpFile, { force: true }); } catch {}
+        await attemptDownload({ ...baseOptions, format });
+        const stats = fs.existsSync(tmpFile) ? fs.statSync(tmpFile) : null;
+        if (stats && stats.size > 128 * 1024) {
+          return { tmpDir, tmpFile, strategy: `format-${format.itag}` };
+        }
+      } catch (err) {
+        lastError = err;
+      }
+    }
+  } catch (err) {
+    lastError = err;
+  }
+
+  throw lastError || new Error("Aucun flux progressif YouTube disponible");
 }
 
 async function extractFramesLocalFile(tmpFile, { maxSeconds, fps }) {
@@ -563,7 +647,8 @@ async function tryFramesAnySource({ id, ytFormats, piped, invid, opts, warns }) 
       }
     } catch (e) {
       lastErr = e;
-      warns.push(`extract fail ${t.src}: ${String(e).slice(0, 200)}`);
+      const reason = t.mode === "local" ? friendlyYtdlError(e) : friendlyAttemptError(e);
+      warns.push(`Extraction vidéo (${t.src}) impossible : ${reason}`);
     }
   }
   if (lastErr) throw lastErr;
@@ -1004,12 +1089,12 @@ export default async function handler(req, res) {
       : readable.status
       ? `HTTP ${readable.status}${readable.statusText ? ` ${readable.statusText}` : ""}`
       : null;
-    if (!piped.data && pipedSummary) {
-      warns.push(`Piped KO: ${pipedSummary}`);
-    }
-    if (!invid.data && invidSummary) {
-      warns.push(`Invidious KO: ${invidSummary}`);
-    }
+      if (!piped.data && pipedSummary && piped.status !== "disabled") {
+        warns.push(`Piped KO: ${pipedSummary}`);
+      }
+      if (!invid.data && invidSummary && invid.status !== "disabled") {
+        warns.push(`Invidious KO: ${invidSummary}`);
+      }
     if (!readable.ok && readableSummary) {
       warns.push(`Readable KO: ${readableSummary}`);
     }
@@ -1103,7 +1188,8 @@ export default async function handler(req, res) {
       ocrCandidates = extractItemCandidates(ocrText);
       ocrMatches = normalizeItems(ocrCandidates);
     } catch (e) {
-      warns.push(`OCR disabled: ${String(e)}`);
+      const reason = friendlyYtdlError(e);
+      warns.push(`OCR désactivé : ${reason}`);
     } finally {
       try {
         if (tmpDir && fs.existsSync(tmpDir)) {

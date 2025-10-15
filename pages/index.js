@@ -143,6 +143,7 @@ function SourceBadges({ sources, speech }) {
       label: "Page lisible",
       ok: !!readable,
       warning: readable_status === "failed",
+      tone: readable ? "ok" : readable_status === "failed" ? "warn" : "idle",
       message: readable ? "Disponible" : "Indisponible",
       detail: compact(readable_note),
     },
@@ -192,6 +193,7 @@ function SourceBadges({ sources, speech }) {
       label: "Sous-titres",
       ok: !!transcript_source,
       warning: !transcript_source,
+      tone: transcript_source ? "ok" : "warn",
       message: transcript_source ? (transcript_lang ? transcript_lang : "Présents") : "Absents",
       detail: transcript_is_translation
         ? "Traduction automatique"
