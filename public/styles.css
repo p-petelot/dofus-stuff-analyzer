@@ -531,20 +531,49 @@ a {
   font-size: 0.9rem;
 }
 
+
 .suggestions__list {
   margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
 .suggestions__item {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 14px;
-  align-items: start;
+  grid-template-columns: 112px 1fr;
+  gap: 18px;
+  align-items: stretch;
+}
+
+.suggestions__media {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
+.suggestions__image {
+  width: 100%;
+  max-width: 96px;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.55);
+  object-fit: contain;
+  padding: 8px;
+  display: block;
+}
+
+.suggestions__image--placeholder {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding: 8px;
 }
 
 .suggestions__swatches {
@@ -554,6 +583,9 @@ a {
   border-radius: var(--radius-sm);
   background: rgba(15, 23, 42, 0.5);
   border: 1px solid rgba(148, 163, 184, 0.16);
+  min-height: 32px;
+  justify-content: center;
+  width: 100%;
 }
 
 .suggestions__swatch {
@@ -576,7 +608,7 @@ a {
 .suggestions__content {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .suggestions__title {
@@ -589,13 +621,6 @@ a {
 .suggestions__title:hover,
 .suggestions__title:focus {
   color: var(--highlight-strong);
-}
-
-.suggestions__description {
-  margin: 0;
-  color: var(--text-soft);
-  font-size: 0.9rem;
-  line-height: 1.5;
 }
 
 .suggestions__note {
@@ -612,6 +637,29 @@ a {
 
   .toast-tray--visible {
     transform: translate(-50%, 0);
+  }
+}
+
+@media (max-width: 520px) {
+  .suggestions__item {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .suggestions__media {
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .suggestions__image {
+    max-width: 88px;
+    padding: 6px;
+  }
+
+  .suggestions__swatches {
+    width: auto;
   }
 }
 

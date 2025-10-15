@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
 
 const ITEM_TYPES = ["coiffe", "cape", "familier", "bouclier"];
-const DOFUS_API_BASE_URL = "https://api.dofusdb.fr/items";
-const DEFAULT_LIMIT = 40;
+const DOFUS_API_HOST = "https://api.dofusdb.fr";
+const DOFUS_API_BASE_URL = `${DOFUS_API_HOST}/items`;
+const DEFAULT_LIMIT = 10;
 const DEFAULT_DOFUS_QUERY_PARAMS = {
   "typeId[$ne]": "203",
   "$sort": "-id",
@@ -20,6 +21,18 @@ const ITEM_TYPE_CONFIG = {
 };
 
 const MAX_ITEM_PALETTE_COLORS = 6;
+const IMAGE_REFERENCE_KEYS = [
+  "url",
+  "href",
+  "img",
+  "image",
+  "icon",
+  "fullSize",
+  "large",
+  "medium",
+  "small",
+  "src",
+];
 
 function slugify(value) {
   if (!value) return "";
@@ -159,6 +172,71 @@ function extractPaletteFromItemData(item) {
   return palette.slice(0, MAX_ITEM_PALETTE_COLORS);
 }
 
+function ensureAbsoluteUrl(path) {
+  if (!path) return null;
+  if (typeof path !== "string") return null;
+
+  const trimmed = path.trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  if (trimmed.startsWith("//")) {
+    return `https:${trimmed}`;
+  }
+  if (trimmed.startsWith("/")) {
+    return `${DOFUS_API_HOST}${trimmed}`;
+  }
+  return `${DOFUS_API_HOST}/${trimmed}`;
+}
+
+function flattenImageReference(reference) {
+  if (!reference) return null;
+  if (typeof reference === "string") {
+    return reference;
+  }
+  if (Array.isArray(reference)) {
+    for (const entry of reference) {
+      const nested = flattenImageReference(entry);
+      if (nested) {
+        return nested;
+      }
+    }
+    return null;
+  }
+  if (typeof reference === "object") {
+    for (const key of IMAGE_REFERENCE_KEYS) {
+      if (reference[key]) {
+        const nested = flattenImageReference(reference[key]);
+        if (nested) {
+          return nested;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function resolveItemImageUrl(item) {
+  const candidates = [
+    item?.img,
+    item?.image,
+    item?.icon,
+    item?.images,
+    item?.look?.img,
+  ];
+
+  for (const candidate of candidates) {
+    const flattened = flattenImageReference(candidate);
+    const absolute = ensureAbsoluteUrl(flattened);
+    if (absolute) {
+      return absolute;
+    }
+  }
+
+  return null;
+}
+
 function buildDofusApiUrl(type) {
   const config = ITEM_TYPE_CONFIG[type];
   if (!config) {
@@ -205,19 +283,21 @@ function normalizeDofusItem(item, type) {
 
   const slugSource = normalizeTextContent(item?.slug) || name;
   const slug = slugify(slugSource) || slugify(name);
-  const description = normalizeTextContent(item?.description);
-  const palette = extractPaletteFromItemData(item);
   const ankamaId = item?.ankamaId ?? item?.id ?? item?._id ?? slug;
   const encyclopediaUrl = buildEncyclopediaUrl(type, item, slug, ankamaId) ??
     "https://www.dofus.com/fr/mmorpg/encyclopedie";
+  const imageUrl = resolveItemImageUrl(item);
+  const palette = extractPaletteFromItemData(item);
+  const paletteSource = palette.length ? "api" : "unknown";
 
   return {
     id: `${type}-${ankamaId}`,
     name,
     type,
-    description,
     palette,
     url: encyclopediaUrl,
+    imageUrl,
+    paletteSource,
   };
 }
 
@@ -354,6 +434,71 @@ function scoreItemAgainstPalette(item, palette) {
   return totalDistance / itemRgb.length;
 }
 
+function analyzePaletteFromUrl(imageUrl) {
+  if (!imageUrl || typeof window === "undefined" || typeof Image === "undefined") {
+    return Promise.resolve([]);
+  }
+
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.decoding = "async";
+    image.onload = () => {
+      try {
+        const palette = extractPalette(image);
+        resolve(palette);
+      } catch (err) {
+        console.error(err);
+        resolve([]);
+      }
+    };
+    image.onerror = () => {
+      resolve([]);
+    };
+    image.src = imageUrl;
+  });
+}
+
+async function enrichItemsWithPalettes(items, shouldCancel) {
+  if (!items.length || (typeof window === "undefined" && typeof document === "undefined")) {
+    return items;
+  }
+
+  const enriched = await Promise.all(
+    items.map(async (item) => {
+      if (shouldCancel?.()) {
+        return item;
+      }
+
+      if (!item.imageUrl) {
+        return { ...item, palette: [] };
+      }
+
+      const paletteEntries = await analyzePaletteFromUrl(item.imageUrl);
+      if (shouldCancel?.()) {
+        return item;
+      }
+
+      const paletteHex = paletteEntries
+        .map((entry) => entry.hex)
+        .filter((hex, index, array) => hex && array.indexOf(hex) === index)
+        .slice(0, MAX_ITEM_PALETTE_COLORS);
+
+      if (!paletteHex.length) {
+        return {
+          ...item,
+          palette: item.palette ?? [],
+          paletteSource: item.paletteSource ?? "unknown",
+        };
+      }
+
+      return { ...item, palette: paletteHex, paletteSource: "image" };
+    })
+  );
+
+  return enriched;
+}
+
 export default function Home() {
   const [imageSrc, setImageSrc] = useState(null);
   const [colors, setColors] = useState([]);
@@ -439,7 +584,9 @@ export default function Home() {
                 .map((rawItem) => normalizeDofusItem(rawItem, type))
                 .filter((item) => item !== null);
 
-              return [type, normalizedItems];
+              const enrichedItems = await enrichItemsWithPalettes(normalizedItems, () => isCancelled);
+
+              return [type, enrichedItems];
             } catch (err) {
               if (err.name === "AbortError") {
                 return [type, []];
@@ -866,20 +1013,42 @@ export default function Home() {
                         <ul className="suggestions__list">
                           {items.map((item) => {
                             const hasPalette = item.palette.length > 0;
+                            const paletteFromImage = item.paletteSource === "image" && hasPalette;
+                            let paletteNote = null;
+                            if (!hasPalette) {
+                              paletteNote = "Palette non détectée sur l'illustration.";
+                            } else if (!paletteFromImage) {
+                              paletteNote = "Palette estimée à partir des données DofusDB.";
+                            }
+
                             return (
                               <li key={item.id} className="suggestions__item">
-                                <div className="suggestions__swatches" aria-hidden={hasPalette}>
-                                  {hasPalette ? (
-                                    item.palette.map((hex) => (
-                                      <span
-                                        key={hex}
-                                        className="suggestions__swatch"
-                                        style={{ backgroundColor: hex }}
-                                      />
-                                    ))
+                                <div className="suggestions__media">
+                                  {item.imageUrl ? (
+                                    <img
+                                      src={item.imageUrl}
+                                      alt={`Illustration de ${item.name}`}
+                                      className="suggestions__image"
+                                      loading="lazy"
+                                    />
                                   ) : (
-                                    <span className="suggestions__swatch-note">Palette indisponible</span>
+                                    <div className="suggestions__image suggestions__image--placeholder" aria-hidden="true">
+                                      Aperçu indisponible
+                                    </div>
                                   )}
+                                  <div className="suggestions__swatches" aria-hidden={hasPalette}>
+                                    {hasPalette ? (
+                                      item.palette.map((hex) => (
+                                        <span
+                                          key={hex}
+                                          className="suggestions__swatch"
+                                          style={{ backgroundColor: hex }}
+                                        />
+                                      ))
+                                    ) : (
+                                      <span className="suggestions__swatch-note">Palette indisponible</span>
+                                    )}
+                                  </div>
                                 </div>
                                 <div className="suggestions__content">
                                   <a
@@ -890,13 +1059,9 @@ export default function Home() {
                                   >
                                     {item.name}
                                   </a>
-                                  {item.description ? (
-                                    <p className="suggestions__description">{item.description}</p>
-                                  ) : null}
-                                  {!hasPalette ? (
-                                    <span className="suggestions__note">
-                                      Palette couleur non fournie par DofusDB.
-                                    </span>
+                                  {paletteNote ? <span className="suggestions__note">{paletteNote}</span> : null}
+                                  {!item.imageUrl ? (
+                                    <span className="suggestions__note">Illustration manquante sur DofusDB.</span>
                                   ) : null}
                                 </div>
                               </li>
