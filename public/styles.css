@@ -367,6 +367,93 @@ input:focus {
   color: var(--muted);
 }
 
+.stuff-switcher {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.stuff-switcher__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.stuff-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.55);
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+}
+
+.stuff-pill:hover { border-color: rgba(168, 85, 247, 0.35); }
+
+.stuff-pill--active {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.16), rgba(59, 130, 246, 0.18));
+  border-color: rgba(168, 85, 247, 0.6);
+  box-shadow: 0 12px 28px -20px rgba(139, 92, 246, 0.55);
+  transform: translateY(-1px);
+}
+
+.stuff-pill__label { font-weight: 600; }
+
+.stuff-pill__count {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.stuff-pill__tag {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.stuff-switcher__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stuff-switcher__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.stuff-switcher__note {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.stuff-context {
+  margin: 18px 0 0;
+  padding: 14px 18px;
+  border-left: 3px solid rgba(168, 85, 247, 0.6);
+  background: rgba(15, 23, 42, 0.55);
+  border-radius: 14px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.dofusbook-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
 .player-toggle {
   margin-top: 18px;
   padding-top: 12px;

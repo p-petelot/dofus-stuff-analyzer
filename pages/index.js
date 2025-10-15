@@ -1,5 +1,5 @@
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 
 const ELEMENT_INFO = {
@@ -98,11 +98,15 @@ function SourceBadges({ sources }) {
   const {
     piped,
     piped_note,
+    piped_status,
+    piped_hint,
     readable,
     readable_status,
     readable_note,
     invidious,
     invidious_note,
+    invidious_status,
+    invidious_hint,
     transcript_source,
     transcript_lang,
     transcript_has_timing,
@@ -135,19 +139,41 @@ function SourceBadges({ sources }) {
       key: "piped",
       icon: "🚰",
       label: "Flux Piped",
-      ok: !!piped,
-      warning: !!piped_note,
-      message: piped ? "OK" : "Hors service",
-      detail: compact(piped_note),
+      ok: piped_status === "ok" || !!piped,
+      warning: piped_status !== "ok" && piped_status !== "disabled",
+      tone:
+        piped_status === "disabled"
+          ? "idle"
+          : piped_status === "ok" || piped
+          ? "ok"
+          : "warn",
+      message:
+        piped_status === "disabled"
+          ? "Désactivé"
+          : piped
+          ? "OK"
+          : "Hors service",
+      detail: piped_hint || compact(piped_note),
     },
     {
       key: "invidious",
       icon: "🌀",
       label: "Flux Invidious",
-      ok: !!invidious,
-      warning: !!invidious_note,
-      message: invidious ? "OK" : "Hors service",
-      detail: compact(invidious_note),
+      ok: invidious_status === "ok" || !!invidious,
+      warning: invidious_status !== "ok" && invidious_status !== "disabled",
+      tone:
+        invidious_status === "disabled"
+          ? "idle"
+          : invidious_status === "ok" || invidious
+          ? "ok"
+          : "warn",
+      message:
+        invidious_status === "disabled"
+          ? "Désactivé"
+          : invidious
+          ? "OK"
+          : "Hors service",
+      detail: invidious_hint || compact(invidious_note),
     },
     {
       key: "captions",
@@ -167,7 +193,19 @@ function SourceBadges({ sources }) {
       icon: "🎙️",
       label: "Analyse audio",
       ok: speech_status === "ok",
-      warning: speech_status === "error" || speech_status === "empty",
+      warning:
+        speech_status === "error" ||
+        speech_status === "empty" ||
+        speech_status === "missing" ||
+        speech_status === "not_configured",
+      tone:
+        speech_status === "ok"
+          ? "ok"
+          : speech_status === "error"
+          ? "warn"
+          : speech_status === "empty"
+          ? "idle"
+          : "warn",
       message:
         speech_status === "ok"
           ? speech_provider || "ASR"
@@ -177,6 +215,8 @@ function SourceBadges({ sources }) {
           ? "Aucun texte"
           : speech_status === "error"
           ? "Erreur"
+          : speech_status === "missing" || speech_status === "not_configured"
+          ? "À configurer"
           : "Inactif",
       detail: speech_model || null,
     },
@@ -185,7 +225,7 @@ function SourceBadges({ sources }) {
   return (
     <div className="status-grid">
       {badges.map((badge) => {
-        const tone = badge.ok ? "ok" : badge.warning ? "warn" : "idle";
+        const tone = badge.tone || (badge.ok ? "ok" : badge.warning ? "warn" : "idle");
         return (
           <div key={badge.key} className={`status-card status-card--${tone}`}>
             <span className="status-card__icon" aria-hidden="true">
@@ -199,6 +239,51 @@ function SourceBadges({ sources }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function StuffSwitcher({ stuffs, activeIndex, onSelect }) {
+  if (!Array.isArray(stuffs) || !stuffs.length) return null;
+  const active = stuffs[activeIndex] || stuffs[0];
+  return (
+    <div className="stuff-switcher">
+      <div className="stuff-switcher__list">
+        {stuffs.map((set, idx) => {
+          const isActive = idx === activeIndex;
+          return (
+            <button
+              key={set.id || `${set.label}-${idx}`}
+              type="button"
+              className={`stuff-pill${isActive ? " stuff-pill--active" : ""}`}
+              onClick={() => onSelect(idx)}
+            >
+              <span className="stuff-pill__label">{set.label || `Variante ${idx + 1}`}</span>
+              {typeof set.item_count === "number" ? (
+                <span className="stuff-pill__count">{set.item_count} pièce{set.item_count > 1 ? "s" : ""}</span>
+              ) : null}
+              {set.timestamp ? <span className="stuff-pill__tag">{set.timestamp}</span> : null}
+            </button>
+          );
+        })}
+      </div>
+      {active ? (
+        <div className="stuff-switcher__meta">
+          <div className="stuff-switcher__tags">
+            {active.source ? (
+              <Tag tone="neutral" subtle icon="🧭">
+                {active.source}
+              </Tag>
+            ) : null}
+            {active.timestamp ? (
+              <Tag tone="info" subtle icon="⏱️">
+                {active.timestamp}
+              </Tag>
+            ) : null}
+          </div>
+          {active.note ? <p className="caption stuff-switcher__note">{active.note}</p> : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -482,12 +567,13 @@ function SpeechInsights({ speech }) {
 
   const status = speech.status || "missing";
   const providerLabel = speech.provider_label || (speech.provider ? `ASR ${speech.provider}` : "Analyse audio");
+  const isNotConfigured = status === "not_configured" || status === "missing";
   const statusTone =
     status === "ok"
       ? "success"
       : status === "error"
       ? "warning"
-      : status === "not_configured"
+      : isNotConfigured
       ? "warning"
       : "muted";
   const statusText =
@@ -496,6 +582,7 @@ function SpeechInsights({ speech }) {
       empty: "Aucun segment exploitable",
       error: "Erreur de transcription",
       not_configured: "ASR non configuré",
+      missing: "ASR non configuré",
       configured: "ASR prêt",
     }[status] || status;
 
@@ -504,7 +591,7 @@ function SpeechInsights({ speech }) {
       ? "success"
       : status === "error"
       ? "warning"
-      : status === "not_configured"
+      : isNotConfigured
       ? "warning"
       : "muted";
 
@@ -656,7 +743,7 @@ function SpeechInsights({ speech }) {
               ))}
             </ul>
           ) : null}
-          {status === "not_configured" ? (
+          {isNotConfigured ? (
             <details className="speech-help">
               <summary>Configurer l'analyse audio</summary>
               <p className="caption">Pour activer l'ASR&nbsp;:</p>
@@ -733,6 +820,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [out, setOut] = useState(null);
   const [err, setErr] = useState("");
+  const [activeStuffIndex, setActiveStuffIndex] = useState(0);
 
   async function run() {
     setLoading(true);
@@ -751,6 +839,7 @@ export default function Home() {
       }
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       setOut(json);
+      setActiveStuffIndex(0);
     } catch (e) {
       setErr(String(e?.message || e));
     } finally {
@@ -758,9 +847,38 @@ export default function Home() {
     }
   }
 
-  const grouped = useMemo(() => groupBySlot(out?.items || []), [out]);
+  const stuffs = useMemo(() => {
+    if (out?.stuffs?.length) return out.stuffs;
+    if (out?.items?.length) {
+      return [
+        {
+          id: "legacy",
+          label: "Synthèse générale",
+          origin: "aggregate",
+          source: "Transcript + OCR",
+          items: out.items,
+          item_count: out.items.length,
+        },
+      ];
+    }
+    return [];
+  }, [out]);
+
+  useEffect(() => {
+    if (activeStuffIndex >= stuffs.length) {
+      setActiveStuffIndex(0);
+    }
+  }, [activeStuffIndex, stuffs.length]);
+
+  const activeStuff = stuffs[activeStuffIndex] || null;
+
+  const grouped = useMemo(() => groupBySlot(activeStuff?.items || []), [activeStuff]);
   const className = out?.class || "Classe inconnue";
   const classIcon = CLASS_ICON[out?.class] || "🧙";
+  const dofusbookCount = out?.dofusbook_urls?.length || 0;
+  const hasDofusbook = dofusbookCount > 0;
+  const activeItemCount = activeStuff?.item_count ?? activeStuff?.items?.length ?? 0;
+  const variantCount = stuffs.length;
 
   return (
     <>
@@ -818,8 +936,8 @@ export default function Home() {
                     <Tag tone="neutral" icon={classIcon}>
                       {className}
                     </Tag>
-                    <Tag tone={out.dofusbook_url ? "success" : "muted"} icon="📘">
-                      {out.dofusbook_url ? "DofusBook détecté" : "DofusBook manquant"}
+                    <Tag tone={hasDofusbook ? "success" : "muted"} icon="📘">
+                      {hasDofusbook ? `DofusBook ×${dofusbookCount}` : "DofusBook manquant"}
                     </Tag>
                     <Tag
                       tone={out.speech?.status === "ok" ? "success" : out.speech?.status === "error" ? "warning" : "muted"}
@@ -832,10 +950,14 @@ export default function Home() {
                   <SourceBadges sources={out.sources} />
                   <MomentsList moments={out.presentation_moments} />
                   <ExoBadges exos={out.exos} />
-                  {out.dofusbook_url ? (
-                    <a className="btn btn-ghost" href={out.dofusbook_url} target="_blank" rel="noreferrer">
-                      Ouvrir sur DofusBook ↗
-                    </a>
+                  {hasDofusbook ? (
+                    <div className="dofusbook-links">
+                      {out.dofusbook_urls.map((link, idx) => (
+                        <a key={link + idx} className="btn btn-ghost" href={link} target="_blank" rel="noreferrer">
+                          {dofusbookCount > 1 ? `DofusBook #${idx + 1}` : "Ouvrir sur DofusBook"} ↗
+                        </a>
+                      ))}
+                    </div>
                   ) : null}
                 </div>
               </div>
@@ -860,14 +982,29 @@ export default function Home() {
             <section className="card card--items">
               <div className="card-heading">
                 <h2>🧩 Stuff détecté</h2>
-                <span className="caption">{out.items?.length || 0} résultats distincts</span>
+                <span className="caption">
+                  {activeItemCount} pièce{activeItemCount === 1 ? "" : "s"} détectée{activeItemCount === 1 ? "" : "s"}
+                  {variantCount > 1 ? ` • ${variantCount} variantes` : ""}
+                </span>
               </div>
-              {out.items?.length ? (
+              {activeItemCount ? (
                 <>
+                  {variantCount > 1 ? (
+                    <StuffSwitcher
+                      stuffs={stuffs}
+                      activeIndex={activeStuffIndex}
+                      onSelect={setActiveStuffIndex}
+                    />
+                  ) : null}
                   <EquipmentBoard
-                    items={out.items}
-                    preview={{ thumbnail: out.video?.thumbnail, icon: classIcon, label: className }}
+                    items={activeStuff?.items || []}
+                    preview={{ thumbnail: out.video?.thumbnail, icon: classIcon, label: activeStuff?.label || className }}
                   />
+                  {activeStuff?.context_excerpt ? (
+                    <blockquote className="stuff-context">
+                      {activeStuff.context_excerpt}
+                    </blockquote>
+                  ) : null}
                   <details className="items-details">
                     <summary>Voir la liste détaillée</summary>
                     <div className="table-wrap">

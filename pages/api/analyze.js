@@ -6,7 +6,24 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 
-const BUILTIN_OPENAI_KEY = "sk-abcd5678efgh1234abcd5678efgh1234abcd5678";
+const DEFAULT_PIPED_HOSTS = [
+  "https://piped.video",
+  "https://piped.videoapi.fr",
+  "https://piped.minionflo.net",
+  "https://piped.darkness.services",
+  "https://piped.projectsegfau.lt",
+  "https://piped.us.projectsegfau.lt",
+  "https://piped.lunar.icu",
+  "https://piped.privacydev.net",
+];
+
+const DEFAULT_INVIDIOUS_HOSTS = [
+  "https://yewtu.be",
+  "https://invidious.fdn.fr",
+  "https://vid.puffyan.us",
+  "https://inv.nadeko.net",
+  "https://invidious.projectsegfau.lt",
+];
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 export const config = { runtime: "nodejs", api: { bodyParser: false } };
@@ -20,6 +37,23 @@ const {
   findDofusbookLinks, gatherEvidences, inferElementsFromText, detectExos, inferClassFromText,
   detectStuffMoments
 } = require("../../lib/util");
+
+function parseHostList(raw, fallback = []) {
+  const base = typeof raw === "string" && raw.trim() ? raw : "";
+  const list = base
+    ? base
+        .split(/[\s,]+/)
+        .map((h) => h.trim())
+        .filter(Boolean)
+    : [];
+  if (list.length) return list;
+  return [...fallback];
+}
+
+function flagDisabled(value) {
+  if (!value) return false;
+  return /^(1|true|yes|on)$/i.test(String(value).trim());
+}
 
 // ---------- Fetch helpers ----------
 async function fetchJSON(url) {
@@ -55,7 +89,7 @@ function friendlyAttemptError(err) {
     .trim();
 }
 
-function summarizeAttempts(attempts = []) {
+function summarizeAttempts(attempts = [], hint = null) {
   const shortHost = (value) => {
     if (!value) return "?";
     try {
@@ -65,7 +99,7 @@ function summarizeAttempts(attempts = []) {
       return value.replace(/^https?:\/\//, "");
     }
   };
-  return attempts
+  const summary = attempts
     .map((attempt) => {
       if (!attempt) return null;
       const host = shortHost(attempt.host || "?");
@@ -88,6 +122,10 @@ function summarizeAttempts(attempts = []) {
     .filter(Boolean)
     .join(" | ")
     .slice(0, 400);
+
+  if (hint && summary) return `${hint} | ${summary}`;
+  if (hint) return hint;
+  return summary;
 }
 
 // ---------- Meta YouTube ----------
@@ -109,17 +147,22 @@ async function getMeta(url) {
 
 // ---------- Piped / Invidious (desc + captions + streams sans clé) ----------
 async function getPipedVideo(id) {
-  const hosts = [
-    "https://piped.video",
-    "https://piped.videoapi.fr",
-    "https://piped.minionflo.net",
-    "https://piped.darkness.services",
-    "https://piped.projectsegfau.lt",
-    "https://piped.us.projectsegfau.lt",
-    "https://piped.lunar.icu",
-    "https://piped.privacydev.net"
-  ];
   const attempts = [];
+  if (flagDisabled(process.env.DISABLE_PIPED)) {
+    return { host: null, data: null, status: "disabled", attempts, hint: "Désactivé via DISABLE_PIPED=1" };
+  }
+
+  const hosts = parseHostList(process.env.PIPED_HOSTS, DEFAULT_PIPED_HOSTS);
+  if (!hosts.length) {
+    return {
+      host: null,
+      data: null,
+      status: "disabled",
+      attempts,
+      hint: "Aucun miroir Piped configuré. Ajoute PIPED_HOSTS=mon.instance pour activer ce flux.",
+    };
+  }
+
   for (const h of hosts) {
     try {
       const res = await fetch(`${h}/api/v1/video/${id}`, { headers: { "User-Agent": "Mozilla/5.0" } });
@@ -147,7 +190,10 @@ async function getPipedVideo(id) {
       attempts.push({ host: h, error: friendlyAttemptError(err) });
     }
   }
-  return { host: null, data: null, status: "failed", attempts };
+  const hint = attempts.length
+    ? "Configure ton propre miroir via PIPED_HOSTS ou masque ce flux avec DISABLE_PIPED=1."
+    : null;
+  return { host: null, data: null, status: "failed", attempts, hint };
 }
 async function getPipedCaptions(host, id, label) {
   const url = `${host}/api/v1/captions/${id}?label=${encodeURIComponent(label)}`;
@@ -156,14 +202,22 @@ async function getPipedCaptions(host, id, label) {
 }
 
 async function getInvidiousVideo(id) {
-  const hosts = [
-    "https://yewtu.be",
-    "https://invidious.fdn.fr",
-    "https://vid.puffyan.us",
-    "https://inv.nadeko.net",
-    "https://invidious.projectsegfau.lt"
-  ];
   const attempts = [];
+  if (flagDisabled(process.env.DISABLE_INVIDIOUS)) {
+    return { host: null, data: null, status: "disabled", attempts, hint: "Désactivé via DISABLE_INVIDIOUS=1" };
+  }
+
+  const hosts = parseHostList(process.env.INVIDIOUS_HOSTS, DEFAULT_INVIDIOUS_HOSTS);
+  if (!hosts.length) {
+    return {
+      host: null,
+      data: null,
+      status: "disabled",
+      attempts,
+      hint: "Aucun miroir Invidious configuré. Défini INVIDIOUS_HOSTS=... pour l'activer.",
+    };
+  }
+
   for (const h of hosts) {
     try {
       const res = await fetch(`${h}/api/v1/videos/${id}`, { headers: { "User-Agent": "Mozilla/5.0" } });
@@ -191,7 +245,10 @@ async function getInvidiousVideo(id) {
       attempts.push({ host: h, error: friendlyAttemptError(err) });
     }
   }
-  return { host: null, data: null, status: "failed", attempts };
+  const hint = attempts.length
+    ? "Installe ton instance Invidious (INVIDIOUS_HOSTS) ou cache ce test via DISABLE_INVIDIOUS=1."
+    : null;
+  return { host: null, data: null, status: "failed", attempts, hint };
 }
 async function getInvidiousCaptions(host, id, labelOrLang) {
   const caps = await fetchJSON(`${host}/api/v1/captions/${id}`);
@@ -544,13 +601,12 @@ function getAsrConfig() {
     };
   }
 
-  const openaiKey = (process.env.OPENAI_API_KEY || "").trim() || BUILTIN_OPENAI_KEY;
+  const openaiKey = (process.env.OPENAI_API_KEY || "").trim();
   if (openaiKey) {
-    const usingBuiltin = !process.env.OPENAI_API_KEY;
     return {
       provider: "openai",
-      provider_label: usingBuiltin ? "OpenAI Whisper (clé intégrée)" : "OpenAI Whisper",
-      model: process.env.OPENAI_TRANSCRIBE_MODEL || "gpt-4o-mini-transcribe",
+      provider_label: "OpenAI Whisper",
+      model: process.env.OPENAI_TRANSCRIBE_MODEL || "whisper-1",
       baseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
       endpoint: "/audio/transcriptions",
       key: openaiKey,
@@ -594,7 +650,7 @@ async function transcribeAudioWithConfig(audioFile, config, warns) {
       if (config.provider !== "openai") {
         return config.model ? [config.model] : [null];
       }
-      const chain = [config.model, "gpt-4o-transcribe", "whisper-1"];
+      const chain = [config.model, "whisper-1", "gpt-4o-mini-transcribe", "gpt-4o-transcribe"];
       const seen = new Set();
       return chain
         .filter(Boolean)
@@ -853,9 +909,66 @@ function extractItemCandidates(textPool) {
   return cand;
 }
 function normalizeItems(candidates) {
-  const fuzzy = (candidates || []).map(c => fuzzyMatchItem(c)).filter(Boolean).filter(m => m.confidence >= 0.5);
+  const fuzzy = (candidates || [])
+    .map((candidate) => {
+      const match = fuzzyMatchItem(candidate);
+      if (!match || match.confidence < 0.5) return null;
+      return {
+        ...match,
+        source: match.source || "texte flou",
+        proof: match.proof || candidate,
+      };
+    })
+    .filter(Boolean);
   fuzzy.sort((a, b) => b.confidence - a.confidence);
   return dedupeByName(fuzzy).slice(0, 25);
+}
+
+function collectTextMatches(text) {
+  if (!text) return [];
+  const aliasHits = scanAliases(text);
+  const directHits = scanKnownItemsBySubstring(text);
+  const slotCapHits = scanSlotNamePatterns(text);
+  const textCand = extractItemCandidates(text);
+  const matchedText = normalizeItems(textCand);
+  return dedupeByName([
+    ...(slotCapHits || []),
+    ...(aliasHits || []),
+    ...(directHits || []),
+    ...(matchedText || []),
+  ]);
+}
+
+function shapeItems(matches = [], { fallbackSource = "texte" } = {}) {
+  return dedupeByName(matches)
+    .map((m) => ({
+      slot: m.slot,
+      name: m.name,
+      confidence: typeof m.confidence === "number" ? m.confidence : 0.5,
+      source: m.source || fallbackSource,
+      raw: m.raw,
+      proof: m.proof || null,
+    }))
+    .sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+}
+
+function collectContextWindow(sources = [], seconds, window = 14) {
+  if (!Array.isArray(sources) || typeof seconds !== "number") return "";
+  const start = Math.max(0, seconds - window / 2);
+  const end = seconds + window / 2;
+  const lines = [];
+  for (const source of sources) {
+    const cues = Array.isArray(source?.cues) ? source.cues : [];
+    for (const cue of cues) {
+      const cueStart = typeof cue.start === "number" ? cue.start : null;
+      if (cueStart == null) continue;
+      if (cueStart >= start && cueStart <= end) {
+        const text = normalize(cue.text || "");
+        if (text) lines.push(text);
+      }
+    }
+  }
+  return lines.join("\n");
 }
 
 // ================== HANDLER ==================
@@ -882,8 +995,8 @@ export default async function handler(req, res) {
     const readable = await getReadableWatchPage(id);
     const piped = await getPipedVideo(id);
     const invid = await getInvidiousVideo(id);
-    const pipedSummary = summarizeAttempts(piped.attempts) || null;
-    const invidSummary = summarizeAttempts(invid.attempts) || null;
+    const pipedSummary = summarizeAttempts(piped.attempts, piped.hint) || null;
+    const invidSummary = summarizeAttempts(invid.attempts, invid.hint) || null;
     const readableSummary = readable.ok
       ? null
       : readable.error
@@ -1013,7 +1126,7 @@ export default async function handler(req, res) {
     const assembled = textSources.map(src => src.text || "").filter(Boolean).join("\n");
 
     // 7) DofusBook + évidences
-    const dofusbooks = findDofusbookLinks(assembled);
+    const dofusbooks = Array.from(new Set(findDofusbookLinks(assembled)));
     const evidences  = gatherEvidences(textSources, 32);
     const presentationMoments = detectStuffMoments(textSources, { limit: 5 });
 
@@ -1022,8 +1135,13 @@ export default async function handler(req, res) {
     const directHits  = scanKnownItemsBySubstring(assembled);
     const slotCapHits = scanSlotNamePatterns(assembled);
     const textCand    = extractItemCandidates(assembled);
-    let   matchedText = normalizeItems(textCand);
-    let   matched     = dedupeByName([ ...slotCapHits, ...aliasHits, ...directHits, ...matchedText ]);
+    const matchedText = normalizeItems(textCand);
+    const textMatches = dedupeByName([
+      ...(slotCapHits || []),
+      ...(aliasHits || []),
+      ...(directHits || []),
+      ...(matchedText || []),
+    ]);
 
     // 9) Exos + éléments (sur TOUT le texte consolidé)
     const exos = detectExos(assembled);
@@ -1031,17 +1149,67 @@ export default async function handler(req, res) {
     const klass = inferClassFromText(assembled);
 
     // 10) Fusion finale items (priorité OCR)
-    const items = dedupeByName([
+    const aggregateMatches = dedupeByName([
       ...(ocrMatches || []),
-      ...(slotCapHits || []),
-      ...(aliasHits || []),
-      ...(directHits || []),
-      ...(matchedText || [])
-    ]).map(m => ({
-      slot: m.slot, name: m.name, confidence: m.confidence,
-      source: m.source || (ocrMatches.some(ocrHit => ocrHit.name === m.name) ? "ocr+fuzzy" : "text+fuzzy"),
-      raw: m.raw, proof: m.proof || null
-    }));
+      ...(textMatches || []),
+    ]);
+    const items = shapeItems(aggregateMatches, { fallbackSource: "texte" });
+
+    const stuffSets = [];
+    const seenSignatures = new Set();
+    const makeSignature = (collection = []) =>
+      collection
+        .map((item) => (item?.name || "").toLowerCase())
+        .filter(Boolean)
+        .sort()
+        .join("|");
+
+    const pushStuffSet = (entry) => {
+      if (!entry || !Array.isArray(entry.items) || !entry.items.length) return;
+      const signature = makeSignature(entry.items);
+      if (!signature) return;
+      if (seenSignatures.has(signature)) return;
+      seenSignatures.add(signature);
+      stuffSets.push({
+        ...entry,
+        items: entry.items,
+        item_count: entry.items.length,
+      });
+    };
+
+    pushStuffSet({
+      id: "aggregate",
+      label: "Synthèse générale",
+      origin: "aggregate",
+      source: "Transcript + OCR",
+      note: "Combinaison de toutes les sources textuelles",
+      timestamp: null,
+      items,
+    });
+
+    presentationMoments.slice(0, 6).forEach((moment, idx) => {
+      if (!moment || typeof moment.seconds !== "number") return;
+      let windowText = collectContextWindow(textSources, moment.seconds, 18);
+      if (moment.text && (!windowText || windowText.toLowerCase().indexOf(moment.text.toLowerCase()) === -1)) {
+        windowText = `${moment.text}\n${windowText || ""}`.trim();
+      }
+      if (!windowText) return;
+      const matches = collectTextMatches(windowText);
+      if (!matches.length) return;
+      const shaped = shapeItems(matches, { fallbackSource: moment.source || "Transcript" });
+      if (shaped.length < 2) return;
+      pushStuffSet({
+        id: `moment-${idx}`,
+        label: moment.timestamp ? `Moment ${moment.timestamp}` : `Moment ${idx + 1}`,
+        origin: "moment",
+        source: moment.source || "Transcript",
+        timestamp: moment.timestamp || null,
+        seconds: moment.seconds,
+        note: "Sélection autour de ce passage",
+        context_excerpt: windowText.slice(0, 400),
+        items: shaped,
+      });
+    });
 
     const transcriptPublic = {
       text: transcript.text,
@@ -1066,10 +1234,12 @@ export default async function handler(req, res) {
         piped_host: piped.host,
         piped_status: piped.status || (piped.data ? "ok" : piped.attempts?.length ? "failed" : null),
         piped_note: pipedSummary,
+        piped_hint: piped.hint || null,
         piped_attempts: Array.isArray(piped.attempts) ? piped.attempts.length : 0,
         invidious_host: invid.host,
         invidious_status: invid.status || (invid.data ? "ok" : invid.attempts?.length ? "failed" : null),
         invidious_note: invidSummary,
+        invidious_hint: invid.hint || null,
         invidious_attempts: Array.isArray(invid.attempts) ? invid.attempts.length : 0,
         readable_status: readable.ok ? "ok" : "failed",
         readable_note: readableSummary,
@@ -1082,11 +1252,13 @@ export default async function handler(req, res) {
         speech_model: speech?.model || (asrConfig?.model ?? null)
       },
       dofusbook_url: dofusbooks[0] || null,
+      dofusbook_urls: dofusbooks,
       class: klass,
       element_build: elements,
       element_signals: elementSignals,
       level: null,
       items,
+      stuffs: stuffSets,
       exos,
       stats_synthese: {},
       evidences,
@@ -1106,6 +1278,8 @@ export default async function handler(req, res) {
         asr_model: speech?.model || (asrConfig?.model ?? null),
         speech_segments: speech?.segment_count ?? 0,
         speech_keywords: speech?.keywords?.length ?? 0,
+        aggregate_items: items.length,
+        stuff_sets: stuffSets.length,
         warns,
         piped_attempts: piped.attempts || [],
         invidious_attempts: invid.attempts || [],
