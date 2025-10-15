@@ -345,25 +345,19 @@ a:hover { color: #c084fc; }
 .hero-links {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
   margin-top: 4px;
+  font-size: 13px;
 }
 
 .hero-links a {
-  display: inline-flex;
-  align-items: center;
-  padding: 8px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  color: var(--fg);
-  font-size: 13px;
-  background: rgba(15, 23, 42, 0.55);
-  transition: border-color 0.2s ease, background 0.2s ease;
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .hero-links a:hover {
-  border-color: rgba(148, 163, 184, 0.4);
-  background: rgba(15, 23, 42, 0.75);
+  color: var(--accent);
 }
 
 .status-grid {

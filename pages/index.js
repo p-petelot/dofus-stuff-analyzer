@@ -53,6 +53,45 @@ const EQUIPMENT_LAYOUT = [
   { id: "extras", label: "Autres", slots: ["Autre"], area: "extras" },
 ];
 
+function normalizeDofusbookLink(link) {
+  if (!link) return link;
+  let current = link.trim();
+
+  for (let i = 0; i < 4; i += 1) {
+    try {
+      const url = new URL(current);
+      if (url.hostname.includes("youtube.com") && url.pathname === "/redirect") {
+        const forwarded = url.searchParams.get("q") || url.searchParams.get("url");
+        if (forwarded) {
+          current = decodeURIComponent(forwarded);
+          continue;
+        }
+      }
+
+      if (/d-bk\.net$/i.test(url.hostname)) {
+        url.hostname = url.hostname.replace(/d-bk\.net/i, "dofusbook.net");
+      }
+
+      if (url.protocol !== "https:") {
+        url.protocol = "https:";
+      }
+
+      return url.toString();
+    } catch (e) {
+      try {
+        const decoded = decodeURIComponent(current);
+        if (decoded !== current) {
+          current = decoded;
+          continue;
+        }
+      } catch {}
+      break;
+    }
+  }
+
+  return current;
+}
+
 function Tag({ children, tone = "neutral", icon, subtle, title }) {
   const cls = ["tag", `tag--${tone}`];
   if (subtle) cls.push("tag--subtle");
@@ -945,11 +984,14 @@ export default function Home() {
                   <ElementBadges elements={out.element_build} signals={out.element_signals} />
                   {hasDofusbook ? (
                     <div className="hero-links">
-                      {out.dofusbook_urls.map((link, idx) => (
-                        <a key={link + idx} href={link} target="_blank" rel="noreferrer">
-                          {dofusbookCount > 1 ? `DofusBook #${idx + 1}` : "Ouvrir sur DofusBook"}
-                        </a>
-                      ))}
+                      {out.dofusbook_urls.map((link, idx) => {
+                        const normalized = normalizeDofusbookLink(link);
+                        return (
+                          <a key={normalized + idx} href={normalized} target="_blank" rel="noreferrer">
+                            {dofusbookCount > 1 ? `DofusBook #${idx + 1}` : "Ouvrir sur DofusBook"}
+                          </a>
+                        );
+                      })}
                     </div>
                   ) : null}
                 </div>
@@ -964,23 +1006,18 @@ export default function Home() {
                   {variantCount > 1 ? ` • ${variantCount} variantes` : ""}
                 </span>
               </div>
-              {activeItemCount ? (
-                <>
-                  {variantCount > 1 ? (
-                    <StuffSwitcher
-                      stuffs={stuffs}
-                      activeIndex={activeStuffIndex}
-                      onSelect={setActiveStuffIndex}
-                    />
-                  ) : null}
-                  <EquipmentBoard
-                    items={activeStuff?.items || []}
-                    preview={{ thumbnail: out.video?.thumbnail, icon: classIcon, label: activeStuff?.label || className }}
-                  />
-                </>
-              ) : (
-                <p className="caption">Aucun item détecté pour ce stuff.</p>
-              )}
+              {variantCount > 1 ? (
+                <StuffSwitcher
+                  stuffs={stuffs}
+                  activeIndex={activeStuffIndex}
+                  onSelect={setActiveStuffIndex}
+                />
+              ) : null}
+              <EquipmentBoard
+                items={activeStuff?.items || []}
+                preview={{ thumbnail: out.video?.thumbnail, icon: classIcon, label: activeStuff?.label || className }}
+              />
+              {!activeItemCount ? <p className="caption">Aucun item détecté pour ce stuff.</p> : null}
             </section>
 
           </>
