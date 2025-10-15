@@ -4,7 +4,7 @@ import Head from "next/head";
 const ITEM_TYPES = ["coiffe", "cape", "familier", "bouclier"];
 const DOFUS_API_HOST = "https://api.dofusdb.fr";
 const DOFUS_API_BASE_URL = `${DOFUS_API_HOST}/items`;
-const DEFAULT_LIMIT = 40;
+const DEFAULT_LIMIT = 1000;
 const DEFAULT_DOFUS_QUERY_PARAMS = {
   "typeId[$ne]": "203",
   "$sort": "-id",
@@ -16,23 +16,23 @@ const DEFAULT_DOFUS_QUERY_PARAMS = {
 const ITEM_TYPE_CONFIG = {
   coiffe: {
     requests: [
-      { typeIds: [16], skip: 10, limit: 48 },
-      { typeIds: [246], skip: 10, limit: 48 },
+      { typeIds: [16], skip: 10, limit: 1000 },
+      { typeIds: [246], skip: 10, limit: 1000 },
     ],
   },
   cape: {
     requests: [
-      { typeIds: [17], skip: 0, limit: 48 },
-      { typeIds: [247], skip: 10, limit: 48 },
+      { typeIds: [17], skip: 0, limit: 1000 },
+      { typeIds: [247], skip: 10, limit: 1000 },
     ],
   },
   familier: {
-    requests: [{ typeIds: [18], skip: 0, limit: 48 }],
+    requests: [{ typeIds: [18], skip: 0, limit: 1000 }],
   },
   bouclier: {
     requests: [
-      { typeIds: [82], skip: 0, limit: 48 },
-      { typeIds: [248], skip: 10, limit: 48 },
+      { typeIds: [82], skip: 0, limit: 1000 },
+      { typeIds: [248], skip: 10, limit: 1000 },
     ],
   },
 };
