@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Head from "next/head";
 
 const BRAND_NAME = "KrosPalette";
-const MAX_COLORS = 10;
+const MAX_COLORS = 8;
 const MAX_DIMENSION = 320;
 const BUCKET_SIZE = 24;
 
@@ -92,6 +92,7 @@ export default function Home() {
   const [error, setError] = useState(null);
   const [copiedCode, setCopiedCode] = useState(null);
   const [codeFormat, setCodeFormat] = useState("hex");
+  const [toast, setToast] = useState(null);
 
   const inputRef = useRef(null);
 
@@ -175,6 +176,12 @@ export default function Home() {
     return () => clearTimeout(timeout);
   }, [copiedCode]);
 
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = setTimeout(() => setToast(null), 1600);
+    return () => clearTimeout(timeout);
+  }, [toast]);
+
   const onDrop = useCallback(
     (event) => {
       event.preventDefault();
@@ -213,12 +220,43 @@ export default function Home() {
   );
 
   const handleCopy = useCallback(async (value) => {
+    const fallbackCopy = (text) => {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.top = "-1000px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    };
+
     try {
-      await navigator.clipboard.writeText(value);
+      if (
+        typeof navigator !== "undefined" &&
+        navigator.clipboard &&
+        typeof window !== "undefined" &&
+        window.isSecureContext
+      ) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        fallbackCopy(value);
+      }
+      setError(null);
       setCopiedCode(value);
+      setToast({ id: Date.now(), message: `${value} copié dans le presse-papiers` });
     } catch (err) {
       console.error(err);
-      setError("Impossible de copier dans le presse-papiers.");
+      try {
+        fallbackCopy(value);
+        setError(null);
+        setCopiedCode(value);
+        setToast({ id: Date.now(), message: `${value} copié dans le presse-papiers` });
+      } catch (fallbackErr) {
+        console.error(fallbackErr);
+        setError("Impossible de copier dans le presse-papiers.");
+      }
     }
   }, []);
 
@@ -232,7 +270,7 @@ export default function Home() {
       return { left: "50%", top: "50%" };
     }
 
-    const radius = total >= 8 ? 42 : total >= 5 ? 40 : 34;
+    const radius = total >= 8 ? 41 : total >= 5 ? 38 : 34;
     const angle = (index / total) * 360 - 90;
     const radians = (angle * Math.PI) / 180;
     const x = 50 + radius * Math.cos(radians);
@@ -259,6 +297,9 @@ export default function Home() {
         />
       </Head>
       <main className="page">
+        <div className={`toast-tray${toast ? " toast-tray--visible" : ""}`} aria-live="polite">
+          {toast ? <div className="toast">{toast.message}</div> : null}
+        </div>
         <header className="hero">
           <h1>{BRAND_NAME}</h1>
           <p>
@@ -306,7 +347,9 @@ export default function Home() {
             <div className="palette__header">
               <div className="palette__title">
                 <h2>Palette extraite</h2>
-                <p className="palette__caption">Cliquer sur une nuance copie le code sélectionné.</p>
+                <p className="palette__caption">
+                  Sélectionne un format et clique sur une nuance pour la copier.
+                </p>
               </div>
               <div className="palette__actions">
                 {isProcessing ? <span className="badge badge--pulse">Analyse en cours…</span> : null}
@@ -356,7 +399,6 @@ export default function Home() {
                         title="Cliquer pour copier"
                       >
                         <span className="swatch-hex__value">{value}</span>
-                        <span className="swatch-hex__hint">Copie instantanée</span>
                         {isCopied ? <span className="swatch-hex__feedback">Copié !</span> : null}
                       </button>
                     </li>
