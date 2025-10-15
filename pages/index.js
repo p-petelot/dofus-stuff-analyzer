@@ -222,6 +222,33 @@ export default function Home() {
     }
   }, []);
 
+  const formatThumbStyle = {
+    transform:
+      codeFormat === "hex" ? "translateX(0%)" : "translateX(calc(100% + 4px))",
+  };
+
+  const getRingPosition = useCallback((index, total) => {
+    if (total <= 1) {
+      return { left: "50%", top: "50%" };
+    }
+
+    const radius = total >= 8 ? 42 : total >= 5 ? 40 : 34;
+    const angle = (index / total) * 360 - 90;
+    const radians = (angle * Math.PI) / 180;
+    const x = 50 + radius * Math.cos(radians);
+    const y = 50 + radius * Math.sin(radians);
+
+    return {
+      left: `${x}%`,
+      top: `${y}%`,
+    };
+  }, []);
+
+  const getTextColor = useCallback((color) => {
+    const luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
+    return luminance > 155 ? "rgba(15, 23, 42, 0.9)" : "#f8fafc";
+  }, []);
+
   return (
     <>
       <Head>
@@ -283,10 +310,11 @@ export default function Home() {
               </div>
               <div className="palette__actions">
                 {isProcessing ? <span className="badge badge--pulse">Analyse en cours…</span> : null}
-                <div className="palette__format" role="radiogroup" aria-label="Format des codes couleur">
+                <div className="format-switch" role="radiogroup" aria-label="Format des codes couleur">
+                  <span className="format-switch__thumb" style={formatThumbStyle} aria-hidden="true" />
                   <button
                     type="button"
-                    className={`format-toggle${codeFormat === "hex" ? " is-active" : ""}`}
+                    className={`format-switch__option${codeFormat === "hex" ? " is-active" : ""}`}
                     onClick={() => setCodeFormat("hex")}
                     role="radio"
                     aria-checked={codeFormat === "hex"}
@@ -295,7 +323,7 @@ export default function Home() {
                   </button>
                   <button
                     type="button"
-                    className={`format-toggle${codeFormat === "rgb" ? " is-active" : ""}`}
+                    className={`format-switch__option${codeFormat === "rgb" ? " is-active" : ""}`}
                     onClick={() => setCodeFormat("rgb")}
                     role="radio"
                     aria-checked={codeFormat === "rgb"}
@@ -307,27 +335,29 @@ export default function Home() {
             </div>
             {error ? <p className="palette__error">{error}</p> : null}
             {colors.length > 0 ? (
-              <ul className="palette__list">
-                {colors.map((color) => {
+              <ul className="palette__ring">
+                {colors.map((color, index) => {
                   const value = codeFormat === "hex" ? color.hex : color.rgb;
+                  const position = getRingPosition(index, colors.length);
+                  const textColor = getTextColor(color);
+                  const isCopied = copiedCode === value;
+
                   return (
-                    <li key={color.hex} className="swatch">
-                      <div
-                        className="swatch__preview"
-                        style={{ backgroundColor: color.hex }}
-                        aria-hidden="true"
-                      />
+                    <li
+                      key={`${color.hex}-${index}`}
+                      className="palette__ring-item"
+                      style={position}
+                    >
                       <button
                         type="button"
-                        className="code"
+                        className={`swatch-hex${isCopied ? " is-copied" : ""}`}
                         onClick={() => handleCopy(value)}
+                        style={{ backgroundColor: color.hex, color: textColor }}
+                        title="Cliquer pour copier"
                       >
-                        <span className="code__info">
-                          <span className="code__label">{codeFormat === "hex" ? "Hex" : "RGB"}</span>
-                          <span className="code__value">{value}</span>
-                        </span>
-                        <span className="code__hint">Cliquer pour copier</span>
-                        {copiedCode === value ? <span className="code__copied">Copié !</span> : null}
+                        <span className="swatch-hex__value">{value}</span>
+                        <span className="swatch-hex__hint">Copie instantanée</span>
+                        {isCopied ? <span className="swatch-hex__feedback">Copié !</span> : null}
                       </button>
                     </li>
                   );

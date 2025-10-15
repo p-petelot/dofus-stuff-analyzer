@@ -22,5 +22,10 @@ npm start
 
 - Glisser-déposer ou coller une image depuis le presse-papiers.
 - Visualisation de l'aperçu directement dans l'atelier.
-- Extraction rapide des teintes principales avec codes Hex et RGB.
-- Copie en un clic pour intégrer les couleurs dans ton outil favori.
+- Extraction rapide des teintes principales avec codes Hex et RGB affichés en anneau hexagonal.
+- Copie en un clic (clic ou tap) pour intégrer les couleurs dans ton outil favori.
+
+## Ressources DofusDB
+
+- L'API publique de DofusDB est disponible via `https://api.dofusdb.fr/` et expose des collections comme `items`, `sets` ou `weapons` (documentation embarquée dans le site officiel).
+- L'accès direct depuis cette sandbox retourne actuellement une réponse HTTP 403 (voir `curl https://api.dofusdb.fr/items?lang=fr&size=1`). Il faudra prévoir un proxy côté serveur ou ajouter les en-têtes attendus par DofusDB (référent, User-Agent navigateur) pour consommer les données en production.
