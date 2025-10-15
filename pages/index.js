@@ -14,10 +14,27 @@ const DEFAULT_DOFUS_QUERY_PARAMS = {
 };
 
 const ITEM_TYPE_CONFIG = {
-  coiffe: { typeIds: [16], skip: 10, limit: 48 },
-  cape: { typeIds: [17], skip: 0, limit: 48 },
-  familier: { typeIds: [18], skip: 0, limit: 48 },
-  bouclier: { typeIds: [82], skip: 0, limit: 48 },
+  coiffe: {
+    requests: [
+      { typeIds: [16], skip: 10, limit: 48 },
+      { typeIds: [246], skip: 10, limit: 48 },
+    ],
+  },
+  cape: {
+    requests: [
+      { typeIds: [17], skip: 0, limit: 48 },
+      { typeIds: [247], skip: 10, limit: 48 },
+    ],
+  },
+  familier: {
+    requests: [{ typeIds: [18], skip: 0, limit: 48 }],
+  },
+  bouclier: {
+    requests: [
+      { typeIds: [82], skip: 0, limit: 48 },
+      { typeIds: [248], skip: 10, limit: 48 },
+    ],
+  },
 };
 
 const MAX_ITEM_PALETTE_COLORS = 6;
@@ -237,30 +254,43 @@ function resolveItemImageUrl(item) {
   return null;
 }
 
-function buildDofusApiUrl(type) {
+function buildDofusApiUrls(type) {
   const config = ITEM_TYPE_CONFIG[type];
   if (!config) {
     throw new Error(`Type d'objet inconnu: ${type}`);
   }
 
-  const params = new URLSearchParams();
-  Object.entries(DEFAULT_DOFUS_QUERY_PARAMS).forEach(([key, value]) => {
-    params.set(key, value);
-  });
-  params.set("$limit", String(config.limit ?? DEFAULT_LIMIT));
-  if (typeof config.skip === "number") {
-    params.set("$skip", String(config.skip));
-  }
-  config.typeIds.forEach((id) => {
-    params.append("typeId[$in][]", String(id));
-  });
-  if (config.query) {
-    Object.entries(config.query).forEach(([key, value]) => {
+  const sources = config.requests?.length ? config.requests : [config];
+
+  return sources.map((source) => {
+    const params = new URLSearchParams();
+    Object.entries(DEFAULT_DOFUS_QUERY_PARAMS).forEach(([key, value]) => {
       params.set(key, value);
     });
-  }
 
-  return `${DOFUS_API_BASE_URL}?${params.toString()}`;
+    const limit = source.limit ?? config.limit ?? DEFAULT_LIMIT;
+    params.set("$limit", String(limit));
+
+    const skip = source.skip ?? config.skip;
+    if (typeof skip === "number") {
+      params.set("$skip", String(skip));
+    }
+
+    const typeIds = source.typeIds ?? config.typeIds;
+    if (!typeIds || !typeIds.length) {
+      throw new Error(`Configuration Dofus invalide pour le type ${type}`);
+    }
+    typeIds.forEach((id) => {
+      params.append("typeId[$in][]", String(id));
+    });
+
+    const query = { ...(config.query ?? {}), ...(source.query ?? {}) };
+    Object.entries(query).forEach(([key, value]) => {
+      params.set(key, value);
+    });
+
+    return `${DOFUS_API_BASE_URL}?${params.toString()}`;
+  });
 }
 
 function buildEncyclopediaUrl(item, fallbackId) {
@@ -315,9 +345,15 @@ const ITEM_TYPE_LABELS = {
 };
 
 const BARBOFUS_BASE_URL = "https://barbofus.com/skinator";
+const BARBOFUS_CLASS_IDS = {
+  feca: 1,
+  osamodas: 2,
+  enutrof: 3,
+  eniripsa: 7,
+};
 const BARBOFUS_DEFAULTS = {
   gender: 1,
-  classId: 7,
+  classId: BARBOFUS_CLASS_IDS.eniripsa,
   lookId: 405,
 };
 const BARBOFUS_EQUIPMENT_SLOTS = ["6", "7", "8", "9", "10", "11", "12", "13"];
@@ -755,33 +791,62 @@ export default function Home() {
       try {
         const entries = await Promise.all(
           ITEM_TYPES.map(async (type) => {
-            const controller = new AbortController();
-            controllers.push(controller);
-
             try {
-              const response = await fetch(buildDofusApiUrl(type), {
-                signal: controller.signal,
-                headers: { Accept: "application/json" },
-              });
+              const urls = buildDofusApiUrls(type);
+              const aggregatedItems = [];
 
-              if (!response.ok) {
-                throw new Error(`Requête DofusDB échouée (${response.status})`);
+              for (const url of urls) {
+                const controller = new AbortController();
+                controllers.push(controller);
+
+                try {
+                  const response = await fetch(url, {
+                    signal: controller.signal,
+                    headers: { Accept: "application/json" },
+                  });
+
+                  if (!response.ok) {
+                    throw new Error(`Requête DofusDB échouée (${response.status})`);
+                  }
+
+                  const payload = await response.json();
+                  const rawItems = Array.isArray(payload)
+                    ? payload
+                    : Array.isArray(payload?.data)
+                    ? payload.data
+                    : Array.isArray(payload?.items)
+                    ? payload.items
+                    : [];
+
+                  aggregatedItems.push(...rawItems);
+                } catch (err) {
+                  if (err.name === "AbortError") {
+                    continue;
+                  }
+
+                  console.error(err);
+                  errors.push({ type, error: err });
+                }
               }
 
-              const payload = await response.json();
-              const rawItems = Array.isArray(payload)
-                ? payload
-                : Array.isArray(payload?.data)
-                ? payload.data
-                : Array.isArray(payload?.items)
-                ? payload.items
-                : [];
+              if (!aggregatedItems.length) {
+                return [type, []];
+              }
 
-              const normalizedItems = rawItems
+              const normalizedItems = aggregatedItems
                 .map((rawItem) => normalizeDofusItem(rawItem, type))
                 .filter((item) => item !== null);
 
-              const enrichedItems = await enrichItemsWithPalettes(normalizedItems, () => isCancelled);
+              const deduplicatedItems = Array.from(
+                normalizedItems.reduce((accumulator, item) => {
+                  if (!accumulator.has(item.id)) {
+                    accumulator.set(item.id, item);
+                  }
+                  return accumulator;
+                }, new Map()).values()
+              );
+
+              const enrichedItems = await enrichItemsWithPalettes(deduplicatedItems, () => isCancelled);
 
               return [type, enrichedItems];
             } catch (err) {
