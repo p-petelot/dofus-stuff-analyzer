@@ -577,6 +577,21 @@ a {
   color: rgba(226, 232, 240, 0.7);
 }
 
+.suggestions__group-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.18);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(224, 231, 255, 0.9);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
 .suggestions__group-empty {
   margin: 0;
   color: var(--text-soft);

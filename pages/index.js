@@ -305,7 +305,7 @@ const BRAND_NAME = "KrosPalette";
 const MAX_COLORS = 6;
 const MAX_DIMENSION = 280;
 const BUCKET_SIZE = 24;
-const MAX_RECOMMENDATIONS = 4;
+const MAX_RECOMMENDATIONS = 1;
 
 const ITEM_TYPE_LABELS = {
   coiffe: "Coiffe",
@@ -321,6 +321,12 @@ const BARBOFUS_DEFAULTS = {
   lookId: 405,
 };
 const BARBOFUS_EQUIPMENT_SLOTS = ["6", "7", "8", "9", "10", "11", "12", "13"];
+const BARBOFUS_SLOT_BY_TYPE = {
+  coiffe: "6",
+  cape: "7",
+  familier: "8",
+  bouclier: "9",
+};
 
 const LZ_KEY_STR_URI_SAFE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-$";
 
@@ -673,12 +679,7 @@ export default function Home() {
   }, [colors, itemsCatalog]);
 
   const barbofusLink = useMemo(() => {
-    if (!colors.length || !recommendations || !recommendations.coiffe?.length) {
-      return null;
-    }
-
-    const topCoiffe = recommendations.coiffe[0];
-    if (!topCoiffe?.ankamaId) {
+    if (!colors.length || !recommendations) {
       return null;
     }
 
@@ -699,7 +700,26 @@ export default function Home() {
       return accumulator;
     }, {});
 
-    equipment["6"] = topCoiffe.ankamaId;
+    let hasEquipment = false;
+
+    ITEM_TYPES.forEach((type) => {
+      const slot = BARBOFUS_SLOT_BY_TYPE[type];
+      if (!slot) {
+        return;
+      }
+
+      const item = recommendations[type]?.find((entry) => entry?.ankamaId);
+      if (!item?.ankamaId) {
+        return;
+      }
+
+      equipment[slot] = item.ankamaId;
+      hasEquipment = true;
+    });
+
+    if (!hasEquipment) {
+      return null;
+    }
 
     const payload = {
       1: BARBOFUS_DEFAULTS.gender,
@@ -1200,6 +1220,9 @@ export default function Home() {
                     <section key={type} className="suggestions__group">
                       <header className="suggestions__group-header">
                         <span className="suggestions__group-type">{ITEM_TYPE_LABELS[type] ?? type}</span>
+                        {items.length > 0 ? (
+                          <span className="suggestions__group-badge">Meilleur match</span>
+                        ) : null}
                       </header>
                       {items.length === 0 ? (
                         <p className="suggestions__group-empty">Aucune correspondance probante pour cette teinte.</p>
