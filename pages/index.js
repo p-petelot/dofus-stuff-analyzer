@@ -2064,7 +2064,8 @@ export default function Home() {
     }
 
     const orbitCount = total - 1;
-    const radius = orbitCount <= 2 ? 24 : orbitCount === 3 ? 28 : orbitCount === 4 ? 32 : 34;
+    const radius =
+      orbitCount <= 2 ? 20 : orbitCount === 3 ? 24 : orbitCount === 4 ? 27 : 30;
     const angle = ((index - 1) / orbitCount) * 360 - 90;
     const radians = (angle * Math.PI) / 180;
     const x = 50 + radius * Math.cos(radians);
@@ -2090,27 +2091,27 @@ export default function Home() {
           content="KrosPalette extrait les couleurs dominantes de tes images pour composer des skins Dofus harmonieux."
         />
       </Head>
-      {showProgressBar ? (
-        <div className="page-progress" role="status" aria-live="polite">
-          <div className={`progress-bar${isProcessing ? " progress-bar--active" : ""}`}>
-            <div className="progress-bar__track">
-              <div
-                className="progress-bar__indicator"
-                style={{ width: `${Math.min(100, Math.max(analysisProgress, 0))}%` }}
-              />
-              <span className="progress-bar__glow" />
-            </div>
-            <span className="progress-bar__label">
-              {isProcessing
-                ? "Analyse de l'image…"
-                : analysisProgress >= 100
-                ? "Analyse terminée"
-                : "Analyse prête"}
-            </span>
-          </div>
-        </div>
-      ) : null}
       <main className="page">
+        {showProgressBar ? (
+          <div className="page-progress" role="status" aria-live="polite">
+            <div className={`progress-bar${isProcessing ? " progress-bar--active" : ""}`}>
+              <div className="progress-bar__track">
+                <div
+                  className="progress-bar__indicator"
+                  style={{ width: `${Math.min(100, Math.max(analysisProgress, 0))}%` }}
+                />
+                <span className="progress-bar__glow" />
+              </div>
+              <span className="progress-bar__label">
+                {isProcessing
+                  ? "Analyse de l'image…"
+                  : analysisProgress >= 100
+                  ? "Analyse terminée"
+                  : "Analyse prête"}
+              </span>
+            </div>
+          </div>
+        ) : null}
         <div className={`toast-tray${toast ? " toast-tray--visible" : ""}`} aria-live="polite">
           {toast ? (
             <div className="toast">
