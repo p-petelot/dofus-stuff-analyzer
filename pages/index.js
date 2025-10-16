@@ -371,7 +371,7 @@ const SHAPE_STRONG_THRESHOLD = 0.18;
 const TONE_CONFIDENCE_DISTANCE = 0.72;
 const TONE_CONFIDENCE_WEIGHT = 0.18;
 const MIN_ALPHA_WEIGHT = 0.05;
-const MAX_RECOMMENDATIONS = 4;
+const MAX_RECOMMENDATIONS = 3;
 const PROPOSAL_COUNT = 3;
 const HASH_CONFIDENCE_DISTANCE = 0.32;
 const HASH_CONFIDENCE_WEIGHT = 0.18;
@@ -529,10 +529,17 @@ function hexToNumeric(hex) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
-function buildBarbofusConfiguration(items, paletteHexes, fallbackColorValues = []) {
+function buildBarbofusConfiguration(
+  items,
+  paletteHexes,
+  fallbackColorValues = [],
+  options = {}
+) {
   if (!Array.isArray(items) || items.length === 0) {
     return { link: null, preview: null };
   }
+
+  const { useCustomSkinTone = true } = options;
 
   const paletteValues = Array.isArray(paletteHexes)
     ? paletteHexes
@@ -562,6 +569,10 @@ function buildBarbofusConfiguration(items, paletteHexes, fallbackColorValues = [
   }
 
   const colorValues = uniqueColors.slice(0, MAX_ITEM_PALETTE_COLORS);
+
+  if (!useCustomSkinTone && colorValues.length) {
+    colorValues[0] = null;
+  }
 
   const equipment = BARBOFUS_EQUIPMENT_SLOTS.reduce((accumulator, slot) => {
     accumulator[slot] = null;
@@ -1772,6 +1783,8 @@ export default function Home() {
   const [selectedColor, setSelectedColor] = useState("#8B5CF6");
   const [activeProposal, setActiveProposal] = useState(0);
   const [previewErrors, setPreviewErrors] = useState({});
+  const [useCustomSkinTone, setUseCustomSkinTone] = useState(false);
+  const [showDetailedMatches, setShowDetailedMatches] = useState(false);
   const progressHandles = useRef({ frame: null, timeout: null, value: 0 });
 
   const isImageMode = inputMode === "image";
@@ -1798,6 +1811,10 @@ export default function Home() {
         return true;
       })
       .slice(0, MAX_ITEM_PALETTE_COLORS);
+  }, [colors]);
+
+  useEffect(() => {
+    setShowDetailedMatches(false);
   }, [colors]);
 
   const applyColorSeed = useCallback(
@@ -1964,7 +1981,8 @@ export default function Home() {
       const { link: barbofusLink, preview: barbofusPreview } = buildBarbofusConfiguration(
         items,
         paletteSample,
-        fallbackColorValues
+        fallbackColorValues,
+        { useCustomSkinTone }
       );
 
       combos.push({
@@ -1979,7 +1997,7 @@ export default function Home() {
     }
 
     return combos;
-  }, [fallbackColorValues, recommendations]);
+  }, [fallbackColorValues, recommendations, useCustomSkinTone]);
 
   const proposalCount = proposals.length;
 
@@ -2045,6 +2063,10 @@ export default function Home() {
       }
       return { ...previous, [id]: true };
     });
+  }, []);
+
+  const toggleDetailedMatches = useCallback(() => {
+    setShowDetailedMatches((previous) => !previous);
   }, []);
 
   const inputRef = useRef(null);
@@ -2468,7 +2490,6 @@ export default function Home() {
             <div className="reference__header">
               <div className="reference__title">
                 <h2>Référence créative</h2>
-                <p>Importe un visuel ou compose un look à partir d&apos;une simple couleur.</p>
               </div>
               <div className="input-switch" role="radiogroup" aria-label="Mode d'analyse">
                 <span
@@ -2607,6 +2628,34 @@ export default function Home() {
                 </div>
               </div>
             </div>
+            {colors.length > 0 ? (
+              <div className="palette__skin-control" role="group" aria-label="Gestion de la teinte de peau">
+                <div className="palette__skin-meta">
+                  <span className="palette__skin-label">Teinte de peau</span>
+                  <span className="palette__skin-hint">#1 peau · #2 cheveux</span>
+                </div>
+                <div className="palette__skin-options" role="radiogroup" aria-label="Choix de la teinte de peau">
+                  <button
+                    type="button"
+                    className={`palette__skin-option${!useCustomSkinTone ? " is-active" : ""}`}
+                    onClick={() => setUseCustomSkinTone(false)}
+                    role="radio"
+                    aria-checked={!useCustomSkinTone}
+                  >
+                    Peau par défaut
+                  </button>
+                  <button
+                    type="button"
+                    className={`palette__skin-option${useCustomSkinTone ? " is-active" : ""}`}
+                    onClick={() => setUseCustomSkinTone(true)}
+                    role="radio"
+                    aria-checked={useCustomSkinTone}
+                  >
+                    Peau personnalisée
+                  </button>
+                </div>
+              </div>
+            ) : null}
             {error ? <p className="palette__error">{error}</p> : null}
             {colors.length > 0 ? (
               <ul className="palette__list">
@@ -2648,9 +2697,7 @@ export default function Home() {
           </div>
           {colors.length === 0 ? (
             <div className="suggestions__empty">
-              <p>
-                Importe un visuel ou choisis une couleur pour générer automatiquement des skins assortis.
-              </p>
+              <p>Lance une analyse pour découvrir des correspondances Dofus adaptées.</p>
             </div>
           ) : !hasCatalogData && itemsLoading ? (
             <div className="suggestions__status suggestions__status--loading">
@@ -2664,16 +2711,6 @@ export default function Home() {
             </div>
           ) : (
             <>
-              {itemsError ? (
-                <p className="suggestions__status suggestions__status--error suggestions__status--inline">
-                  {itemsError}
-                </p>
-              ) : null}
-              {itemsLoading ? (
-                <p className="suggestions__status suggestions__status--loading suggestions__status--inline">
-                  Mise à jour des suggestions…
-                </p>
-              ) : null}
               {proposals.length ? (
                 <div className="skin-carousel" aria-live="polite">
                   <div className="skin-carousel__controls">
@@ -2684,14 +2721,12 @@ export default function Home() {
                       disabled={proposalCount <= 1}
                       aria-label="Skin précédent"
                     >
-                      <svg
+                      <img
+                        src="/icons/arrow-left.svg"
+                        alt=""
                         className="skin-carousel__nav-icon"
-                        viewBox="0 0 24 24"
-                        role="img"
                         aria-hidden="true"
-                      >
-                        <path d="M14.5 5L8.5 12l6 7" />
-                      </svg>
+                      />
                     </button>
                     <span className="skin-carousel__legend">
                       Skin {activeProposal + 1} / {proposalCount}
@@ -2703,14 +2738,12 @@ export default function Home() {
                       disabled={proposalCount <= 1}
                       aria-label="Skin suivant"
                     >
-                      <svg
+                      <img
+                        src="/icons/arrow-right.svg"
+                        alt=""
                         className="skin-carousel__nav-icon"
-                        viewBox="0 0 24 24"
-                        role="img"
                         aria-hidden="true"
-                      >
-                        <path d="M9.5 5l6 7-6 7" />
-                      </svg>
+                      />
                     </button>
                   </div>
                   <div className="skin-carousel__viewport">
@@ -2727,7 +2760,7 @@ export default function Home() {
                         return (
                           <article key={proposal.id} className="skin-card">
                             <header className="skin-card__header">
-                              <h3 className="skin-card__title">Skin chromatique #{proposal.index + 1}</h3>
+                              <h3 className="skin-card__title">Skin chromatique</h3>
                             </header>
                             <div className="skin-card__body">
                               <div
@@ -2849,92 +2882,130 @@ export default function Home() {
                   </div>
                 </div>
               ) : null}
-              <div className="suggestions__grid">
-                {ITEM_TYPES.map((type) => {
-                  const items = recommendations?.[type] ?? [];
-                  return (
-                    <section key={type} className="suggestions__group">
-                      <header className="suggestions__group-header">
-                        <span className="suggestions__group-type">{ITEM_TYPE_LABELS[type] ?? type}</span>
-                        {items.length > 0 ? (
-                          <span className="suggestions__group-badge">Meilleur match</span>
-                        ) : null}
-                      </header>
-                      {items.length === 0 ? (
-                        <p className="suggestions__group-empty">Aucune correspondance probante pour cette teinte.</p>
-                      ) : (
-                        <ul className="suggestions__deck">
-                          {items.map((item) => {
-                            const hasPalette = item.palette.length > 0;
-                            const paletteFromImage = item.paletteSource === "image" && hasPalette;
-                            const notes = [];
-                            if (!hasPalette) {
-                              notes.push("Palette non détectée sur l'illustration.");
-                            } else if (!paletteFromImage) {
-                              notes.push("Palette estimée à partir des données DofusDB.");
-                            }
-                            if (!item.imageUrl) {
-                              notes.push("Illustration manquante sur DofusDB.");
-                            }
+              <div className="suggestions__details-toggle">
+                <button
+                  type="button"
+                  className={`suggestions__toggle${showDetailedMatches ? " is-open" : ""}`}
+                  onClick={toggleDetailedMatches}
+                  aria-expanded={showDetailedMatches}
+                >
+                  <span>
+                    {showDetailedMatches
+                      ? "Masquer les correspondances détaillées"
+                      : "Afficher les correspondances détaillées"}
+                  </span>
+                  <span className="suggestions__toggle-icon" aria-hidden="true" />
+                </button>
+                {itemsLoading ? (
+                  <span className="suggestions__inline-status">Mise à jour…</span>
+                ) : null}
+                {itemsError && !showDetailedMatches ? (
+                  <span className="suggestions__inline-status suggestions__inline-status--error">
+                    {itemsError}
+                  </span>
+                ) : null}
+              </div>
+              <div
+                className={`suggestions__details${showDetailedMatches ? " is-visible" : ""}`}
+                hidden={!showDetailedMatches}
+              >
+                {itemsError ? (
+                  <p className="suggestions__status suggestions__status--error suggestions__status--inline">
+                    {itemsError}
+                  </p>
+                ) : null}
+                {itemsLoading ? (
+                  <p className="suggestions__status suggestions__status--loading suggestions__status--inline">
+                    Mise à jour des suggestions…
+                  </p>
+                ) : null}
+                <div className="suggestions__grid">
+                  {ITEM_TYPES.map((type) => {
+                    const items = recommendations?.[type] ?? [];
+                    return (
+                      <section key={type} className="suggestions__group">
+                        <header className="suggestions__group-header">
+                          <span className="suggestions__group-type">{ITEM_TYPE_LABELS[type] ?? type}</span>
+                          {items.length > 0 ? (
+                            <span className="suggestions__group-badge">Meilleur match</span>
+                          ) : null}
+                        </header>
+                        {items.length === 0 ? (
+                          <p className="suggestions__group-empty">Aucune correspondance probante pour cette teinte.</p>
+                        ) : (
+                          <ul className="suggestions__deck">
+                            {items.map((item) => {
+                              const hasPalette = item.palette.length > 0;
+                              const paletteFromImage = item.paletteSource === "image" && hasPalette;
+                              const notes = [];
+                              if (!hasPalette) {
+                                notes.push("Palette non détectée sur l'illustration.");
+                              } else if (!paletteFromImage) {
+                                notes.push("Palette estimée à partir des données DofusDB.");
+                              }
+                              if (!item.imageUrl) {
+                                notes.push("Illustration manquante sur DofusDB.");
+                              }
 
-                            return (
-                              <li key={item.id} className="suggestions__card">
-                                <div className="suggestions__thumb">
-                                  {item.imageUrl ? (
-                                    <img
-                                      src={item.imageUrl}
-                                      alt={`Illustration de ${item.name}`}
-                                      loading="lazy"
-                                    />
-                                  ) : (
-                                    <div className="suggestions__thumb-placeholder" aria-hidden="true">
-                                      Aperçu indisponible
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="suggestions__card-body">
-                                  <a
-                                    href={item.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="suggestions__title"
-                                  >
-                                    {item.name}
-                                  </a>
-                                  <div
-                                    className={`suggestions__swatches${hasPalette ? "" : " suggestions__swatches--empty"}`}
-                                    aria-hidden={hasPalette}
-                                  >
-                                    {hasPalette ? (
-                                      item.palette.map((hex) => (
-                                        <span
-                                          key={hex}
-                                          className="suggestions__swatch"
-                                          style={{ backgroundColor: hex }}
-                                        />
-                                      ))
+                              return (
+                                <li key={item.id} className="suggestions__card">
+                                  <div className="suggestions__thumb">
+                                    {item.imageUrl ? (
+                                      <img
+                                        src={item.imageUrl}
+                                        alt={`Illustration de ${item.name}`}
+                                        loading="lazy"
+                                      />
                                     ) : (
-                                      <span className="suggestions__swatch-note">Palette indisponible</span>
+                                      <div className="suggestions__thumb-placeholder" aria-hidden="true">
+                                        Aperçu indisponible
+                                      </div>
                                     )}
                                   </div>
-                                  {notes.length ? (
-                                    <div className="suggestions__notes">
-                                      {notes.map((note, index) => (
-                                        <span key={`${item.id}-note-${index}`} className="suggestions__note">
-                                          {note}
-                                        </span>
-                                      ))}
+                                  <div className="suggestions__card-body">
+                                    <a
+                                      href={item.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="suggestions__title"
+                                    >
+                                      {item.name}
+                                    </a>
+                                    <div
+                                      className={`suggestions__swatches${hasPalette ? "" : " suggestions__swatches--empty"}`}
+                                      aria-hidden={hasPalette}
+                                    >
+                                      {hasPalette ? (
+                                        item.palette.map((hex) => (
+                                          <span
+                                            key={hex}
+                                            className="suggestions__swatch"
+                                            style={{ backgroundColor: hex }}
+                                          />
+                                        ))
+                                      ) : (
+                                        <span className="suggestions__swatch-note">Palette indisponible</span>
+                                      )}
                                     </div>
-                                  ) : null}
-                                </div>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </section>
-                  );
-                })}
+                                    {notes.length ? (
+                                      <div className="suggestions__notes">
+                                        {notes.map((note, index) => (
+                                          <span key={`${item.id}-note-${index}`} className="suggestions__note">
+                                            {note}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </section>
+                    );
+                  })}
+                </div>
               </div>
             </>
           )}
