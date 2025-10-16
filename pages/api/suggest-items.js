@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import type { NextApiRequest, NextApiResponse } from "next";
 import { DEFAULT_MAX_SUGGESTIONS, FOUR_SLOTS, RETRIEVAL_K } from "../../lib/config/suggestions";
 import { extractPaletteLAB, snapToDofusPalette, deltaE2000 } from "../../lib/colors/palette";
 import { computeClipEmbedding } from "../../lib/vision/features";
@@ -7,17 +6,21 @@ import { locateFourSlots, normalizeInput } from "../../lib/vision/preprocess";
 import { queryIndex } from "../../lib/items/indexStore";
 import { rerankAndConstrain, scoreCandidate } from "../../lib/items/rerank";
 import { logSuggestion } from "../../lib/telemetry/suggestions";
-import {
-  Candidate,
-  CandidateReasons,
-  CandidateRef,
-  FourSlot,
-  ImageDataLike,
-  SetRules,
-  SuggestionOutput,
-} from "../../lib/types";
 
-function cosineSimilarity(a: number[], b: number[]): number {
+/** @typedef {import("../../lib/types").Candidate} Candidate */
+/** @typedef {import("../../lib/types").CandidateReasons} CandidateReasons */
+/** @typedef {import("../../lib/types").CandidateRef} CandidateRef */
+/** @typedef {import("../../lib/types").FourSlot} FourSlot */
+/** @typedef {import("../../lib/types").ImageDataLike} ImageDataLike */
+/** @typedef {import("../../lib/types").SetRules} SetRules */
+/** @typedef {import("../../lib/types").SuggestionOutput} SuggestionOutput */
+
+/**
+ * @param {number[]} a
+ * @param {number[]} b
+ * @returns {number}
+ */
+function cosineSimilarity(a, b) {
   const length = Math.min(a.length, b.length);
   if (!length) return 0;
   let dot = 0;
@@ -34,7 +37,12 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-function cropImage(img: ImageDataLike, box: { x: number; y: number; width: number; height: number }): ImageDataLike {
+/**
+ * @param {ImageDataLike} img
+ * @param {{ x: number; y: number; width: number; height: number }} box
+ * @returns {ImageDataLike}
+ */
+function cropImage(img, box) {
   const startX = Math.max(0, Math.floor(box.x));
   const startY = Math.max(0, Math.floor(box.y));
   const endX = Math.min(img.width, Math.ceil(box.x + box.width));
@@ -56,13 +64,17 @@ function cropImage(img: ImageDataLike, box: { x: number; y: number; width: numbe
   return { width, height, data };
 }
 
-function hexToLab(hex: string) {
+/**
+ * @param {string} hex
+ * @returns {{ L: number; a: number; b: number }}
+ */
+function hexToLab(hex) {
   const normalized = hex.replace(/^#/, "");
   const value = parseInt(normalized, 16);
   const r = (value >> 16) & 255;
   const g = (value >> 8) & 255;
   const b = value & 255;
-  const pivot = (channel: number) => {
+  const pivot = (channel) => {
     const c = channel / 255;
     return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
   };
@@ -75,7 +87,7 @@ function hexToLab(hex: string) {
   const refX = 0.95047;
   const refY = 1.0;
   const refZ = 1.08883;
-  const f = (value: number) => {
+  const f = (value) => {
     const epsilon = 216 / 24389;
     const kappa = 24389 / 27;
     return value > epsilon ? Math.cbrt(value) : (kappa * value + 16) / 116;
@@ -86,7 +98,12 @@ function hexToLab(hex: string) {
   return { L: 116 * fy - 16, a: 500 * (fx - fy), b: 200 * (fy - fz) };
 }
 
-function paletteDelta(candidate: CandidateRef, palette: { primary: string; secondary: string; tertiary: string }): number {
+/**
+ * @param {CandidateRef} candidate
+ * @param {{ primary: string; secondary: string; tertiary: string }} palette
+ * @returns {number}
+ */
+function paletteDelta(candidate, palette) {
   if (!candidate.palette || candidate.palette.length === 0) {
     return 50;
   }
@@ -109,20 +126,29 @@ function paletteDelta(candidate: CandidateRef, palette: { primary: string; secon
   return count > 0 ? total / count : 50;
 }
 
-function buildRules(slot: FourSlot, body: any): SetRules {
+/**
+ * @param {FourSlot} slot
+ * @param {any} body
+ * @returns {SetRules}
+ */
+function buildRules(slot, body) {
   const hints = body?.hints?.[slot];
   const excludeSets = Array.isArray(body?.excludeSets) ? body.excludeSets : [];
   return {
     hintItemIds: Array.isArray(hints) ? hints : [],
-    excludeSets: excludeSets.filter((value: unknown) => typeof value === "number") as number[],
+    excludeSets: excludeSets.filter((value) => typeof value === "number"),
   };
 }
 
-function hashInput(image: string): string {
+/**
+ * @param {string} image
+ * @returns {string}
+ */
+function hashInput(image) {
   return crypto.createHash("sha1").update(image).digest("hex");
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse<SuggestionOutput | { error: string }>) {
+export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     res.status(405).json({ error: "Method not allowed" });
@@ -141,15 +167,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const paletteLab = extractPaletteLAB(img);
     const palette = snapToDofusPalette(paletteLab);
 
-    const notes: string[] = [];
-    const degradedNotes = new Set<string>();
-    const slotSuggestions: Record<FourSlot, Candidate[]> = {
+    const notes = [];
+    const degradedNotes = new Set();
+    /** @type {Object.<FourSlot, Candidate[]>} */
+    const slotSuggestions = {
       coiffe: [],
       cape: [],
       bouclier: [],
       familier: [],
     };
-    const confidence: Record<FourSlot, number> = {
+    /** @type {Object.<FourSlot, number>} */
+    const confidence = {
       coiffe: 0,
       cape: 0,
       bouclier: 0,
@@ -182,7 +210,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           notes.push("Analyse ORB/SSIM dégradée : heuristiques de fallback utilisées.");
         }
         const delta = paletteDelta(candidate, palette);
-        const reasons: CandidateReasons = { clip, orb, ssim, deltaE: delta };
+        /** @type {CandidateReasons} */
+        const reasons = { clip, orb, ssim, deltaE: delta };
         return {
           itemId: candidate.itemId,
           label: candidate.label,
@@ -201,7 +230,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       logSuggestion(inputHash, slot, reranked);
     }
 
-    const output: SuggestionOutput = {
+    /** @type {SuggestionOutput} */
+    const output = {
       palette,
       slots: slotSuggestions,
       confidence,

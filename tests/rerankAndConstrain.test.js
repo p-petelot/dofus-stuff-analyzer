@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { rerankAndConstrain, scoreCandidate } from "../lib/items/rerank";
-import { DofusPalette } from "../lib/types";
 
 describe("rerankAndConstrain", () => {
   it("filters excluded sets and boosts hinted items", () => {
-    const palette: DofusPalette = {
+    const palette = {
       primary: "#FFFFFF",
       secondary: "#000000",
       tertiary: "#FF0000",
