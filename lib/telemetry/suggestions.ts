@@ -1,0 +1,30 @@
+import { Candidate } from "../types";
+
+export function logSuggestion(
+  inputHash: string,
+  slot: string,
+  topCandidates: Candidate[],
+  chosen?: Candidate,
+): void {
+  if (process.env.NODE_ENV === "test") {
+    return;
+  }
+
+  try {
+    const summary = {
+      inputHash,
+      slot,
+      topCandidates: topCandidates.slice(0, 5).map((candidate) => ({
+        id: candidate.itemId,
+        score: candidate.score,
+      })),
+      chosen: chosen ? { id: chosen.itemId, score: chosen.score } : null,
+      timestamp: new Date().toISOString(),
+    };
+    // eslint-disable-next-line no-console
+    console.debug("suggestion", summary);
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.warn("Unable to log suggestion", error);
+  }
+}
