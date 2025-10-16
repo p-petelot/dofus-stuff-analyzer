@@ -334,6 +334,8 @@ function normalizeDofusItem(item, type) {
     signature: null,
     shape: null,
     tones: null,
+    hash: null,
+    edges: null,
   };
 }
 
@@ -343,13 +345,18 @@ const MAX_DIMENSION = 280;
 const BUCKET_SIZE = 24;
 const SIGNATURE_GRID_SIZE = 12;
 const SHAPE_PROFILE_SIZE = 28;
+const HASH_GRID_SIZE = 24;
+const EDGE_GRID_SIZE = 28;
+const EDGE_ORIENTATION_BINS = 8;
 const HUE_BUCKETS = 12;
 const HUE_NEUTRAL_INDEX = HUE_BUCKETS;
 const MAX_TONE_DISTANCE = 2;
-const PALETTE_SCORE_WEIGHT = 0.28;
-const SIGNATURE_SCORE_WEIGHT = 0.32;
-const SHAPE_SCORE_WEIGHT = 0.18;
-const TONE_SCORE_WEIGHT = 0.22;
+const PALETTE_SCORE_WEIGHT = 0.24;
+const SIGNATURE_SCORE_WEIGHT = 0.28;
+const SHAPE_SCORE_WEIGHT = 0.16;
+const TONE_SCORE_WEIGHT = 0.18;
+const HASH_SCORE_WEIGHT = 0.22;
+const EDGE_SCORE_WEIGHT = 0.12;
 const MAX_COLOR_DISTANCE = Math.sqrt(255 * 255 * 3);
 const PALETTE_COVERAGE_THRESHOLD = 56;
 const PALETTE_COVERAGE_WEIGHT = 0.32;
@@ -365,6 +372,12 @@ const TONE_CONFIDENCE_DISTANCE = 0.72;
 const TONE_CONFIDENCE_WEIGHT = 0.18;
 const MIN_ALPHA_WEIGHT = 0.05;
 const MAX_RECOMMENDATIONS = 1;
+const HASH_CONFIDENCE_DISTANCE = 0.32;
+const HASH_CONFIDENCE_WEIGHT = 0.18;
+const HASH_STRONG_THRESHOLD = 0.12;
+const EDGE_CONFIDENCE_DISTANCE = 0.26;
+const EDGE_CONFIDENCE_WEIGHT = 0.12;
+const EDGE_STRONG_THRESHOLD = 0.1;
 
 const ITEM_TYPE_LABELS = {
   coiffe: "Coiffe",
@@ -514,26 +527,207 @@ function rgbToHex(r, g, b) {
   return `#${componentToHex(r)}${componentToHex(g)}${componentToHex(b)}`;
 }
 
-function extractPalette(image) {
+function getImageDimensions(image) {
+  if (!image) {
+    return { width: MAX_DIMENSION, height: MAX_DIMENSION };
+  }
+
+  const width =
+    image.naturalWidth || image.videoWidth || image.width || image.clientWidth || MAX_DIMENSION;
+  const height =
+    image.naturalHeight || image.videoHeight || image.height || image.clientHeight || MAX_DIMENSION;
+
+  return {
+    width: Math.max(1, Math.round(width)),
+    height: Math.max(1, Math.round(height)),
+  };
+}
+
+function resolveSourceRect(image, options = {}) {
+  if (!image) {
+    return null;
+  }
+
+  if (options.sourceRect) {
+    return options.sourceRect;
+  }
+
+  const { width, height } = getImageDimensions(image);
+  if (!options.trimTransparent && !options.detectEdges) {
+    return null;
+  }
+
   const canvas = document.createElement("canvas");
-  const ratio = Math.min(
-    1,
-    MAX_DIMENSION / (image.width || MAX_DIMENSION),
-    MAX_DIMENSION / (image.height || MAX_DIMENSION)
-  );
-
-  const width = Math.max(1, Math.round((image.width || MAX_DIMENSION) * ratio));
-  const height = Math.max(1, Math.round((image.height || MAX_DIMENSION) * ratio));
-
   canvas.width = width;
   canvas.height = height;
 
   const context = canvas.getContext("2d", { willReadFrequently: true });
   if (!context) {
-    return [];
+    return null;
   }
 
   context.drawImage(image, 0, 0, width, height);
+  const { data } = context.getImageData(0, 0, width, height);
+
+  const totalPixels = width * height;
+  const brightness = new Float32Array(totalPixels);
+  const alphaThreshold = options.alphaThreshold ?? 32;
+
+  let alphaMinX = width;
+  let alphaMinY = height;
+  let alphaMaxX = -1;
+  let alphaMaxY = -1;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      const offset = index * 4;
+      const r = data[offset];
+      const g = data[offset + 1];
+      const b = data[offset + 2];
+      const a = data[offset + 3];
+
+      brightness[index] = 0.299 * r + 0.587 * g + 0.114 * b;
+
+      if (options.trimTransparent && a > alphaThreshold) {
+        if (x < alphaMinX) alphaMinX = x;
+        if (x > alphaMaxX) alphaMaxX = x;
+        if (y < alphaMinY) alphaMinY = y;
+        if (y > alphaMaxY) alphaMaxY = y;
+      }
+    }
+  }
+
+  const paddingRatio = options.paddingRatio ?? 0.04;
+
+  const withPadding = (rect) => {
+    if (!rect) {
+      return null;
+    }
+    const padX = Math.max(2, Math.round(width * paddingRatio));
+    const padY = Math.max(2, Math.round(height * paddingRatio));
+    const startX = Math.max(0, rect.x - padX);
+    const startY = Math.max(0, rect.y - padY);
+    const endX = Math.min(width, rect.x + rect.width + padX);
+    const endY = Math.min(height, rect.y + rect.height + padY);
+    return {
+      x: startX,
+      y: startY,
+      width: Math.max(1, endX - startX),
+      height: Math.max(1, endY - startY),
+    };
+  };
+
+  if (options.trimTransparent && alphaMaxX >= alphaMinX && alphaMaxY >= alphaMinY) {
+    return withPadding({
+      x: alphaMinX,
+      y: alphaMinY,
+      width: alphaMaxX - alphaMinX + 1,
+      height: alphaMaxY - alphaMinY + 1,
+    });
+  }
+
+  if (!options.detectEdges) {
+    return null;
+  }
+
+  const gradientThreshold = options.gradientThreshold ?? 28;
+  const minActiveRatio = options.minActiveRatio ?? 0.004;
+
+  let edgeMinX = width;
+  let edgeMinY = height;
+  let edgeMaxX = -1;
+  let edgeMaxY = -1;
+  let activeCount = 0;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      const current = brightness[index];
+
+      let gradient = 0;
+      if (x < width - 1) {
+        gradient += Math.abs(current - brightness[index + 1]);
+      }
+      if (y < height - 1) {
+        gradient += Math.abs(current - brightness[index + width]);
+      }
+
+      if (gradient > gradientThreshold) {
+        if (x < edgeMinX) edgeMinX = x;
+        if (x > edgeMaxX) edgeMaxX = x;
+        if (y < edgeMinY) edgeMinY = y;
+        if (y > edgeMaxY) edgeMaxY = y;
+        activeCount += 1;
+      }
+    }
+  }
+
+  if (edgeMaxX >= edgeMinX && edgeMaxY >= edgeMinY) {
+    if (activeCount / totalPixels >= minActiveRatio) {
+      return withPadding({
+        x: edgeMinX,
+        y: edgeMinY,
+        width: edgeMaxX - edgeMinX + 1,
+        height: edgeMaxY - edgeMinY + 1,
+      });
+    }
+  }
+
+  return null;
+}
+
+function drawImageRegion(image, { sourceRect, targetWidth, targetHeight, maxDimension = MAX_DIMENSION } = {}) {
+  if (!image) {
+    return null;
+  }
+
+  const { width: baseWidth, height: baseHeight } = getImageDimensions(image);
+  const region = sourceRect ?? null;
+
+  const sx = region ? region.x : 0;
+  const sy = region ? region.y : 0;
+  const sw = region ? region.width : baseWidth;
+  const sh = region ? region.height : baseHeight;
+
+  if (!sw || !sh) {
+    return null;
+  }
+
+  let width = targetWidth;
+  let height = targetHeight;
+
+  if (!width && !height) {
+    const ratio = Math.min(1, maxDimension / sw, maxDimension / sh);
+    width = Math.max(1, Math.round(sw * ratio));
+    height = Math.max(1, Math.round(sh * ratio));
+  } else if (width && !height) {
+    height = Math.max(1, Math.round((width * sh) / sw));
+  } else if (!width && height) {
+    width = Math.max(1, Math.round((height * sw) / sh));
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) {
+    return null;
+  }
+
+  context.drawImage(image, sx, sy, sw, sh, 0, 0, width, height);
+  return { canvas, context, width, height };
+}
+
+function extractPalette(image, options = {}) {
+  const sourceRect = options.sourceRect ?? resolveSourceRect(image, options);
+  const region = drawImageRegion(image, { sourceRect, maxDimension: MAX_DIMENSION });
+  if (!region) {
+    return [];
+  }
+
+  const { context, width, height } = region;
   const { data } = context.getImageData(0, 0, width, height);
 
   const buckets = new Map();
@@ -583,22 +777,24 @@ function extractPalette(image) {
     });
 }
 
-function computeImageSignature(image, gridSize = SIGNATURE_GRID_SIZE) {
+function computeImageSignature(image, gridSize = SIGNATURE_GRID_SIZE, options = {}) {
   if (!image || gridSize <= 0 || typeof document === "undefined") {
     return [];
   }
 
-  const canvas = document.createElement("canvas");
-  canvas.width = gridSize;
-  canvas.height = gridSize;
+  const sourceRect = options.sourceRect ?? resolveSourceRect(image, options);
+  const region = drawImageRegion(image, {
+    sourceRect,
+    targetWidth: gridSize,
+    targetHeight: gridSize,
+  });
 
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  if (!context) {
+  if (!region) {
     return [];
   }
 
-  context.drawImage(image, 0, 0, gridSize, gridSize);
-  const { data } = context.getImageData(0, 0, gridSize, gridSize);
+  const { context, width, height } = region;
+  const { data } = context.getImageData(0, 0, width, height);
 
   const signature = [];
   for (let i = 0; i < data.length; i += 4) {
@@ -612,29 +808,31 @@ function computeImageSignature(image, gridSize = SIGNATURE_GRID_SIZE) {
   return signature;
 }
 
-function computeShapeProfile(image, gridSize = SHAPE_PROFILE_SIZE) {
+function computeShapeProfile(image, gridSize = SHAPE_PROFILE_SIZE, options = {}) {
   if (!image || gridSize <= 0 || typeof document === "undefined") {
     return null;
   }
 
-  const canvas = document.createElement("canvas");
-  canvas.width = gridSize;
-  canvas.height = gridSize;
+  const sourceRect = options.sourceRect ?? resolveSourceRect(image, options);
+  const region = drawImageRegion(image, {
+    sourceRect,
+    targetWidth: gridSize,
+    targetHeight: gridSize,
+  });
 
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  if (!context) {
+  if (!region) {
     return null;
   }
 
-  context.drawImage(image, 0, 0, gridSize, gridSize);
-  const { data } = context.getImageData(0, 0, gridSize, gridSize);
+  const { context, width, height } = region;
+  const { data } = context.getImageData(0, 0, width, height);
 
-  const rows = new Array(gridSize).fill(0);
-  const columns = new Array(gridSize).fill(0);
+  const rows = new Array(height).fill(0);
+  const columns = new Array(width).fill(0);
 
-  for (let y = 0; y < gridSize; y += 1) {
-    for (let x = 0; x < gridSize; x += 1) {
-      const index = (y * gridSize + x) * 4;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = (y * width + x) * 4;
       const alpha = data[index + 3] / 255;
       rows[y] += alpha;
       columns[x] += alpha;
@@ -643,14 +841,14 @@ function computeShapeProfile(image, gridSize = SHAPE_PROFILE_SIZE) {
 
   const normalize = (values) =>
     values.map((sum) => {
-      const normalized = sum / gridSize;
+      const normalized = sum / values.length;
       return Number.isFinite(normalized) ? Math.min(Math.max(normalized, 0), 1) : 0;
     });
 
   const normalizedRows = normalize(rows);
   const normalizedColumns = normalize(columns);
   const occupancy =
-    normalizedRows.reduce((accumulator, value) => accumulator + value, 0) / gridSize;
+    normalizedRows.reduce((accumulator, value) => accumulator + value, 0) / normalizedRows.length;
 
   return {
     rows: normalizedRows,
@@ -697,6 +895,147 @@ function computeShapeDistance(shapeA, shapeB) {
 
   const total = finiteComponents.reduce((accumulator, value) => accumulator + value, 0);
   return total / finiteComponents.length;
+}
+
+function computeDifferenceHash(image, hashSize = HASH_GRID_SIZE, options = {}) {
+  if (!image || typeof document === "undefined" || hashSize <= 0) {
+    return null;
+  }
+
+  const sourceRect = options.sourceRect ?? resolveSourceRect(image, options);
+  const region = drawImageRegion(image, {
+    sourceRect,
+    targetWidth: hashSize + 1,
+    targetHeight: hashSize,
+  });
+
+  if (!region) {
+    return null;
+  }
+
+  const { context, width, height } = region;
+  const { data } = context.getImageData(0, 0, width, height);
+  const hash = [];
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < hashSize; x += 1) {
+      const leftIndex = (y * width + x) * 4;
+      const rightIndex = (y * width + (x + 1)) * 4;
+
+      const left =
+        0.299 * data[leftIndex] + 0.587 * data[leftIndex + 1] + 0.114 * data[leftIndex + 2];
+      const right =
+        0.299 * data[rightIndex] + 0.587 * data[rightIndex + 1] + 0.114 * data[rightIndex + 2];
+
+      hash.push(left > right ? "1" : "0");
+    }
+  }
+
+  return hash.length ? hash.join("") : null;
+}
+
+function computeHashDistance(hashA, hashB) {
+  if (!hashA || !hashB) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const length = Math.min(hashA.length, hashB.length);
+  if (!length) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  let distance = 0;
+  for (let i = 0; i < length; i += 1) {
+    if (hashA.charAt(i) !== hashB.charAt(i)) {
+      distance += 1;
+    }
+  }
+
+  return distance / length;
+}
+
+function computeEdgeHistogram(image, gridSize = EDGE_GRID_SIZE, options = {}) {
+  if (!image || typeof document === "undefined" || gridSize <= 1) {
+    return null;
+  }
+
+  const sourceRect = options.sourceRect ?? resolveSourceRect(image, options);
+  const region = drawImageRegion(image, {
+    sourceRect,
+    targetWidth: gridSize,
+    targetHeight: gridSize,
+  });
+
+  if (!region) {
+    return null;
+  }
+
+  const { context, width, height } = region;
+  const { data } = context.getImageData(0, 0, width, height);
+  const brightness = new Float32Array(width * height);
+
+  for (let i = 0; i < width * height; i += 1) {
+    const offset = i * 4;
+    brightness[i] =
+      0.299 * data[offset] + 0.587 * data[offset + 1] + 0.114 * data[offset + 2];
+  }
+
+  const bins = new Array(EDGE_ORIENTATION_BINS).fill(0);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      const center = brightness[index];
+      const left = x > 0 ? brightness[index - 1] : center;
+      const right = x < width - 1 ? brightness[index + 1] : center;
+      const up = y > 0 ? brightness[index - width] : center;
+      const down = y < height - 1 ? brightness[index + width] : center;
+
+      const gx = right - left;
+      const gy = down - up;
+      const magnitude = Math.sqrt(gx * gx + gy * gy);
+
+      if (magnitude < 1) {
+        continue;
+      }
+
+      const orientation = Math.atan2(gy, gx);
+      const normalized = (orientation + Math.PI) / (2 * Math.PI);
+      const bin = Math.min(
+        EDGE_ORIENTATION_BINS - 1,
+        Math.max(0, Math.floor(normalized * EDGE_ORIENTATION_BINS))
+      );
+
+      bins[bin] += magnitude;
+    }
+  }
+
+  const total = bins.reduce((accumulator, value) => accumulator + value, 0);
+  if (total <= 0) {
+    return null;
+  }
+
+  return bins.map((value) => value / total);
+}
+
+function computeEdgeDistance(edgesA, edgesB) {
+  if (!Array.isArray(edgesA) || !Array.isArray(edgesB)) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const length = Math.min(edgesA.length, edgesB.length);
+  if (!length) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  let total = 0;
+  for (let i = 0; i < length; i += 1) {
+    const valueA = edgesA[i] ?? 0;
+    const valueB = edgesB[i] ?? 0;
+    total += Math.abs(valueA - valueB);
+  }
+
+  return total / length;
 }
 
 function hexToRgb(hex) {
@@ -798,30 +1137,18 @@ function computeToneHistogramFromPixels(pixels, bucketCount = HUE_BUCKETS) {
   return buckets.map((value) => value / total);
 }
 
-function computeToneDistribution(image) {
+function computeToneDistribution(image, options = {}) {
   if (!image || typeof document === "undefined") {
     return null;
   }
 
-  const canvas = document.createElement("canvas");
-  const ratio = Math.min(
-    1,
-    MAX_DIMENSION / (image.width || MAX_DIMENSION),
-    MAX_DIMENSION / (image.height || MAX_DIMENSION)
-  );
-
-  const width = Math.max(1, Math.round((image.width || MAX_DIMENSION) * ratio));
-  const height = Math.max(1, Math.round((image.height || MAX_DIMENSION) * ratio));
-
-  canvas.width = width;
-  canvas.height = height;
-
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  if (!context) {
+  const sourceRect = options.sourceRect ?? resolveSourceRect(image, options);
+  const region = drawImageRegion(image, { sourceRect, maxDimension: MAX_DIMENSION });
+  if (!region) {
     return null;
   }
 
-  context.drawImage(image, 0, 0, width, height);
+  const { context, width, height } = region;
   const { data } = context.getImageData(0, 0, width, height);
 
   return computeToneHistogramFromPixels(data);
@@ -918,7 +1245,15 @@ function computeSignatureDistance(signatureA, signatureB) {
   return total / weightTotal;
 }
 
-function scoreItemAgainstPalette(item, palette, referenceSignature, referenceShape, referenceTones) {
+function scoreItemAgainstPalette(
+  item,
+  palette,
+  referenceSignature,
+  referenceShape,
+  referenceTones,
+  referenceHash,
+  referenceEdges
+) {
   let paletteScore = Number.POSITIVE_INFINITY;
   let paletteCoverage = 0;
   if (palette.length > 0 && item.palette && item.palette.length > 0) {
@@ -966,13 +1301,32 @@ function scoreItemAgainstPalette(item, palette, referenceSignature, referenceSha
     }
   }
 
+  let hashScore = Number.POSITIVE_INFINITY;
+  if (referenceHash && typeof referenceHash === "string" && referenceHash.length > 0) {
+    const itemHash = typeof item.hash === "string" ? item.hash : null;
+    if (itemHash && itemHash.length) {
+      hashScore = computeHashDistance(referenceHash, itemHash);
+    }
+  }
+
+  let edgeScore = Number.POSITIVE_INFINITY;
+  if (Array.isArray(referenceEdges) && referenceEdges.length) {
+    const itemEdges = Array.isArray(item.edges) ? item.edges : null;
+    if (itemEdges && itemEdges.length) {
+      edgeScore = computeEdgeDistance(referenceEdges, itemEdges);
+    }
+  }
+
   const paletteFinite = Number.isFinite(paletteScore);
   const signatureFinite = Number.isFinite(signatureScore);
 
   const shapeFinite = Number.isFinite(shapeScore);
   const toneFinite = Number.isFinite(toneScore);
 
-  if (!paletteFinite && !signatureFinite && !shapeFinite && !toneFinite) {
+  const hashFinite = Number.isFinite(hashScore);
+  const edgeFinite = Number.isFinite(edgeScore);
+
+  if (!paletteFinite && !signatureFinite && !shapeFinite && !toneFinite && !hashFinite && !edgeFinite) {
     return Number.POSITIVE_INFINITY;
   }
 
@@ -986,6 +1340,8 @@ function scoreItemAgainstPalette(item, palette, referenceSignature, referenceSha
     ? Math.min(shapeScore / MAX_SHAPE_DISTANCE, 1)
     : Number.POSITIVE_INFINITY;
   const toneNormalized = toneFinite ? Math.min(toneScore / MAX_TONE_DISTANCE, 1) : Number.POSITIVE_INFINITY;
+  const hashNormalized = hashFinite ? Math.min(hashScore, 1) : Number.POSITIVE_INFINITY;
+  const edgeNormalized = edgeFinite ? Math.min(edgeScore, 1) : Number.POSITIVE_INFINITY;
 
   let weightedScore = 0;
   let totalWeight = 0;
@@ -1008,6 +1364,16 @@ function scoreItemAgainstPalette(item, palette, referenceSignature, referenceSha
   if (toneFinite) {
     weightedScore += toneNormalized * TONE_SCORE_WEIGHT;
     totalWeight += TONE_SCORE_WEIGHT;
+  }
+
+  if (hashFinite) {
+    weightedScore += hashNormalized * HASH_SCORE_WEIGHT;
+    totalWeight += HASH_SCORE_WEIGHT;
+  }
+
+  if (edgeFinite) {
+    weightedScore += edgeNormalized * EDGE_SCORE_WEIGHT;
+    totalWeight += EDGE_SCORE_WEIGHT;
   }
 
   if (totalWeight <= 0) {
@@ -1053,12 +1419,46 @@ function scoreItemAgainstPalette(item, palette, referenceSignature, referenceSha
     }
   }
 
+  if (hashFinite) {
+    const hashConfidence = Math.max(0, 1 - hashScore / HASH_CONFIDENCE_DISTANCE);
+    if (hashConfidence > 0) {
+      finalScore -= hashConfidence * HASH_CONFIDENCE_WEIGHT;
+    }
+    if (hashScore < HASH_STRONG_THRESHOLD) {
+      finalScore -= 0.1;
+    }
+  }
+
+  if (edgeFinite) {
+    const edgeConfidence = Math.max(0, 1 - edgeScore / EDGE_CONFIDENCE_DISTANCE);
+    if (edgeConfidence > 0) {
+      finalScore -= edgeConfidence * EDGE_CONFIDENCE_WEIGHT;
+    }
+    if (edgeScore < EDGE_STRONG_THRESHOLD) {
+      finalScore -= 0.07;
+    }
+  }
+
   return Number.isFinite(finalScore) ? finalScore : Number.POSITIVE_INFINITY;
 }
 
-function analyzePaletteFromUrl(imageUrl) {
+function analyzeImage(image, options = {}) {
+  const sourceRect = options.sourceRect ?? resolveSourceRect(image, options);
+  const sharedOptions = { ...options, sourceRect };
+
+  const palette = extractPalette(image, sharedOptions);
+  const signature = computeImageSignature(image, SIGNATURE_GRID_SIZE, sharedOptions);
+  const shape = computeShapeProfile(image, SHAPE_PROFILE_SIZE, sharedOptions);
+  const tones = computeToneDistribution(image, sharedOptions);
+  const hash = computeDifferenceHash(image, HASH_GRID_SIZE, sharedOptions);
+  const edges = computeEdgeHistogram(image, EDGE_GRID_SIZE, sharedOptions);
+
+  return { palette, signature, shape, tones, hash, edges, sourceRect };
+}
+
+function analyzePaletteFromUrl(imageUrl, options = {}) {
   if (!imageUrl || typeof window === "undefined" || typeof Image === "undefined") {
-    return Promise.resolve({ palette: [], signature: [], shape: null });
+    return Promise.resolve({ palette: [], signature: [], shape: null, tones: null, hash: null, edges: null });
   }
 
   return new Promise((resolve) => {
@@ -1067,18 +1467,15 @@ function analyzePaletteFromUrl(imageUrl) {
     image.decoding = "async";
     image.onload = () => {
       try {
-        const palette = extractPalette(image);
-        const signature = computeImageSignature(image);
-        const shape = computeShapeProfile(image);
-        const tones = computeToneDistribution(image);
-        resolve({ palette, signature, shape, tones });
+        const analysis = analyzeImage(image, options);
+        resolve(analysis);
       } catch (err) {
         console.error(err);
-        resolve({ palette: [], signature: [], shape: null, tones: null });
+        resolve({ palette: [], signature: [], shape: null, tones: null, hash: null, edges: null });
       }
     };
     image.onerror = () => {
-      resolve({ palette: [], signature: [], shape: null, tones: null });
+      resolve({ palette: [], signature: [], shape: null, tones: null, hash: null, edges: null });
     };
     image.src = imageUrl;
   });
@@ -1099,7 +1496,18 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
         return { ...item, palette: [] };
       }
 
-      const { palette: paletteEntries, signature, shape, tones } = await analyzePaletteFromUrl(item.imageUrl);
+      const {
+        palette: paletteEntries,
+        signature,
+        shape,
+        tones,
+        hash,
+        edges,
+      } = await analyzePaletteFromUrl(item.imageUrl, {
+        trimTransparent: true,
+        detectEdges: true,
+        paddingRatio: 0.05,
+      });
       if (shouldCancel?.()) {
         return item;
       }
@@ -1118,6 +1526,16 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
         : null;
       const nextShape = shape ?? item.shape ?? null;
       const nextTones = tones ?? item.tones ?? computeToneDistributionFromPalette(nextPalette);
+      const nextHash = typeof hash === "string" && hash.length
+        ? hash
+        : typeof item.hash === "string"
+        ? item.hash
+        : null;
+      const nextEdges = Array.isArray(edges) && edges.length
+        ? edges
+        : Array.isArray(item.edges) && item.edges.length
+        ? item.edges
+        : null;
 
       return {
         ...item,
@@ -1126,6 +1544,8 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
         signature: nextSignature,
         shape: nextShape,
         tones: nextTones,
+        hash: nextHash,
+        edges: nextEdges,
       };
     })
   );
@@ -1139,6 +1559,8 @@ export default function Home() {
   const [imageSignature, setImageSignature] = useState(null);
   const [imageShape, setImageShape] = useState(null);
   const [imageTones, setImageTones] = useState(null);
+  const [imageHash, setImageHash] = useState(null);
+  const [imageEdges, setImageEdges] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
@@ -1228,7 +1650,15 @@ export default function Home() {
       const scoredItems = catalogItems
         .map((item) => ({
           item,
-          score: scoreItemAgainstPalette(item, colors, imageSignature, imageShape, imageTones),
+          score: scoreItemAgainstPalette(
+            item,
+            colors,
+            imageSignature,
+            imageShape,
+            imageTones,
+            imageHash,
+            imageEdges
+          ),
         }))
         .sort((a, b) => a.score - b.score);
 
@@ -1238,7 +1668,7 @@ export default function Home() {
       accumulator[type] = ranked.slice(0, MAX_RECOMMENDATIONS).map(({ item }) => item);
       return accumulator;
     }, {});
-  }, [colors, imageSignature, imageShape, imageTones, itemsCatalog]);
+  }, [colors, imageSignature, imageShape, imageTones, imageHash, imageEdges, itemsCatalog]);
 
   const barbofusLink = useMemo(() => {
     if (!colors.length || !recommendations) {
@@ -1432,20 +1862,26 @@ export default function Home() {
     setImageSignature(null);
     setImageShape(null);
     setImageTones(null);
+    setImageHash(null);
+    setImageEdges(null);
 
     const image = new Image();
     image.crossOrigin = "anonymous";
     image.onload = () => {
       try {
-        const palette = extractPalette(image);
-        const signature = computeImageSignature(image);
-        const shape = computeShapeProfile(image);
-        const tones = computeToneDistribution(image);
+        const { palette, signature, shape, tones, hash, edges } = analyzeImage(image, {
+          trimTransparent: true,
+          detectEdges: true,
+          gradientThreshold: 32,
+          paddingRatio: 0.06,
+        });
         setColors(palette);
-        setImageSignature(signature.length ? signature : null);
+        setImageSignature(Array.isArray(signature) && signature.length ? signature : null);
         setImageShape(shape);
         setImageTones(Array.isArray(tones) && tones.length ? tones : null);
-        if (palette.length === 0) {
+        setImageHash(typeof hash === "string" && hash.length ? hash : null);
+        setImageEdges(Array.isArray(edges) && edges.length ? edges : null);
+        if (!palette || palette.length === 0) {
           setError("Aucune couleur dominante détectée.");
         }
       } catch (err) {
@@ -1455,6 +1891,8 @@ export default function Home() {
         setImageSignature(null);
         setImageShape(null);
         setImageTones(null);
+        setImageHash(null);
+        setImageEdges(null);
       } finally {
         setIsProcessing(false);
       }
@@ -1466,6 +1904,8 @@ export default function Home() {
       setImageSignature(null);
       setImageShape(null);
       setImageTones(null);
+      setImageHash(null);
+      setImageEdges(null);
     };
     image.src = dataUrl;
   }, []);
@@ -1477,6 +1917,8 @@ export default function Home() {
         setImageSignature(null);
         setImageShape(null);
         setImageTones(null);
+        setImageHash(null);
+        setImageEdges(null);
         return;
       }
 

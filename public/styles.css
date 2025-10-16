@@ -40,7 +40,7 @@ a {
 
 .page {
   min-height: 100vh;
-  padding: 78px 14px 30px;
+  padding: 68px 14px 26px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -49,7 +49,7 @@ a {
 
 .toast-tray {
   position: fixed;
-  top: 24px;
+  top: 76px;
   right: 24px;
   display: flex;
   flex-direction: column;
@@ -113,7 +113,7 @@ a {
 .hero {
   text-align: center;
   max-width: 640px;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
 }
 
 .hero h1 {
@@ -126,7 +126,7 @@ a {
   width: 100%;
   max-width: 1080px;
   display: grid;
-  gap: 16px;
+  gap: 14px;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
 }
 
@@ -137,7 +137,7 @@ a {
   right: 0;
   display: flex;
   justify-content: center;
-  padding: 14px 18px 0;
+  padding: 10px 18px 6px;
   pointer-events: none;
   z-index: 32;
 }
@@ -147,16 +147,16 @@ a {
 }
 
 .progress-bar {
-  width: min(520px, calc(100% - 36px));
+  width: min(440px, calc(100% - 32px));
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background: rgba(10, 17, 40, 0.64);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(10, 17, 40, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 999px;
-  padding: 10px 16px;
-  box-shadow: 0 18px 36px -28px rgba(15, 23, 42, 0.95);
-  backdrop-filter: blur(12px);
+  padding: 8px 16px;
+  box-shadow: 0 14px 32px -26px rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(16px);
 }
 
 .progress-bar__track {
@@ -210,11 +210,11 @@ a {
 
 .dropzone {
   position: relative;
-  padding: 16px;
+  padding: 14px;
   border-radius: var(--radius-lg);
   border: 1px dashed rgba(148, 163, 184, 0.35);
   background: rgba(10, 17, 40, 0.6);
-  min-height: 200px;
+  min-height: 180px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -269,7 +269,7 @@ a {
 
 .dropzone__preview {
   max-width: 100%;
-  max-height: 208px;
+  max-height: 196px;
   object-fit: contain;
   border-radius: var(--radius-lg);
   display: block;
@@ -306,11 +306,11 @@ a {
   background: var(--card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--card-border);
-  padding: 18px;
+  padding: 16px;
   box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 .palette__header {
@@ -504,14 +504,14 @@ a {
   background: var(--card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--card-border);
-  padding: 18px;
+  padding: 16px;
   box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   width: 100%;
   max-width: 1080px;
-  margin: 16px auto 0;
+  margin: 12px auto 0;
 }
 
 .suggestions__header {
@@ -612,17 +612,17 @@ a {
 .suggestions__grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .suggestions__group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  background: rgba(10, 17, 40, 0.58);
+  gap: 7px;
+  background: rgba(10, 17, 40, 0.56);
   border-radius: var(--radius-md);
   border: 1px solid rgba(148, 163, 184, 0.16);
-  padding: 12px;
+  padding: 10px;
 }
 
 .suggestions__group-header {
@@ -667,14 +667,14 @@ a {
   list-style: none;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .suggestions__card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px;
+  gap: 5px;
+  padding: 8px;
   border-radius: var(--radius-sm);
   border: 1px solid rgba(148, 163, 184, 0.16);
   background: rgba(15, 23, 42, 0.6);
@@ -703,7 +703,7 @@ a {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  padding: 4px;
+  padding: 2px;
 }
 
 .suggestions__thumb-placeholder {
@@ -716,17 +716,17 @@ a {
 .suggestions__card-body {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .suggestions__swatches {
   display: inline-flex;
-  gap: 4px;
-  padding: 4px 6px;
+  gap: 3px;
+  padding: 3px 5px;
   border-radius: 12px;
   background: rgba(15, 23, 42, 0.5);
   border: 1px solid rgba(148, 163, 184, 0.16);
-  min-height: 28px;
+  min-height: 24px;
   justify-content: flex-start;
   width: max-content;
   max-width: 100%;
@@ -738,8 +738,8 @@ a {
 }
 
 .suggestions__swatch {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   border: 1px solid rgba(15, 23, 42, 0.35);
 }
