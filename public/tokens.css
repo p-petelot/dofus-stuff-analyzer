@@ -1,0 +1,24 @@
+:root {
+  --color-bg: #0E1116;
+  --color-surface: #121722;
+  --color-text: #E6ECFF;
+  --color-muted: #7A8399;
+  --color-primary: #4DD77C;
+  --color-accent: #D9A441;
+  --color-border: #223146;
+  --radius: 14px;
+  --shadow-1: 0 18px 40px rgba(4, 7, 12, 0.45);
+  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: "Cinzel", "Times New Roman", serif;
+  --size-h1: clamp(2.75rem, 2.1rem + 1.5vw, 3.6rem);
+  --size-h2: clamp(2.2rem, 1.7rem + 1.1vw, 2.9rem);
+  --size-h3: clamp(1.8rem, 1.4rem + 0.7vw, 2.3rem);
+  --size-h4: clamp(1.4rem, 1.2rem + 0.4vw, 1.7rem);
+  --size-body: 1rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+}
