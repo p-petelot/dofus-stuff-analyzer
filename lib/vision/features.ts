@@ -86,5 +86,5 @@ export async function poseAlign(
   template: ImageDataLike,
 ): Promise<{ ok: boolean; alignedPatch: ImageDataLike; alignedTemplate: ImageDataLike }> {
   const { inliers } = await orbMatch(patch, template);
-  return { ok: inliers > 25, alignedPatch: patch, alignedTemplate: template };
+  return { ok: inliers >= 12, alignedPatch: patch, alignedTemplate: template };
 }

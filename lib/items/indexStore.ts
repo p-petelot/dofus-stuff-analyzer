@@ -35,8 +35,8 @@ function cosineSimilarity(a: number[], b: number[]): number {
   let normB = 0;
   for (let i = 0; i < length; i += 1) {
     dot += a[i] * b[i];
-    normA += a[i] ** 2;
-    normB += b[i] ** 2;
+    normA += Math.pow(a[i], 2);
+    normB += Math.pow(b[i], 2);
   }
   if (!normA || !normB) return 0;
   return dot / Math.sqrt(normA * normB);

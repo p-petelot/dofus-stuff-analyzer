@@ -75,7 +75,7 @@ export default async function handler(
       let candidates: Candidate[] = [];
       let confidence = 0;
       if (!isVisible) {
-        localNotes.push(`Visibilité faible sur ${slot} → bascule immédiate en mode COULEUR.`);
+        localNotes.push(`Visibilité faible sur ${slot} → aucune confirmation possible.`);
       }
       if (isVisible && FLAGS.enableItemMode) {
         const itemStart = Date.now();
@@ -94,7 +94,7 @@ export default async function handler(
           }
         }
       }
-      if (!candidates.length && FLAGS.enableColorMode) {
+      if (!candidates.length && FLAGS.enableColorMode && isVisible) {
         const colorStart = Date.now();
         const colorCandidates = await colorModeSuggest(slot, patch, paletteBySlot[slot], K.colorPick);
         timings.colorMode += Date.now() - colorStart;
@@ -105,6 +105,8 @@ export default async function handler(
             colorCandidates[0].reasons.deltaE?.toFixed(2) ?? "n/a"
           }).`);
         }
+      } else if (!candidates.length && !isVisible) {
+        localNotes.push(`Slot ${slot} trop masqué → aucune suggestion.`);
       }
       perSlot[slot] = { candidates, confidence, notes: localNotes };
     }
