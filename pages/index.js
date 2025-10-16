@@ -2053,6 +2053,16 @@ export default function Home() {
   };
 
   const showProgressBar = isProcessing || analysisProgress > 0;
+  const clampedProgress = Math.max(0, Math.min(analysisProgress, 100));
+  const safeProgress = Number.isFinite(clampedProgress) ? clampedProgress : 0;
+  const displayedProgress = isProcessing
+    ? Math.max(safeProgress / 100, 0.05)
+    : safeProgress / 100;
+  const progressLabel = isProcessing
+    ? "Analyse de l'image en cours"
+    : safeProgress >= 100
+    ? "Analyse terminée"
+    : "Analyse prête";
 
   const getRingPosition = useCallback((index, total) => {
     if (total <= 1) {
@@ -2094,22 +2104,11 @@ export default function Home() {
       <main className="page">
         {showProgressBar ? (
           <div className="page-progress" role="status" aria-live="polite">
-            <div className={`progress-bar${isProcessing ? " progress-bar--active" : ""}`}>
-              <div className="progress-bar__track">
-                <div
-                  className="progress-bar__indicator"
-                  style={{ width: `${Math.min(100, Math.max(analysisProgress, 0))}%` }}
-                />
-                <span className="progress-bar__glow" />
-              </div>
-              <span className="progress-bar__label">
-                {isProcessing
-                  ? "Analyse de l'image…"
-                  : analysisProgress >= 100
-                  ? "Analyse terminée"
-                  : "Analyse prête"}
-              </span>
-            </div>
+            <div
+              className={`page-progress__indicator${isProcessing ? " page-progress__indicator--busy" : ""}`}
+              style={{ transform: `scaleX(${displayedProgress})` }}
+            />
+            <span className="sr-only">{progressLabel}</span>
           </div>
         ) : null}
         <div className={`toast-tray${toast ? " toast-tray--visible" : ""}`} aria-live="polite">
