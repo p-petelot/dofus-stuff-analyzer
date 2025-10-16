@@ -520,6 +520,94 @@ function compressToEncodedURIComponent(input) {
   return _compress(input, 6, getUriSafeCharFromInt);
 }
 
+function hexToNumeric(hex) {
+  const normalized = normalizeColorToHex(hex);
+  if (!normalized) {
+    return null;
+  }
+  const numeric = parseInt(normalized.replace(/#/g, ""), 16);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function buildBarbofusConfiguration(items, paletteHexes, fallbackColorValues = []) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return { link: null, preview: null };
+  }
+
+  const paletteValues = Array.isArray(paletteHexes)
+    ? paletteHexes
+        .map((hex) => hexToNumeric(hex))
+        .filter((value) => value !== null)
+    : [];
+
+  const combinedColors = paletteValues.length ? paletteValues : fallbackColorValues;
+
+  if (!combinedColors.length) {
+    return { link: null, preview: null };
+  }
+
+  const uniqueColors = [];
+  const seenColors = new Set();
+
+  combinedColors.forEach((value) => {
+    if (seenColors.has(value)) {
+      return;
+    }
+    seenColors.add(value);
+    uniqueColors.push(value);
+  });
+
+  if (!uniqueColors.length) {
+    return { link: null, preview: null };
+  }
+
+  const colorValues = uniqueColors.slice(0, MAX_ITEM_PALETTE_COLORS);
+
+  const equipment = BARBOFUS_EQUIPMENT_SLOTS.reduce((accumulator, slot) => {
+    accumulator[slot] = null;
+    return accumulator;
+  }, {});
+
+  let hasEquipment = false;
+
+  items.forEach((item) => {
+    if (!item) {
+      return;
+    }
+    const slot = BARBOFUS_SLOT_BY_TYPE[item.slotType];
+    if (!slot || !item.ankamaId) {
+      return;
+    }
+    equipment[slot] = item.ankamaId;
+    hasEquipment = true;
+  });
+
+  if (!hasEquipment) {
+    return { link: null, preview: null };
+  }
+
+  const payload = {
+    1: BARBOFUS_DEFAULTS.gender,
+    2: BARBOFUS_DEFAULTS.classId,
+    3: BARBOFUS_DEFAULTS.lookId,
+    4: colorValues,
+    5: equipment,
+  };
+
+  try {
+    const encoded = compressToEncodedURIComponent(JSON.stringify(payload));
+    if (!encoded) {
+      return { link: null, preview: null };
+    }
+    const link = `${BARBOFUS_BASE_URL}?s=${encoded}`;
+    const preview = `${BARBOFUS_BASE_URL}/render?s=${encoded}`;
+    return { link, preview };
+  } catch (err) {
+    console.error(err);
+    return { link: null, preview: null };
+  }
+}
+
 function componentToHex(value) {
   const hex = value.toString(16).padStart(2, "0");
   return hex.toUpperCase();
@@ -1683,6 +1771,7 @@ export default function Home() {
   const [inputMode, setInputMode] = useState("image");
   const [selectedColor, setSelectedColor] = useState("#8B5CF6");
   const [activeProposal, setActiveProposal] = useState(0);
+  const [previewErrors, setPreviewErrors] = useState({});
   const progressHandles = useRef({ frame: null, timeout: null, value: 0 });
 
   const isImageMode = inputMode === "image";
@@ -1693,6 +1782,23 @@ export default function Home() {
   );
 
   const colorsCount = colors.length;
+
+  const fallbackColorValues = useMemo(() => {
+    if (!colors.length) {
+      return [];
+    }
+    const seen = new Set();
+    return colors
+      .map((entry) => hexToNumeric(entry?.hex))
+      .filter((value) => {
+        if (value === null || seen.has(value)) {
+          return false;
+        }
+        seen.add(value);
+        return true;
+      })
+      .slice(0, MAX_ITEM_PALETTE_COLORS);
+  }, [colors]);
 
   const applyColorSeed = useCallback(
     (seedHex) => {
@@ -1854,19 +1960,43 @@ export default function Home() {
         });
       });
 
+      const paletteSample = palette.slice(0, MAX_ITEM_PALETTE_COLORS);
+      const { link: barbofusLink, preview: barbofusPreview } = buildBarbofusConfiguration(
+        items,
+        paletteSample,
+        fallbackColorValues
+      );
+
       combos.push({
         id: `proposal-${index}`,
         index,
         items,
-        palette: palette.slice(0, MAX_ITEM_PALETTE_COLORS),
+        palette: paletteSample,
         heroImage: items.find((item) => item.imageUrl)?.imageUrl ?? null,
+        barbofusLink,
+        barbofusPreview,
       });
     }
 
     return combos;
-  }, [recommendations]);
+  }, [fallbackColorValues, recommendations]);
 
   const proposalCount = proposals.length;
+
+  useEffect(() => {
+    if (!proposals.length) {
+      setPreviewErrors({});
+      return;
+    }
+
+    setPreviewErrors((previous) => {
+      const activeIds = new Set(proposals.map((proposal) => proposal.id));
+      const next = Object.fromEntries(
+        Object.entries(previous).filter(([key]) => activeIds.has(key))
+      );
+      return Object.keys(next).length === Object.keys(previous).length ? previous : next;
+    });
+  }, [proposals]);
 
   useEffect(() => {
     if (!proposalCount) {
@@ -1905,68 +2035,17 @@ export default function Home() {
     [proposalCount]
   );
 
-  const barbofusLink = useMemo(() => {
-    if (!colors.length || !recommendations) {
-      return null;
+  const handlePreviewFallback = useCallback((id) => {
+    if (!id) {
+      return;
     }
-
-    const colorValues = colors
-      .map((entry) => {
-        if (!entry?.hex) return null;
-        const numeric = parseInt(entry.hex.replace(/#/g, ""), 16);
-        return Number.isFinite(numeric) ? numeric : null;
-      })
-      .filter((value) => value !== null);
-
-    if (!colorValues.length) {
-      return null;
-    }
-
-    const equipment = BARBOFUS_EQUIPMENT_SLOTS.reduce((accumulator, slot) => {
-      accumulator[slot] = null;
-      return accumulator;
-    }, {});
-
-    let hasEquipment = false;
-
-    ITEM_TYPES.forEach((type) => {
-      const slot = BARBOFUS_SLOT_BY_TYPE[type];
-      if (!slot) {
-        return;
+    setPreviewErrors((previous) => {
+      if (previous?.[id]) {
+        return previous;
       }
-
-      const item = recommendations[type]?.find((entry) => entry?.ankamaId);
-      if (!item?.ankamaId) {
-        return;
-      }
-
-      equipment[slot] = item.ankamaId;
-      hasEquipment = true;
+      return { ...previous, [id]: true };
     });
-
-    if (!hasEquipment) {
-      return null;
-    }
-
-    const payload = {
-      1: BARBOFUS_DEFAULTS.gender,
-      2: BARBOFUS_DEFAULTS.classId,
-      3: BARBOFUS_DEFAULTS.lookId,
-      4: colorValues,
-      5: equipment,
-    };
-
-    try {
-      const encoded = compressToEncodedURIComponent(JSON.stringify(payload));
-      if (!encoded) {
-        return null;
-      }
-      return `${BARBOFUS_BASE_URL}?s=${encoded}`;
-    } catch (err) {
-      console.error(err);
-      return null;
-    }
-  }, [colors, recommendations]);
+  }, []);
 
   const inputRef = useRef(null);
 
@@ -2565,21 +2644,7 @@ export default function Home() {
           <div className="suggestions__header">
             <div className="suggestions__intro">
               <h2>Correspondances Dofus</h2>
-              <p>Trois propositions stylisées pour explorer ta palette directement dans le jeu.</p>
             </div>
-            {barbofusLink ? (
-              <a
-                className="suggestions__cta"
-                href={barbofusLink}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Tester sur Barbofus
-                <span aria-hidden="true" className="suggestions__cta-icon">
-                  ↗
-                </span>
-              </a>
-            ) : null}
           </div>
           {colors.length === 0 ? (
             <div className="suggestions__empty">
@@ -2617,21 +2682,35 @@ export default function Home() {
                       className="skin-carousel__nav"
                       onClick={handlePrevProposal}
                       disabled={proposalCount <= 1}
-                      aria-label="Proposition précédente"
+                      aria-label="Skin précédent"
                     >
-                      ←
+                      <svg
+                        className="skin-carousel__nav-icon"
+                        viewBox="0 0 24 24"
+                        role="img"
+                        aria-hidden="true"
+                      >
+                        <path d="M14.5 5L8.5 12l6 7" />
+                      </svg>
                     </button>
                     <span className="skin-carousel__legend">
-                      Proposition {activeProposal + 1} sur {proposalCount}
+                      Skin {activeProposal + 1} / {proposalCount}
                     </span>
                     <button
                       type="button"
                       className="skin-carousel__nav"
                       onClick={handleNextProposal}
                       disabled={proposalCount <= 1}
-                      aria-label="Proposition suivante"
+                      aria-label="Skin suivant"
                     >
-                      →
+                      <svg
+                        className="skin-carousel__nav-icon"
+                        viewBox="0 0 24 24"
+                        role="img"
+                        aria-hidden="true"
+                      >
+                        <path d="M9.5 5l6 7-6 7" />
+                      </svg>
                     </button>
                   </div>
                   <div className="skin-carousel__viewport">
@@ -2642,10 +2721,12 @@ export default function Home() {
                       {proposals.map((proposal) => {
                         const primaryColor = proposal.palette[0] ?? "#1f2937";
                         const canvasBackground = buildGradientFromHex(primaryColor);
+                        const previewFailed = Boolean(previewErrors?.[proposal.id]);
+                        const hasBarbofusPreview = proposal.barbofusPreview && !previewFailed;
+                        const previewAlt = `Aperçu Barbofus du skin ${proposal.index + 1}`;
                         return (
                           <article key={proposal.id} className="skin-card">
                             <header className="skin-card__header">
-                              <span className="skin-card__eyebrow">Proposition {proposal.index + 1}</span>
                               <h3 className="skin-card__title">Skin chromatique #{proposal.index + 1}</h3>
                             </header>
                             <div className="skin-card__body">
@@ -2654,7 +2735,15 @@ export default function Home() {
                                 style={{ backgroundImage: canvasBackground }}
                               >
                                 <div className="skin-card__glow" aria-hidden="true" />
-                                {proposal.heroImage ? (
+                                {hasBarbofusPreview ? (
+                                  <img
+                                    src={proposal.barbofusPreview}
+                                    alt={previewAlt}
+                                    loading="lazy"
+                                    className="skin-card__preview"
+                                    onError={() => handlePreviewFallback(proposal.id)}
+                                  />
+                                ) : proposal.heroImage ? (
                                   <img
                                     src={proposal.heroImage}
                                     alt={`Aperçu principal de la proposition ${proposal.index + 1}`}
@@ -2720,6 +2809,25 @@ export default function Home() {
                                     </li>
                                   ))}
                                 </ul>
+                                <div className="skin-card__actions">
+                                  {proposal.barbofusLink ? (
+                                    <a
+                                      href={proposal.barbofusLink}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="skin-card__cta"
+                                    >
+                                      Tester sur Barbofus
+                                      <span aria-hidden="true" className="skin-card__cta-icon">
+                                        ↗
+                                      </span>
+                                    </a>
+                                  ) : (
+                                    <span className="skin-card__cta skin-card__cta--disabled">
+                                      Lien Barbofus indisponible
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </article>
@@ -2734,7 +2842,7 @@ export default function Home() {
                         type="button"
                         className={`skin-carousel__dot${index === activeProposal ? " is-active" : ""}`}
                         onClick={() => handleSelectProposal(index)}
-                        aria-label={`Afficher la proposition ${index + 1}`}
+                        aria-label={`Afficher le skin ${index + 1}`}
                         aria-pressed={index === activeProposal}
                       />
                     ))}
