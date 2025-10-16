@@ -371,13 +371,15 @@ const SHAPE_STRONG_THRESHOLD = 0.18;
 const TONE_CONFIDENCE_DISTANCE = 0.72;
 const TONE_CONFIDENCE_WEIGHT = 0.18;
 const MIN_ALPHA_WEIGHT = 0.05;
-const MAX_RECOMMENDATIONS = 1;
+const MAX_RECOMMENDATIONS = 4;
+const PROPOSAL_COUNT = 3;
 const HASH_CONFIDENCE_DISTANCE = 0.32;
 const HASH_CONFIDENCE_WEIGHT = 0.18;
 const HASH_STRONG_THRESHOLD = 0.12;
 const EDGE_CONFIDENCE_DISTANCE = 0.26;
 const EDGE_CONFIDENCE_WEIGHT = 0.12;
 const EDGE_STRONG_THRESHOLD = 0.1;
+const CURATED_COLOR_SWATCHES = ["#8B5CF6", "#F97316", "#10B981", "#38BDF8", "#F43F5E", "#FACC15"];
 
 const ITEM_TYPE_LABELS = {
   coiffe: "Coiffe",
@@ -525,6 +527,113 @@ function componentToHex(value) {
 
 function rgbToHex(r, g, b) {
   return `#${componentToHex(r)}${componentToHex(g)}${componentToHex(b)}`;
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function hslToRgb(h, s, l) {
+  const normalizedHue = ((h % 360) + 360) % 360;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((normalizedHue / 60) % 2) - 1));
+  const m = l - c / 2;
+
+  let rr = 0;
+  let gg = 0;
+  let bb = 0;
+
+  if (normalizedHue < 60) {
+    rr = c;
+    gg = x;
+  } else if (normalizedHue < 120) {
+    rr = x;
+    gg = c;
+  } else if (normalizedHue < 180) {
+    gg = c;
+    bb = x;
+  } else if (normalizedHue < 240) {
+    gg = x;
+    bb = c;
+  } else if (normalizedHue < 300) {
+    rr = x;
+    bb = c;
+  } else {
+    rr = c;
+    bb = x;
+  }
+
+  const r = Math.round(clamp((rr + m) * 255, 0, 255));
+  const g = Math.round(clamp((gg + m) * 255, 0, 255));
+  const b = Math.round(clamp((bb + m) * 255, 0, 255));
+
+  return { r, g, b };
+}
+
+function adjustHsl(base, deltaH = 0, deltaS = 0, deltaL = 0) {
+  return {
+    h: (base.h + deltaH + 360) % 360,
+    s: clamp(base.s + deltaS, 0, 1),
+    l: clamp(base.l + deltaL, 0.04, 0.96),
+  };
+}
+
+function generatePaletteFromSeed(seedHex) {
+  const baseRgb = hexToRgb(seedHex);
+  if (!baseRgb) {
+    return [];
+  }
+
+  const baseHsl = rgbToHsl(baseRgb.r, baseRgb.g, baseRgb.b);
+  const variations = [
+    adjustHsl(baseHsl, -16, -0.12, -0.24),
+    adjustHsl(baseHsl, -6, -0.06, -0.12),
+    adjustHsl(baseHsl, 0, 0.02, 0),
+    adjustHsl(baseHsl, 10, 0.06, 0.08),
+    adjustHsl(baseHsl, 18, 0.08, 0.16),
+    adjustHsl(baseHsl, 32, 0.1, 0.2),
+  ];
+
+  const seen = new Set();
+
+  return variations
+    .map((entry, index) => {
+      const { r, g, b } = hslToRgb(entry.h, entry.s, entry.l);
+      const hex = rgbToHex(r, g, b);
+      return {
+        hex,
+        rgb: `rgb(${r}, ${g}, ${b})`,
+        r,
+        g,
+        b,
+        weight: index === 2 ? 1.4 : 1,
+      };
+    })
+    .filter((entry) => {
+      if (seen.has(entry.hex)) {
+        return false;
+      }
+      seen.add(entry.hex);
+      return true;
+    })
+    .slice(0, MAX_COLORS);
+}
+
+function adjustHexLightness(hex, deltaL, deltaS = 0) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) {
+    return hex;
+  }
+  const base = rgbToHsl(rgb.r, rgb.g, rgb.b);
+  const adjusted = adjustHsl(base, 0, deltaS, deltaL);
+  const { r, g, b } = hslToRgb(adjusted.h, adjusted.s, adjusted.l);
+  return rgbToHex(r, g, b);
+}
+
+function buildGradientFromHex(hex) {
+  const darker = adjustHexLightness(hex, -0.2, -0.08);
+  const lighter = adjustHexLightness(hex, 0.18, -0.12);
+  return `linear-gradient(135deg, ${darker}, ${hex}, ${lighter})`;
 }
 
 function getImageDimensions(image) {
@@ -1571,7 +1680,12 @@ export default function Home() {
   const [itemsLoading, setItemsLoading] = useState(false);
   const [itemsError, setItemsError] = useState(null);
   const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [inputMode, setInputMode] = useState("image");
+  const [selectedColor, setSelectedColor] = useState("#8B5CF6");
+  const [activeProposal, setActiveProposal] = useState(0);
   const progressHandles = useRef({ frame: null, timeout: null, value: 0 });
+
+  const isImageMode = inputMode === "image";
 
   const hasCatalogData = useMemo(
     () => ITEM_TYPES.some((type) => (itemsCatalog[type] ?? []).length > 0),
@@ -1579,6 +1693,37 @@ export default function Home() {
   );
 
   const colorsCount = colors.length;
+
+  const applyColorSeed = useCallback(
+    (seedHex) => {
+      const palette = generatePaletteFromSeed(seedHex);
+      setColors(palette);
+      setImageSignature(null);
+      setImageShape(null);
+      setImageTones(
+        palette.length
+          ? computeToneDistributionFromPalette(palette.map((entry) => entry.hex))
+          : null
+      );
+      setImageHash(null);
+      setImageEdges(null);
+      setIsProcessing(false);
+      setAnalysisProgress(0);
+      setCopiedCode(null);
+      setToast(null);
+      setError(null);
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (inputMode !== "color") {
+      return;
+    }
+
+    applyColorSeed(selectedColor);
+    setImageSrc(null);
+  }, [applyColorSeed, inputMode, selectedColor]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1669,6 +1814,96 @@ export default function Home() {
       return accumulator;
     }, {});
   }, [colors, imageSignature, imageShape, imageTones, imageHash, imageEdges, itemsCatalog]);
+
+  const proposals = useMemo(() => {
+    if (!recommendations) {
+      return [];
+    }
+
+    const maxLength = Math.max(
+      0,
+      ...ITEM_TYPES.map((type) => (recommendations[type]?.length ?? 0))
+    );
+
+    const total = Math.min(PROPOSAL_COUNT, maxLength || 0);
+    const combos = [];
+
+    for (let index = 0; index < total; index += 1) {
+      const items = ITEM_TYPES.map((type) => {
+        const pool = recommendations[type] ?? [];
+        const pick = pool[index] ?? pool[0];
+        if (!pick) {
+          return null;
+        }
+        return { ...pick, slotType: type };
+      }).filter(Boolean);
+
+      if (!items.length) {
+        continue;
+      }
+
+      const palette = [];
+      const seen = new Set();
+
+      items.forEach((item) => {
+        item.palette.forEach((hex) => {
+          if (!seen.has(hex)) {
+            palette.push(hex);
+            seen.add(hex);
+          }
+        });
+      });
+
+      combos.push({
+        id: `proposal-${index}`,
+        index,
+        items,
+        palette: palette.slice(0, MAX_ITEM_PALETTE_COLORS),
+        heroImage: items.find((item) => item.imageUrl)?.imageUrl ?? null,
+      });
+    }
+
+    return combos;
+  }, [recommendations]);
+
+  const proposalCount = proposals.length;
+
+  useEffect(() => {
+    if (!proposalCount) {
+      if (activeProposal !== 0) {
+        setActiveProposal(0);
+      }
+      return;
+    }
+
+    if (activeProposal >= proposalCount) {
+      setActiveProposal(0);
+    }
+  }, [activeProposal, proposalCount]);
+
+  const handleNextProposal = useCallback(() => {
+    if (!proposalCount) {
+      return;
+    }
+    setActiveProposal((previous) => (previous + 1) % proposalCount);
+  }, [proposalCount]);
+
+  const handlePrevProposal = useCallback(() => {
+    if (!proposalCount) {
+      return;
+    }
+    setActiveProposal((previous) => (previous - 1 + proposalCount) % proposalCount);
+  }, [proposalCount]);
+
+  const handleSelectProposal = useCallback(
+    (index) => {
+      if (!proposalCount) {
+        return;
+      }
+      setActiveProposal(index);
+    },
+    [proposalCount]
+  );
 
   const barbofusLink = useMemo(() => {
     if (!colors.length || !recommendations) {
@@ -1855,6 +2090,7 @@ export default function Home() {
 
   const handleDataUrl = useCallback((dataUrl) => {
     if (!dataUrl) return;
+    setInputMode("image");
     setImageSrc(dataUrl);
     setIsProcessing(true);
     setError(null);
@@ -1972,6 +2208,9 @@ export default function Home() {
   const onDrop = useCallback(
     (event) => {
       event.preventDefault();
+      if (!isImageMode) {
+        return;
+      }
       setIsDragging(false);
 
       const files = event.dataTransfer?.files;
@@ -1979,32 +2218,74 @@ export default function Home() {
         handleFile(files[0]);
       }
     },
-    [handleFile]
+    [handleFile, isImageMode]
   );
 
-  const onDragOver = useCallback((event) => {
-    event.preventDefault();
-    setIsDragging(true);
-  }, []);
+  const onDragOver = useCallback(
+    (event) => {
+      if (!isImageMode) {
+        return;
+      }
+      event.preventDefault();
+      setIsDragging(true);
+    },
+    [isImageMode]
+  );
 
-  const onDragLeave = useCallback((event) => {
-    event.preventDefault();
-    setIsDragging(false);
-  }, []);
+  const onDragLeave = useCallback(
+    (event) => {
+      if (!isImageMode) {
+        return;
+      }
+      event.preventDefault();
+      setIsDragging(false);
+    },
+    [isImageMode]
+  );
 
   const onBrowseClick = useCallback(() => {
+    if (!isImageMode) {
+      return;
+    }
     inputRef.current?.click();
-  }, []);
+  }, [isImageMode]);
 
   const onFileInputChange = useCallback(
     (event) => {
+      if (!isImageMode) {
+        return;
+      }
       const file = event.target.files?.[0];
       if (file) {
         handleFile(file);
       }
     },
-    [handleFile]
+    [handleFile, isImageMode]
   );
+
+  const handleColorInput = useCallback((event) => {
+    const value = event.target.value;
+    if (typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)) {
+      setSelectedColor(value.toUpperCase());
+    }
+  }, []);
+
+  const handleRandomizeColor = useCallback(() => {
+    const random = `#${Math.floor(Math.random() * 0xffffff)
+      .toString(16)
+      .padStart(6, "0")
+      .toUpperCase()}`;
+    setInputMode("color");
+    setSelectedColor(random);
+  }, []);
+
+  const handleSeedClick = useCallback((hex) => {
+    if (!hex) {
+      return;
+    }
+    setInputMode("color");
+    setSelectedColor(hex.toUpperCase());
+  }, []);
 
   const handleCopy = useCallback(async (value) => {
     const fallbackCopy = (text) => {
@@ -2064,29 +2345,6 @@ export default function Home() {
     ? "Analyse terminée"
     : "Analyse prête";
 
-  const getRingPosition = useCallback((index, total) => {
-    if (total <= 1) {
-      return { left: "50%", top: "50%" };
-    }
-
-    if (index === 0) {
-      return { left: "50%", top: "50%" };
-    }
-
-    const orbitCount = total - 1;
-    const radius =
-      orbitCount <= 2 ? 20 : orbitCount === 3 ? 24 : orbitCount === 4 ? 27 : 30;
-    const angle = ((index - 1) / orbitCount) * 360 - 90;
-    const radians = (angle * Math.PI) / 180;
-    const x = 50 + radius * Math.cos(radians);
-    const y = 50 + radius * Math.sin(radians);
-
-    return {
-      left: `${x}%`,
-      top: `${y}%`,
-    };
-  }, []);
-
   const getTextColor = useCallback((color) => {
     const luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
     return luminance > 155 ? "rgba(15, 23, 42, 0.9)" : "#f8fafc";
@@ -2127,44 +2385,123 @@ export default function Home() {
         </header>
 
         <section className="workspace">
-          <div
-            className={`dropzone${isDragging ? " dropzone--active" : ""}${imageSrc ? " dropzone--filled" : ""}`}
-            onDrop={onDrop}
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
-            role="button"
-            tabIndex={0}
-            onClick={onBrowseClick}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onBrowseClick();
-              }
-            }}
-          >
-            {imageSrc ? (
-              <img src={imageSrc} alt="Aperçu de la référence importée" className="dropzone__preview" />
+          <div className="reference">
+            <div className="reference__header">
+              <div className="reference__title">
+                <h2>Référence créative</h2>
+                <p>Importe un visuel ou compose un look à partir d&apos;une simple couleur.</p>
+              </div>
+              <div className="input-switch" role="radiogroup" aria-label="Mode d'analyse">
+                <span
+                  className="input-switch__thumb"
+                  style={{ transform: inputMode === "image" ? "translateX(0%)" : "translateX(100%)" }}
+                  aria-hidden="true"
+                />
+                <button
+                  type="button"
+                  className={`input-switch__option${isImageMode ? " is-active" : ""}`}
+                  onClick={() => setInputMode("image")}
+                  role="radio"
+                  aria-checked={isImageMode}
+                >
+                  Image
+                </button>
+                <button
+                  type="button"
+                  className={`input-switch__option${!isImageMode ? " is-active" : ""}`}
+                  onClick={() => setInputMode("color")}
+                  role="radio"
+                  aria-checked={!isImageMode}
+                >
+                  Couleur
+                </button>
+              </div>
+            </div>
+            {isImageMode ? (
+              <div
+                className={`dropzone${isDragging ? " dropzone--active" : ""}${imageSrc ? " dropzone--filled" : ""}`}
+                onDrop={onDrop}
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeave}
+                role="button"
+                tabIndex={0}
+                onClick={onBrowseClick}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onBrowseClick();
+                  }
+                }}
+              >
+                {imageSrc ? (
+                  <img src={imageSrc} alt="Aperçu de la référence importée" className="dropzone__preview" />
+                ) : (
+                  <div className="dropzone__placeholder">
+                    <strong>Glisse ton visuel ici</strong>
+                    <span>… ou colle-le directement depuis ton presse-papiers</span>
+                    <em>Formats acceptés : PNG, JPG, WebP, GIF statique</em>
+                  </div>
+                )}
+                <input
+                  ref={inputRef}
+                  className="dropzone__input"
+                  type="file"
+                  accept="image/*"
+                  onChange={onFileInputChange}
+                />
+                <div className="dropzone__hint">Cliquer ouvre l&apos;explorateur de fichiers</div>
+              </div>
             ) : (
-              <div className="dropzone__placeholder">
-                <strong>Glisse ton visuel ici</strong>
-                <span>… ou colle-le directement depuis ton presse-papiers</span>
-                <em>Formats acceptés : PNG, JPG, WebP, GIF statique</em>
+              <div className="color-picker">
+                <div
+                  className="color-picker__preview"
+                  style={{ backgroundImage: buildGradientFromHex(selectedColor) }}
+                >
+                  <span className="color-picker__preview-value">{selectedColor}</span>
+                </div>
+                <div className="color-picker__controls">
+                  <label className="color-picker__label" htmlFor="seed-color">
+                    Choisis ta teinte de départ
+                  </label>
+                  <div className="color-picker__inputs">
+                    <input
+                      id="seed-color"
+                      className="color-picker__input"
+                      type="color"
+                      value={selectedColor}
+                      onChange={handleColorInput}
+                    />
+                    <button type="button" className="color-picker__random" onClick={handleRandomizeColor}>
+                      Nuance surprise
+                    </button>
+                  </div>
+                  <div className="color-picker__swatch-tray" role="list" aria-label="Suggestions de couleurs">
+                    {CURATED_COLOR_SWATCHES.map((hex) => {
+                      const isActive = selectedColor === hex.toUpperCase();
+                      return (
+                        <button
+                          key={hex}
+                          type="button"
+                          className={`color-picker__swatch${isActive ? " is-active" : ""}`}
+                          style={{ backgroundImage: buildGradientFromHex(hex) }}
+                          onClick={() => handleSeedClick(hex)}
+                          aria-pressed={isActive}
+                        >
+                          <span className="sr-only">Utiliser la couleur {hex}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             )}
-            <input
-              ref={inputRef}
-              className="dropzone__input"
-              type="file"
-              accept="image/*"
-              onChange={onFileInputChange}
-            />
-            <div className="dropzone__hint">Cliquer ouvre l'explorateur de fichiers</div>
           </div>
 
           <div className="palette">
             <div className="palette__header">
               <div className="palette__title">
                 <h2>Palette extraite</h2>
+                <p>Cliquer sur une teinte la copie instantanément.</p>
               </div>
               <div className="palette__actions">
                 {isProcessing ? <span className="badge badge--pulse">Analyse en cours…</span> : null}
@@ -2193,27 +2530,21 @@ export default function Home() {
             </div>
             {error ? <p className="palette__error">{error}</p> : null}
             {colors.length > 0 ? (
-              <ul className="palette__ring">
+              <ul className="palette__list">
                 {colors.map((color, index) => {
                   const value = codeFormat === "hex" ? color.hex : color.rgb;
-                  const position = getRingPosition(index, colors.length);
-                  const textColor = getTextColor(color);
                   const isCopied = copiedCode === value;
-
+                  const textColor = getTextColor(color);
                   return (
-                    <li
-                      key={`${color.hex}-${index}`}
-                      className="palette__ring-item"
-                      style={position}
-                    >
+                    <li key={`${color.hex}-${index}`} className="palette__item">
                       <button
                         type="button"
-                        className={`swatch-hex${isCopied ? " is-copied" : ""}`}
+                        className={`palette__chip${isCopied ? " is-copied" : ""}`}
                         onClick={() => handleCopy(value)}
-                        style={{ backgroundColor: color.hex, color: textColor }}
-                        title="Cliquer pour copier"
+                        style={{ backgroundImage: buildGradientFromHex(color.hex), color: textColor }}
                       >
-                        <span className="swatch-hex__value">{value}</span>
+                        <span className="palette__chip-index">#{String(index + 1).padStart(2, "0")}</span>
+                        <span className="palette__chip-value">{value}</span>
                       </button>
                     </li>
                   );
@@ -2222,8 +2553,8 @@ export default function Home() {
             ) : (
               <div className="palette__empty">
                 <p>
-                  Dépose une image pour révéler automatiquement ses teintes dominantes. Les codes Hex et RGB
-                  sont prêts à être copiés.
+                  Glisse un visuel ou sélectionne une couleur d&apos;ambiance : KrosPalette s&apos;occupe de générer
+                  automatiquement une palette harmonieuse.
                 </p>
               </div>
             )}
@@ -2234,6 +2565,7 @@ export default function Home() {
           <div className="suggestions__header">
             <div className="suggestions__intro">
               <h2>Correspondances Dofus</h2>
+              <p>Trois propositions stylisées pour explorer ta palette directement dans le jeu.</p>
             </div>
             {barbofusLink ? (
               <a
@@ -2251,7 +2583,9 @@ export default function Home() {
           </div>
           {colors.length === 0 ? (
             <div className="suggestions__empty">
-              <p>Importe d&apos;abord une image pour générer des propositions personnalisées.</p>
+              <p>
+                Importe un visuel ou choisis une couleur pour générer automatiquement des skins assortis.
+              </p>
             </div>
           ) : !hasCatalogData && itemsLoading ? (
             <div className="suggestions__status suggestions__status--loading">
@@ -2274,6 +2608,138 @@ export default function Home() {
                 <p className="suggestions__status suggestions__status--loading suggestions__status--inline">
                   Mise à jour des suggestions…
                 </p>
+              ) : null}
+              {proposals.length ? (
+                <div className="skin-carousel" aria-live="polite">
+                  <div className="skin-carousel__controls">
+                    <button
+                      type="button"
+                      className="skin-carousel__nav"
+                      onClick={handlePrevProposal}
+                      disabled={proposalCount <= 1}
+                      aria-label="Proposition précédente"
+                    >
+                      ←
+                    </button>
+                    <span className="skin-carousel__legend">
+                      Proposition {activeProposal + 1} sur {proposalCount}
+                    </span>
+                    <button
+                      type="button"
+                      className="skin-carousel__nav"
+                      onClick={handleNextProposal}
+                      disabled={proposalCount <= 1}
+                      aria-label="Proposition suivante"
+                    >
+                      →
+                    </button>
+                  </div>
+                  <div className="skin-carousel__viewport">
+                    <div
+                      className="skin-carousel__track"
+                      style={{ transform: `translateX(-${activeProposal * 100}%)` }}
+                    >
+                      {proposals.map((proposal) => {
+                        const primaryColor = proposal.palette[0] ?? "#1f2937";
+                        const canvasBackground = buildGradientFromHex(primaryColor);
+                        return (
+                          <article key={proposal.id} className="skin-card">
+                            <header className="skin-card__header">
+                              <span className="skin-card__eyebrow">Proposition {proposal.index + 1}</span>
+                              <h3 className="skin-card__title">Skin chromatique #{proposal.index + 1}</h3>
+                            </header>
+                            <div className="skin-card__body">
+                              <div
+                                className="skin-card__canvas"
+                                style={{ backgroundImage: canvasBackground }}
+                              >
+                                <div className="skin-card__glow" aria-hidden="true" />
+                                {proposal.heroImage ? (
+                                  <img
+                                    src={proposal.heroImage}
+                                    alt={`Aperçu principal de la proposition ${proposal.index + 1}`}
+                                    loading="lazy"
+                                    className="skin-card__hero"
+                                  />
+                                ) : (
+                                  <div className="skin-card__placeholder" aria-hidden="true">
+                                    Aperçu indisponible
+                                  </div>
+                                )}
+                                <ul className="skin-card__equipment" role="list">
+                                  {proposal.items.map((item) => (
+                                    <li key={`${proposal.id}-${item.id}`} className="skin-card__equipment-slot">
+                                      {item.imageUrl ? (
+                                        <img
+                                          src={item.imageUrl}
+                                          alt={`Illustration de ${item.name}`}
+                                          loading="lazy"
+                                        />
+                                      ) : (
+                                        <span>{ITEM_TYPE_LABELS[item.slotType] ?? item.slotType}</span>
+                                      )}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                              <div className="skin-card__details">
+                                <ul className="skin-card__swatches" role="list">
+                                  {proposal.palette.length ? (
+                                    proposal.palette.map((hex) => (
+                                      <li key={`${proposal.id}-${hex}`} className="skin-card__swatch">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCopy(hex)}
+                                          style={{ backgroundImage: buildGradientFromHex(hex) }}
+                                          className="skin-card__swatch-button"
+                                        >
+                                          <span>{hex}</span>
+                                        </button>
+                                      </li>
+                                    ))
+                                  ) : (
+                                    <li className="skin-card__swatch skin-card__swatch--empty">
+                                      Palette indisponible
+                                    </li>
+                                  )}
+                                </ul>
+                                <ul className="skin-card__list" role="list">
+                                  {proposal.items.map((item) => (
+                                    <li key={`${proposal.id}-${item.id}-entry`} className="skin-card__list-item">
+                                      <span className="skin-card__list-type">
+                                        {ITEM_TYPE_LABELS[item.slotType] ?? item.slotType}
+                                      </span>
+                                      <a
+                                        href={item.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="skin-card__list-link"
+                                      >
+                                        {item.name}
+                                      </a>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="skin-carousel__dots" role="tablist" aria-label="Choisir une proposition">
+                    {proposals.map((proposal, index) => (
+                      <button
+                        key={`${proposal.id}-dot`}
+                        type="button"
+                        className={`skin-carousel__dot${index === activeProposal ? " is-active" : ""}`}
+                        onClick={() => handleSelectProposal(index)}
+                        aria-label={`Afficher la proposition ${index + 1}`}
+                        aria-pressed={index === activeProposal}
+                      />
+                    ))}
+                  </div>
+                </div>
               ) : null}
               <div className="suggestions__grid">
                 {ITEM_TYPES.map((type) => {
