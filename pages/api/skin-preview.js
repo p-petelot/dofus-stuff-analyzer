@@ -20,6 +20,7 @@ function decodePotentialUrl(raw, baseUrl) {
     .replace(/&#39;/g, "'")
     .replace(/&#x2f;/gi, "/")
     .replace(/&#47;/g, "/")
+    .replace(/\\x2f/gi, "/")
     .replace(/%5[Cc]\//g, "/")
     .replace(/\\\//g, "/")
     .replace(/\\u002f/gi, "/")
@@ -58,8 +59,10 @@ function extractMetaContent(html, attribute, value) {
 
 const CANVAS_OBJECT_DATA_PATTERN =
   /<object[^>]+id=["']canvas0["'][^>]*data=["']([^"']+)["'][^>]*>/gi;
+const CANVAS_IMAGE_TAG_PATTERN =
+  /<img[^>]+id=["']canvas0["'][^>]*(?:data-[^=\s"']+|src)=["']([^"']+)["'][^>]*>/gi;
 const CANVAS_DATA_ATTRIBUTE_PATTERN =
-  /<canvas[^>]+id=["']canvas0["'][^>]*(data-(?:src|source|image|preview)|src)=["']([^"']+)["'][^>]*>/gi;
+  /<canvas[^>]+id=["']canvas0["'][^>]*(data-(?:src|source|image|preview|asset)|src)=["']([^"']+)["'][^>]*>/gi;
 const CANVAS_JSON_OBJECT_PATTERN =
   /["']canvas0["']\s*:\s*\{[^{}]*?(?:["'](src|source|image|url|href)["']\s*:\s*["']([^"']+)["'])[^{}]*\}/gi;
 const CANVAS_JSON_STRING_PATTERN = /["']canvas0["']\s*:\s*["']([^"']+)["']/gi;
@@ -154,6 +157,7 @@ function extractCanvasPreviewUrl(html, baseUrl) {
 
   const directPatterns = [
     { pattern: CANVAS_OBJECT_DATA_PATTERN, source: "object:data" },
+    { pattern: CANVAS_IMAGE_TAG_PATTERN, source: "img:attr" },
     { pattern: CANVAS_DATA_ATTRIBUTE_PATTERN, source: "canvas:attr" },
     { pattern: CANVAS_JSON_OBJECT_PATTERN, source: "json:object" },
     { pattern: CANVAS_JSON_STRING_PATTERN, source: "json:string" },
@@ -323,9 +327,42 @@ export default async function handler(req, res) {
       previewSource,
     });
 
+    if (/^data:image\//i.test(previewUrl)) {
+      const [meta, dataPart] = previewUrl.split(",", 2);
+      if (!dataPart) {
+        res.status(415).json({ error: "Invalid data URL" });
+        return;
+      }
+
+      const isBase64 = /;base64/i.test(meta);
+      const mimeMatch = meta.match(/^data:([^;,]+)/i);
+      const contentType = mimeMatch ? mimeMatch[1] : "image/png";
+      const buffer = isBase64
+        ? Buffer.from(dataPart, "base64")
+        : Buffer.from(decodeURIComponent(dataPart));
+
+      console.log("[skin-preview] streaming inline preview response", {
+        previewSource,
+        contentType,
+        contentLength: buffer.length,
+      });
+
+      res.setHeader("Content-Type", contentType);
+      res.setHeader(
+        "Cache-Control",
+        "public, max-age=0, s-maxage=86400, stale-while-revalidate=86400"
+      );
+      res.setHeader("Content-Length", buffer.length.toString());
+      res.status(200).send(buffer);
+      return;
+    }
+
     const imageResponse = await fetch(previewUrl, {
       headers: {
         Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        Referer: target,
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
       },
       cache: "no-store",
     });
