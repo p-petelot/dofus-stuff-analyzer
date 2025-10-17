@@ -1,5 +1,36 @@
 const BARBOFUS_RENDER_BASE_URL = "https://barbofus.com/skinator";
 
+function decodePotentialUrl(raw, baseUrl) {
+  if (!raw || typeof raw !== "string") {
+    return null;
+  }
+
+  let candidate = raw.trim();
+  if (!candidate) {
+    return null;
+  }
+
+  candidate = candidate
+    .replace(/^['"`]+/, "")
+    .replace(/['"`,]+$/, "")
+    .replace(/&amp;/gi, "&")
+    .replace(/&#x2f;/gi, "/")
+    .replace(/&#47;/g, "/")
+    .replace(/\\\//g, "/")
+    .replace(/\\u0026/gi, "&");
+
+  if (/^data:/i.test(candidate)) {
+    return candidate;
+  }
+
+  try {
+    const resolved = baseUrl ? new URL(candidate, baseUrl).toString() : candidate;
+    return resolved;
+  } catch (error) {
+    return null;
+  }
+}
+
 function extractMetaContent(html, attribute, value) {
   if (!html) {
     return null;
@@ -17,6 +48,53 @@ function extractMetaContent(html, attribute, value) {
   const tag = match[0];
   const contentMatch = tag.match(/content=["']([^"']+)["']/i);
   return contentMatch ? contentMatch[1].trim() : null;
+}
+
+const CANVAS_OBJECT_DATA_PATTERN =
+  /<object[^>]+id=["']canvas0["'][^>]*data=["']([^"']+)["'][^>]*>/i;
+const CANVAS_DATA_ATTRIBUTE_PATTERN =
+  /<canvas[^>]+id=["']canvas0["'][^>]*(data-(?:src|source|image|preview)|src)=["']([^"']+)["'][^>]*>/i;
+const CANVAS_JSON_OBJECT_PATTERN =
+  /"canvas0"\s*:\s*\{[^{}]*?(?:"(src|source|image|url|href)"\s*:\s*"([^"]+)")[^{}]*\}/i;
+const CANVAS_JSON_STRING_PATTERN = /"canvas0"\s*:\s*"([^"]+)"/i;
+const CANVAS_CONTEXT_URL_PATTERN =
+  /canvas0[^<>{}\[\]]*?(https?:\\\/\\\/[^"'\s<>]+|https?:\/\/[^"'\s<>]+)/i;
+
+function extractCanvasPreviewUrl(html, baseUrl) {
+  if (!html) {
+    return null;
+  }
+
+  const patterns = [
+    CANVAS_OBJECT_DATA_PATTERN,
+    CANVAS_DATA_ATTRIBUTE_PATTERN,
+    CANVAS_JSON_OBJECT_PATTERN,
+    CANVAS_JSON_STRING_PATTERN,
+  ];
+
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (!match) {
+      continue;
+    }
+
+    const raw = match[2] ?? match[1] ?? null;
+    const decoded = decodePotentialUrl(raw, baseUrl);
+    if (decoded) {
+      return decoded;
+    }
+  }
+
+  const contextMatch = html.match(CANVAS_CONTEXT_URL_PATTERN);
+  if (contextMatch) {
+    const raw = contextMatch[1];
+    const decoded = decodePotentialUrl(raw, baseUrl);
+    if (decoded) {
+      return decoded;
+    }
+  }
+
+  return null;
 }
 
 export default async function handler(req, res) {
@@ -56,17 +134,20 @@ export default async function handler(req, res) {
     }
 
     const html = await pageResponse.text();
-    const ogImage =
-      extractMetaContent(html, "property", "og:image") ??
-      extractMetaContent(html, "name", "twitter:image") ??
-      null;
+    const previewUrl =
+      extractCanvasPreviewUrl(html, target) ??
+      (() => {
+        const ogImage =
+          extractMetaContent(html, "property", "og:image") ??
+          extractMetaContent(html, "name", "twitter:image") ??
+          null;
+        return ogImage ? decodePotentialUrl(ogImage, target) : null;
+      })();
 
-    if (!ogImage) {
+    if (!previewUrl) {
       res.status(404).json({ error: "Preview image not found" });
       return;
     }
-
-    const previewUrl = new URL(ogImage, target).toString();
 
     const imageResponse = await fetch(previewUrl, {
       headers: {
