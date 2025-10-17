@@ -1118,6 +1118,37 @@ a {
   opacity: 0.6;
 }
 
+.skin-card__loader {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  z-index: 2;
+  background: rgba(5, 8, 22, 0.35);
+  backdrop-filter: blur(1.5px);
+}
+
+.skin-card__spinner {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 3px solid rgba(248, 250, 252, 0.24);
+  border-top-color: rgba(139, 92, 246, 0.92);
+  animation: skin-card-spin 0.9s linear infinite;
+  box-shadow: 0 0 18px rgba(139, 92, 246, 0.35);
+}
+
+@keyframes skin-card-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
 .skin-card__preview,
 .skin-card__hero {
   position: relative;
