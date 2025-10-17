@@ -1,4 +1,4 @@
-const BARBOFUS_RENDER_BASE_URL = "https://barbofus.com/skinator/render";
+const BARBOFUS_RENDER_BASE_URL = "https://barbofus.com/skinator";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
