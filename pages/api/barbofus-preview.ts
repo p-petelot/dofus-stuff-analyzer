@@ -55,25 +55,39 @@ async function captureCanvasFromUrl(url: string): Promise<CanvasPayload> {
       { timeout: PAGE_TIMEOUT }
     );
 
-    const result = await page.evaluate<CanvasPayload>(() => {
+    const canvasLocator = page.locator("canvas");
+    await canvasLocator.waitFor({ state: "visible", timeout: PAGE_TIMEOUT });
+
+    const metadata = await page.evaluate<
+      | {
+          width: number;
+          height: number;
+        }
+      | null
+    >(() => {
       const canvas = document.querySelector<HTMLCanvasElement>("canvas");
-      if (!canvas) {
+      if (!canvas || canvas.width <= 0 || canvas.height <= 0) {
         return null;
       }
-      try {
-        const dataUrl = canvas.toDataURL("image/png");
-        return {
-          dataUrl,
-          width: canvas.width,
-          height: canvas.height,
-        };
-      } catch (error) {
-        console.error("Unable to read canvas", error);
-        return null;
-      }
+
+      return {
+        width: canvas.width,
+        height: canvas.height,
+      };
     });
 
-    return result;
+    if (!metadata) {
+      return null;
+    }
+
+    const screenshot = await canvasLocator.screenshot({ type: "png" });
+    const dataUrl = `data:image/png;base64,${screenshot.toString("base64")}`;
+
+    return {
+      dataUrl,
+      width: metadata.width,
+      height: metadata.height,
+    };
   } finally {
     await context.close();
   }
