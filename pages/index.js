@@ -4,6 +4,7 @@ import Head from "next/head";
 const ITEM_TYPES = ["coiffe", "cape", "bouclier", "familier"];
 const DOFUS_API_HOST = "https://api.dofusdb.fr";
 const DOFUS_API_BASE_URL = `${DOFUS_API_HOST}/items`;
+const DOFUS_BREEDS_API_URL = `${DOFUS_API_HOST}/breeds?$skip=0&$limit=20&lang=fr`;
 const DEFAULT_LIMIT = 1200;
 const DEFAULT_DOFUS_QUERY_PARAMS = {
   "typeId[$ne]": "203",
@@ -210,6 +211,166 @@ function ensureAbsoluteUrl(path) {
   return `${DOFUS_API_HOST}/${trimmed}`;
 }
 
+function extractLookIdFromLookString(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const directMatch = value.match(/\|\|(-?\d+)/);
+  if (directMatch) {
+    const parsed = Number(directMatch[1]);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  const numericMatches = value.match(/-?\d+/g);
+  if (numericMatches && numericMatches.length) {
+    const last = Number(numericMatches[numericMatches.length - 1]);
+    if (Number.isFinite(last)) {
+      return last;
+    }
+  }
+  return null;
+}
+
+function extractLookIdFromUrl(url) {
+  if (typeof url !== "string") {
+    return null;
+  }
+  const match = url.match(/(\d+)(?=\.[a-z]+$)/i);
+  if (match) {
+    const parsed = Number(match[1]);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+function normalizeBreedColors(input) {
+  if (!Array.isArray(input)) {
+    return { numeric: [], hex: [] };
+  }
+
+  const numeric = [];
+  const hex = [];
+  const seen = new Set();
+
+  input.forEach((entry) => {
+    let value = null;
+    if (typeof entry === "number" && Number.isFinite(entry)) {
+      value = Math.max(0, Math.floor(entry));
+    } else if (typeof entry === "string") {
+      const trimmed = entry.trim();
+      if (!trimmed) {
+        return;
+      }
+      if (/^-?\d+$/.test(trimmed)) {
+        const parsed = Number(trimmed);
+        if (Number.isFinite(parsed)) {
+          value = parsed;
+        }
+      } else {
+        const normalizedHex = normalizeColorToHex(trimmed);
+        if (normalizedHex) {
+          const parsed = parseInt(normalizedHex.replace(/#/g, ""), 16);
+          if (Number.isFinite(parsed)) {
+            value = parsed;
+          }
+        }
+      }
+    }
+
+    if (value === null || !Number.isFinite(value) || seen.has(value)) {
+      return;
+    }
+
+    seen.add(value);
+    numeric.push(value);
+    const normalizedHex = normalizeColorToHex(value);
+    if (normalizedHex) {
+      hex.push(normalizedHex);
+    }
+  });
+
+  return { numeric, hex };
+}
+
+function normalizeBreedEntry(entry) {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+
+  const id = Number(entry.id);
+  if (!Number.isFinite(id)) {
+    return null;
+  }
+
+  const name = normalizeTextContent(entry.shortName) || `Classe ${id}`;
+  const slug = slugify(name) || `breed-${id}`;
+  const icon = ensureAbsoluteUrl(entry.img);
+  const maleLookId = extractLookIdFromLookString(entry.maleLook) ?? extractLookIdFromUrl(entry?.heads?.male);
+  const femaleLookId =
+    extractLookIdFromLookString(entry.femaleLook) ?? extractLookIdFromUrl(entry?.heads?.female);
+  const maleColors = normalizeBreedColors(entry.maleColors);
+  const femaleColors = normalizeBreedColors(entry.femaleColors);
+
+  return {
+    id,
+    name,
+    slug,
+    icon,
+    sortIndex: Number.isFinite(entry.sortIndex) ? entry.sortIndex : id,
+    male: {
+      lookId: Number.isFinite(maleLookId) ? maleLookId : null,
+      colors: maleColors,
+    },
+    female: {
+      lookId: Number.isFinite(femaleLookId) ? femaleLookId : null,
+      colors: femaleColors,
+    },
+  };
+}
+
+function extractBreedEntries(entries) {
+  if (Array.isArray(entries)) {
+    return entries;
+  }
+
+  if (entries && typeof entries === "object") {
+    const candidateKeys = ["data", "value", "values", "results", "items", "breeds"];
+    for (const key of candidateKeys) {
+      if (Array.isArray(entries[key])) {
+        return entries[key];
+      }
+    }
+
+    if (entries.data && typeof entries.data === "object") {
+      const nested = extractBreedEntries(entries.data);
+      if (nested.length) {
+        return nested;
+      }
+    }
+  }
+
+  return [];
+}
+
+function normalizeBreedsDataset(entries) {
+  const dataset = extractBreedEntries(entries);
+  if (!dataset.length) {
+    return [];
+  }
+
+  return dataset
+    .map((entry) => normalizeBreedEntry(entry))
+    .filter(Boolean)
+    .sort((a, b) => {
+      const aIndex = Number.isFinite(a.sortIndex) ? a.sortIndex : a.id;
+      const bIndex = Number.isFinite(b.sortIndex) ? b.sortIndex : b.id;
+      return aIndex - bIndex;
+    });
+}
+
 function flattenImageReference(reference) {
   if (!reference) return null;
   if (typeof reference === "string") {
@@ -371,13 +532,15 @@ const SHAPE_STRONG_THRESHOLD = 0.18;
 const TONE_CONFIDENCE_DISTANCE = 0.72;
 const TONE_CONFIDENCE_WEIGHT = 0.18;
 const MIN_ALPHA_WEIGHT = 0.05;
-const MAX_RECOMMENDATIONS = 1;
+const MAX_RECOMMENDATIONS = 3;
+const PROPOSAL_COUNT = 3;
 const HASH_CONFIDENCE_DISTANCE = 0.32;
 const HASH_CONFIDENCE_WEIGHT = 0.18;
 const HASH_STRONG_THRESHOLD = 0.12;
 const EDGE_CONFIDENCE_DISTANCE = 0.26;
 const EDGE_CONFIDENCE_WEIGHT = 0.12;
 const EDGE_STRONG_THRESHOLD = 0.1;
+const CURATED_COLOR_SWATCHES = ["#8B5CF6", "#F97316", "#10B981", "#38BDF8", "#F43F5E", "#FACC15"];
 
 const ITEM_TYPE_LABELS = {
   coiffe: "Coiffe",
@@ -387,17 +550,33 @@ const ITEM_TYPE_LABELS = {
 };
 
 const BARBOFUS_BASE_URL = "https://barbofus.com/skinator";
-const BARBOFUS_CLASS_IDS = {
-  feca: 1,
-  osamodas: 2,
-  enutrof: 3,
-  eniripsa: 7,
-};
 const BARBOFUS_DEFAULTS = {
   gender: 1,
-  classId: BARBOFUS_CLASS_IDS.eniripsa,
+  classId: 7,
   lookId: 405,
 };
+const BARBOFUS_GENDER_VALUES = {
+  male: 0,
+  female: 1,
+};
+const BARBOFUS_DEFAULT_GENDER_KEY =
+  BARBOFUS_DEFAULTS.gender === BARBOFUS_GENDER_VALUES.male ? "male" : "female";
+const EMPTY_BREED_COLORS = Object.freeze({ numeric: [], hex: [] });
+const BARBOFUS_DEFAULT_BREED = Object.freeze({
+  id: BARBOFUS_DEFAULTS.classId,
+  name: "Eniripsa",
+  slug: "eniripsa",
+  icon: null,
+  sortIndex: BARBOFUS_DEFAULTS.classId,
+  male: {
+    lookId: BARBOFUS_DEFAULTS.lookId,
+    colors: EMPTY_BREED_COLORS,
+  },
+  female: {
+    lookId: BARBOFUS_DEFAULTS.lookId,
+    colors: EMPTY_BREED_COLORS,
+  },
+});
 const BARBOFUS_EQUIPMENT_SLOTS = ["6", "7", "8", "9", "10", "11", "12", "13"];
 const BARBOFUS_SLOT_BY_TYPE = {
   coiffe: "6",
@@ -518,6 +697,148 @@ function compressToEncodedURIComponent(input) {
   return _compress(input, 6, getUriSafeCharFromInt);
 }
 
+function hexToNumeric(hex) {
+  const normalized = normalizeColorToHex(hex);
+  if (!normalized) {
+    return null;
+  }
+  const numeric = parseInt(normalized.replace(/#/g, ""), 16);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function buildBarbofusConfiguration(
+  items,
+  paletteHexes,
+  fallbackColorValues = [],
+  options = {}
+) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return { link: null, preview: null };
+  }
+
+  const {
+    useCustomSkinTone = true,
+    classId = BARBOFUS_DEFAULTS.classId,
+    gender = BARBOFUS_DEFAULTS.gender,
+    lookId = BARBOFUS_DEFAULTS.lookId,
+    classDefaults = [],
+  } = options;
+
+  const paletteValues = Array.isArray(paletteHexes)
+    ? paletteHexes
+        .map((hex) => hexToNumeric(hex))
+        .filter((value) => value !== null)
+    : [];
+
+  const defaultColorValues = Array.isArray(classDefaults)
+    ? classDefaults.filter((value) => Number.isFinite(value))
+    : [];
+
+  const fallbackValues = Array.isArray(fallbackColorValues)
+    ? fallbackColorValues.filter((value) => Number.isFinite(value))
+    : [];
+
+  const overlayValues = paletteValues.length ? paletteValues : fallbackValues;
+  const initialColors = new Array(MAX_ITEM_PALETTE_COLORS).fill(null);
+
+  if (!useCustomSkinTone && defaultColorValues.length) {
+    defaultColorValues.forEach((value, index) => {
+      if (index >= MAX_ITEM_PALETTE_COLORS || !Number.isFinite(value)) {
+        return;
+      }
+      initialColors[index] = value;
+    });
+  }
+
+  const startIndex = !useCustomSkinTone && defaultColorValues.length ? 1 : 0;
+
+  overlayValues.forEach((value) => {
+    if (!Number.isFinite(value)) {
+      return;
+    }
+    if (initialColors.includes(value)) {
+      return;
+    }
+    const targetIndex = initialColors.findIndex((entry, index) => entry === null && index >= startIndex);
+    if (targetIndex !== -1) {
+      initialColors[targetIndex] = value;
+    }
+  });
+
+  if (initialColors.every((value) => value === null) && defaultColorValues.length) {
+    defaultColorValues.forEach((value, index) => {
+      if (index < MAX_ITEM_PALETTE_COLORS && Number.isFinite(value)) {
+        initialColors[index] = value;
+      }
+    });
+  }
+
+  if (useCustomSkinTone && !defaultColorValues.length && !overlayValues.length) {
+    return { link: null, preview: null };
+  }
+
+  const resolvedColors = initialColors.filter((value) => Number.isFinite(value));
+
+  if (!resolvedColors.length && !useCustomSkinTone) {
+    const defaultSkin = defaultColorValues.length ? defaultColorValues[0] : null;
+    if (defaultSkin !== null) {
+      resolvedColors.push(defaultSkin);
+    }
+  }
+
+  if (!resolvedColors.length) {
+    return { link: null, preview: null };
+  }
+
+  const equipment = BARBOFUS_EQUIPMENT_SLOTS.reduce((accumulator, slot) => {
+    accumulator[slot] = null;
+    return accumulator;
+  }, {});
+
+  let hasEquipment = false;
+
+  items.forEach((item) => {
+    if (!item) {
+      return;
+    }
+    const slot = BARBOFUS_SLOT_BY_TYPE[item.slotType];
+    if (!slot || !item.ankamaId) {
+      return;
+    }
+    equipment[slot] = item.ankamaId;
+    hasEquipment = true;
+  });
+
+  if (!hasEquipment) {
+    return { link: null, preview: null };
+  }
+
+  const payload = {
+    1: Number.isFinite(gender) ? gender : BARBOFUS_DEFAULTS.gender,
+    2: Number.isFinite(classId) ? classId : BARBOFUS_DEFAULTS.classId,
+    4: resolvedColors,
+    5: equipment,
+  };
+
+  const resolvedLookId = Number.isFinite(lookId) ? lookId : null;
+  if (resolvedLookId !== null) {
+    payload[3] = resolvedLookId;
+  }
+
+  try {
+    const encoded = compressToEncodedURIComponent(JSON.stringify(payload));
+    if (!encoded) {
+      return { link: null, preview: null };
+    }
+    const link = `${BARBOFUS_BASE_URL}?s=${encoded}`;
+    const preview = `${BARBOFUS_BASE_URL}/render?s=${encoded}`;
+    return { link, preview };
+  } catch (err) {
+    console.error(err);
+    return { link: null, preview: null };
+  }
+}
+
 function componentToHex(value) {
   const hex = value.toString(16).padStart(2, "0");
   return hex.toUpperCase();
@@ -525,6 +846,113 @@ function componentToHex(value) {
 
 function rgbToHex(r, g, b) {
   return `#${componentToHex(r)}${componentToHex(g)}${componentToHex(b)}`;
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function hslToRgb(h, s, l) {
+  const normalizedHue = ((h % 360) + 360) % 360;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((normalizedHue / 60) % 2) - 1));
+  const m = l - c / 2;
+
+  let rr = 0;
+  let gg = 0;
+  let bb = 0;
+
+  if (normalizedHue < 60) {
+    rr = c;
+    gg = x;
+  } else if (normalizedHue < 120) {
+    rr = x;
+    gg = c;
+  } else if (normalizedHue < 180) {
+    gg = c;
+    bb = x;
+  } else if (normalizedHue < 240) {
+    gg = x;
+    bb = c;
+  } else if (normalizedHue < 300) {
+    rr = x;
+    bb = c;
+  } else {
+    rr = c;
+    bb = x;
+  }
+
+  const r = Math.round(clamp((rr + m) * 255, 0, 255));
+  const g = Math.round(clamp((gg + m) * 255, 0, 255));
+  const b = Math.round(clamp((bb + m) * 255, 0, 255));
+
+  return { r, g, b };
+}
+
+function adjustHsl(base, deltaH = 0, deltaS = 0, deltaL = 0) {
+  return {
+    h: (base.h + deltaH + 360) % 360,
+    s: clamp(base.s + deltaS, 0, 1),
+    l: clamp(base.l + deltaL, 0.04, 0.96),
+  };
+}
+
+function generatePaletteFromSeed(seedHex) {
+  const baseRgb = hexToRgb(seedHex);
+  if (!baseRgb) {
+    return [];
+  }
+
+  const baseHsl = rgbToHsl(baseRgb.r, baseRgb.g, baseRgb.b);
+  const variations = [
+    adjustHsl(baseHsl, -16, -0.12, -0.24),
+    adjustHsl(baseHsl, -6, -0.06, -0.12),
+    adjustHsl(baseHsl, 0, 0.02, 0),
+    adjustHsl(baseHsl, 10, 0.06, 0.08),
+    adjustHsl(baseHsl, 18, 0.08, 0.16),
+    adjustHsl(baseHsl, 32, 0.1, 0.2),
+  ];
+
+  const seen = new Set();
+
+  return variations
+    .map((entry, index) => {
+      const { r, g, b } = hslToRgb(entry.h, entry.s, entry.l);
+      const hex = rgbToHex(r, g, b);
+      return {
+        hex,
+        rgb: `rgb(${r}, ${g}, ${b})`,
+        r,
+        g,
+        b,
+        weight: index === 2 ? 1.4 : 1,
+      };
+    })
+    .filter((entry) => {
+      if (seen.has(entry.hex)) {
+        return false;
+      }
+      seen.add(entry.hex);
+      return true;
+    })
+    .slice(0, MAX_COLORS);
+}
+
+function adjustHexLightness(hex, deltaL, deltaS = 0) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) {
+    return hex;
+  }
+  const base = rgbToHsl(rgb.r, rgb.g, rgb.b);
+  const adjusted = adjustHsl(base, 0, deltaS, deltaL);
+  const { r, g, b } = hslToRgb(adjusted.h, adjusted.s, adjusted.l);
+  return rgbToHex(r, g, b);
+}
+
+function buildGradientFromHex(hex) {
+  const darker = adjustHexLightness(hex, -0.2, -0.08);
+  const lighter = adjustHexLightness(hex, 0.18, -0.12);
+  return `linear-gradient(135deg, ${darker}, ${hex}, ${lighter})`;
 }
 
 function getImageDimensions(image) {
@@ -1553,7 +1981,7 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
   return enriched;
 }
 
-export default function Home() {
+export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   const [imageSrc, setImageSrc] = useState(null);
   const [colors, setColors] = useState([]);
   const [imageSignature, setImageSignature] = useState(null);
@@ -1571,7 +1999,34 @@ export default function Home() {
   const [itemsLoading, setItemsLoading] = useState(false);
   const [itemsError, setItemsError] = useState(null);
   const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [inputMode, setInputMode] = useState("image");
+  const [selectedColor, setSelectedColor] = useState("#8B5CF6");
+  const [activeProposal, setActiveProposal] = useState(0);
+  const [previewErrors, setPreviewErrors] = useState({});
+  const [useCustomSkinTone, setUseCustomSkinTone] = useState(false);
+  const [showDetailedMatches, setShowDetailedMatches] = useState(false);
+  const [breeds, setBreeds] = useState(() =>
+    Array.isArray(initialBreeds) && initialBreeds.length
+      ? initialBreeds
+      : [BARBOFUS_DEFAULT_BREED]
+  );
+  const [breedsLoading, setBreedsLoading] = useState(false);
+  const [breedsError, setBreedsError] = useState(null);
+  const [selectedBreedId, setSelectedBreedId] = useState(() => {
+    if (Array.isArray(initialBreeds) && initialBreeds.length) {
+      const fallbackEntry =
+        initialBreeds.find((entry) => entry.id === BARBOFUS_DEFAULTS.classId) ?? initialBreeds[0];
+      if (fallbackEntry && Number.isFinite(fallbackEntry.id)) {
+        return fallbackEntry.id;
+      }
+    }
+    return BARBOFUS_DEFAULTS.classId;
+  });
+  const [selectedGender, setSelectedGender] = useState(BARBOFUS_DEFAULT_GENDER_KEY);
   const progressHandles = useRef({ frame: null, timeout: null, value: 0 });
+  const breedsRequestRef = useRef(null);
+
+  const isImageMode = inputMode === "image";
 
   const hasCatalogData = useMemo(
     () => ITEM_TYPES.some((type) => (itemsCatalog[type] ?? []).length > 0),
@@ -1579,6 +2034,196 @@ export default function Home() {
   );
 
   const colorsCount = colors.length;
+
+  const activeBreed = useMemo(() => {
+    if (!Array.isArray(breeds) || breeds.length === 0) {
+      return BARBOFUS_DEFAULT_BREED;
+    }
+    const found = breeds.find((entry) => entry.id === selectedBreedId);
+    return found ?? breeds[0] ?? BARBOFUS_DEFAULT_BREED;
+  }, [breeds, selectedBreedId]);
+
+  const activeGenderConfig = useMemo(() => {
+    const fallback = selectedGender === "male" ? BARBOFUS_DEFAULT_BREED.male : BARBOFUS_DEFAULT_BREED.female;
+    if (!activeBreed) {
+      return fallback;
+    }
+    return selectedGender === "male" ? activeBreed.male ?? fallback : activeBreed.female ?? fallback;
+  }, [activeBreed, selectedGender]);
+
+  const activeClassDefaults = activeGenderConfig?.colors?.numeric ?? [];
+  const activeClassLookId =
+    typeof activeGenderConfig?.lookId === "number" ? activeGenderConfig.lookId : BARBOFUS_DEFAULTS.lookId;
+  const activeClassId = typeof activeBreed?.id === "number" ? activeBreed.id : BARBOFUS_DEFAULTS.classId;
+  const activeGenderValue = BARBOFUS_GENDER_VALUES[selectedGender] ?? BARBOFUS_DEFAULTS.gender;
+  const activeGenderLabel = selectedGender === "male" ? "Homme" : "Femme";
+
+  const fallbackColorValues = useMemo(() => {
+    if (!colors.length) {
+      return [];
+    }
+    const seen = new Set();
+    const values = [];
+    colors.forEach((entry) => {
+      const numeric = hexToNumeric(entry?.hex);
+      if (numeric === null || seen.has(numeric)) {
+        return;
+      }
+      seen.add(numeric);
+      values.push(numeric);
+    });
+    return values.slice(0, MAX_ITEM_PALETTE_COLORS);
+  }, [colors]);
+
+  const loadBreeds = useCallback(async () => {
+    if (typeof fetch !== "function") {
+      return;
+    }
+
+    if (breedsRequestRef.current && typeof breedsRequestRef.current.abort === "function") {
+      try {
+        breedsRequestRef.current.abort();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    const supportsAbort = typeof AbortController !== "undefined";
+    const controller = supportsAbort ? new AbortController() : null;
+    if (controller) {
+      breedsRequestRef.current = controller;
+    } else {
+      breedsRequestRef.current = null;
+    }
+    setBreedsLoading(true);
+    setBreedsError(null);
+
+    try {
+      const fetchOptions = {
+        headers: { Accept: "application/json" },
+      };
+      if (controller) {
+        fetchOptions.signal = controller.signal;
+      }
+
+      const response = await fetch(DOFUS_BREEDS_API_URL, fetchOptions);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const payload = await response.json();
+
+      if (controller?.signal?.aborted) {
+        return;
+      }
+
+      const normalized = normalizeBreedsDataset(payload);
+      const dataset = normalized.length ? normalized : [BARBOFUS_DEFAULT_BREED];
+
+      setBreeds(dataset);
+      setSelectedBreedId((previous) => {
+        if (previous != null && dataset.some((entry) => entry.id === previous)) {
+          return previous;
+        }
+        const fallbackEntry =
+          dataset.find((entry) => entry.id === BARBOFUS_DEFAULTS.classId) ?? dataset[0] ?? null;
+        return fallbackEntry?.id ?? previous ?? BARBOFUS_DEFAULTS.classId;
+      });
+    } catch (err) {
+      if (controller?.signal?.aborted) {
+        return;
+      }
+      console.error(err);
+      setBreedsError("Impossible de récupérer les classes Dofus.");
+      setBreeds([BARBOFUS_DEFAULT_BREED]);
+      setSelectedBreedId(BARBOFUS_DEFAULT_BREED.id);
+    } finally {
+      if (controller && breedsRequestRef.current === controller) {
+        setBreedsLoading(false);
+        breedsRequestRef.current = null;
+      }
+      if (!controller) {
+        setBreedsLoading(false);
+      }
+    }
+  }, []);
+
+  const handleRetryBreeds = useCallback(() => {
+    loadBreeds();
+  }, [loadBreeds]);
+
+  useEffect(() => {
+    if (!Array.isArray(initialBreeds) || !initialBreeds.length) {
+      return;
+    }
+    setBreeds((previous) => {
+      if (
+        previous.length === initialBreeds.length &&
+        previous.every((entry, index) => entry.id === (initialBreeds[index]?.id ?? null))
+      ) {
+        return previous;
+      }
+      return initialBreeds;
+    });
+    setSelectedBreedId((previous) => {
+      if (initialBreeds.some((entry) => entry.id === previous)) {
+        return previous;
+      }
+      const fallbackEntry =
+        initialBreeds.find((entry) => entry.id === BARBOFUS_DEFAULTS.classId) ?? initialBreeds[0];
+      return fallbackEntry?.id ?? BARBOFUS_DEFAULTS.classId;
+    });
+  }, [initialBreeds]);
+
+  const shouldPreloadBreeds = !Array.isArray(initialBreeds) || initialBreeds.length <= 1;
+
+  useEffect(() => {
+    if (shouldPreloadBreeds) {
+      loadBreeds();
+    }
+    return () => {
+      const controller = breedsRequestRef.current;
+      if (controller && typeof controller.abort === "function") {
+        controller.abort();
+      }
+    };
+  }, [loadBreeds, shouldPreloadBreeds]);
+
+  useEffect(() => {
+    setShowDetailedMatches(false);
+  }, [colors]);
+
+  const applyColorSeed = useCallback(
+    (seedHex) => {
+      const palette = generatePaletteFromSeed(seedHex);
+      setColors(palette);
+      setImageSignature(null);
+      setImageShape(null);
+      setImageTones(
+        palette.length
+          ? computeToneDistributionFromPalette(palette.map((entry) => entry.hex))
+          : null
+      );
+      setImageHash(null);
+      setImageEdges(null);
+      setIsProcessing(false);
+      setAnalysisProgress(0);
+      setCopiedCode(null);
+      setToast(null);
+      setError(null);
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (inputMode !== "color") {
+      return;
+    }
+
+    applyColorSeed(selectedColor);
+    setImageSrc(null);
+  }, [applyColorSeed, inputMode, selectedColor]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1670,68 +2315,155 @@ export default function Home() {
     }, {});
   }, [colors, imageSignature, imageShape, imageTones, imageHash, imageEdges, itemsCatalog]);
 
-  const barbofusLink = useMemo(() => {
-    if (!colors.length || !recommendations) {
-      return null;
+  const proposals = useMemo(() => {
+    if (!recommendations) {
+      return [];
     }
 
-    const colorValues = colors
-      .map((entry) => {
-        if (!entry?.hex) return null;
-        const numeric = parseInt(entry.hex.replace(/#/g, ""), 16);
-        return Number.isFinite(numeric) ? numeric : null;
-      })
-      .filter((value) => value !== null);
+    const maxLength = Math.max(
+      0,
+      ...ITEM_TYPES.map((type) => (recommendations[type]?.length ?? 0))
+    );
 
-    if (!colorValues.length) {
-      return null;
+    const total = Math.min(PROPOSAL_COUNT, maxLength || 0);
+    const combos = [];
+
+    for (let index = 0; index < total; index += 1) {
+      const items = ITEM_TYPES.map((type) => {
+        const pool = recommendations[type] ?? [];
+        const pick = pool[index] ?? pool[0];
+        if (!pick) {
+          return null;
+        }
+        return { ...pick, slotType: type };
+      }).filter(Boolean);
+
+      if (!items.length) {
+        continue;
+      }
+
+      const palette = [];
+      const seen = new Set();
+
+      items.forEach((item) => {
+        item.palette.forEach((hex) => {
+          if (!seen.has(hex)) {
+            palette.push(hex);
+            seen.add(hex);
+          }
+        });
+      });
+
+      const paletteSample = palette.slice(0, MAX_ITEM_PALETTE_COLORS);
+      const { link: barbofusLink, preview: barbofusPreview } = buildBarbofusConfiguration(
+        items,
+        paletteSample,
+        fallbackColorValues,
+        {
+          useCustomSkinTone,
+          classId: activeClassId,
+          gender: activeGenderValue,
+          lookId: activeClassLookId,
+          classDefaults: activeClassDefaults,
+        }
+      );
+
+      combos.push({
+        id: `proposal-${index}`,
+        index,
+        items,
+        palette: paletteSample,
+        heroImage: items.find((item) => item.imageUrl)?.imageUrl ?? null,
+        barbofusLink,
+        barbofusPreview,
+        className: activeBreed?.name ?? null,
+        genderLabel: activeGenderLabel,
+        classIcon: activeBreed?.icon ?? null,
+      });
     }
 
-    const equipment = BARBOFUS_EQUIPMENT_SLOTS.reduce((accumulator, slot) => {
-      accumulator[slot] = null;
-      return accumulator;
-    }, {});
+    return combos;
+  }, [
+    activeBreed,
+    activeClassDefaults,
+    activeClassId,
+    activeClassLookId,
+    activeGenderLabel,
+    activeGenderValue,
+    fallbackColorValues,
+    recommendations,
+    useCustomSkinTone,
+  ]);
 
-    let hasEquipment = false;
+  const proposalCount = proposals.length;
 
-    ITEM_TYPES.forEach((type) => {
-      const slot = BARBOFUS_SLOT_BY_TYPE[type];
-      if (!slot) {
-        return;
-      }
+  useEffect(() => {
+    if (!proposals.length) {
+      setPreviewErrors({});
+      return;
+    }
 
-      const item = recommendations[type]?.find((entry) => entry?.ankamaId);
-      if (!item?.ankamaId) {
-        return;
-      }
-
-      equipment[slot] = item.ankamaId;
-      hasEquipment = true;
+    setPreviewErrors((previous) => {
+      const activeIds = new Set(proposals.map((proposal) => proposal.id));
+      const next = Object.fromEntries(
+        Object.entries(previous).filter(([key]) => activeIds.has(key))
+      );
+      return Object.keys(next).length === Object.keys(previous).length ? previous : next;
     });
+  }, [proposals]);
 
-    if (!hasEquipment) {
-      return null;
-    }
-
-    const payload = {
-      1: BARBOFUS_DEFAULTS.gender,
-      2: BARBOFUS_DEFAULTS.classId,
-      3: BARBOFUS_DEFAULTS.lookId,
-      4: colorValues,
-      5: equipment,
-    };
-
-    try {
-      const encoded = compressToEncodedURIComponent(JSON.stringify(payload));
-      if (!encoded) {
-        return null;
+  useEffect(() => {
+    if (!proposalCount) {
+      if (activeProposal !== 0) {
+        setActiveProposal(0);
       }
-      return `${BARBOFUS_BASE_URL}?s=${encoded}`;
-    } catch (err) {
-      console.error(err);
-      return null;
+      return;
     }
-  }, [colors, recommendations]);
+
+    if (activeProposal >= proposalCount) {
+      setActiveProposal(0);
+    }
+  }, [activeProposal, proposalCount]);
+
+  const handleNextProposal = useCallback(() => {
+    if (!proposalCount) {
+      return;
+    }
+    setActiveProposal((previous) => (previous + 1) % proposalCount);
+  }, [proposalCount]);
+
+  const handlePrevProposal = useCallback(() => {
+    if (!proposalCount) {
+      return;
+    }
+    setActiveProposal((previous) => (previous - 1 + proposalCount) % proposalCount);
+  }, [proposalCount]);
+
+  const handleSelectProposal = useCallback(
+    (index) => {
+      if (!proposalCount) {
+        return;
+      }
+      setActiveProposal(index);
+    },
+    [proposalCount]
+  );
+
+  const handlePreviewFallback = useCallback((id) => {
+    if (!id) {
+      return;
+    }
+    setPreviewErrors((previous) => {
+      if (previous?.[id]) {
+        return previous;
+      }
+      return { ...previous, [id]: true };
+    });
+  }, []);
+
+  const toggleDetailedMatches = useCallback(() => {
+    setShowDetailedMatches((previous) => !previous);
+  }, []);
 
   const inputRef = useRef(null);
 
@@ -1855,6 +2587,7 @@ export default function Home() {
 
   const handleDataUrl = useCallback((dataUrl) => {
     if (!dataUrl) return;
+    setInputMode("image");
     setImageSrc(dataUrl);
     setIsProcessing(true);
     setError(null);
@@ -1972,6 +2705,9 @@ export default function Home() {
   const onDrop = useCallback(
     (event) => {
       event.preventDefault();
+      if (!isImageMode) {
+        return;
+      }
       setIsDragging(false);
 
       const files = event.dataTransfer?.files;
@@ -1979,32 +2715,74 @@ export default function Home() {
         handleFile(files[0]);
       }
     },
-    [handleFile]
+    [handleFile, isImageMode]
   );
 
-  const onDragOver = useCallback((event) => {
-    event.preventDefault();
-    setIsDragging(true);
-  }, []);
+  const onDragOver = useCallback(
+    (event) => {
+      if (!isImageMode) {
+        return;
+      }
+      event.preventDefault();
+      setIsDragging(true);
+    },
+    [isImageMode]
+  );
 
-  const onDragLeave = useCallback((event) => {
-    event.preventDefault();
-    setIsDragging(false);
-  }, []);
+  const onDragLeave = useCallback(
+    (event) => {
+      if (!isImageMode) {
+        return;
+      }
+      event.preventDefault();
+      setIsDragging(false);
+    },
+    [isImageMode]
+  );
 
   const onBrowseClick = useCallback(() => {
+    if (!isImageMode) {
+      return;
+    }
     inputRef.current?.click();
-  }, []);
+  }, [isImageMode]);
 
   const onFileInputChange = useCallback(
     (event) => {
+      if (!isImageMode) {
+        return;
+      }
       const file = event.target.files?.[0];
       if (file) {
         handleFile(file);
       }
     },
-    [handleFile]
+    [handleFile, isImageMode]
   );
+
+  const handleColorInput = useCallback((event) => {
+    const value = event.target.value;
+    if (typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)) {
+      setSelectedColor(value.toUpperCase());
+    }
+  }, []);
+
+  const handleRandomizeColor = useCallback(() => {
+    const random = `#${Math.floor(Math.random() * 0xffffff)
+      .toString(16)
+      .padStart(6, "0")
+      .toUpperCase()}`;
+    setInputMode("color");
+    setSelectedColor(random);
+  }, []);
+
+  const handleSeedClick = useCallback((hex) => {
+    if (!hex) {
+      return;
+    }
+    setInputMode("color");
+    setSelectedColor(hex.toUpperCase());
+  }, []);
 
   const handleCopy = useCallback(async (value) => {
     const fallbackCopy = (text) => {
@@ -2064,29 +2842,6 @@ export default function Home() {
     ? "Analyse terminée"
     : "Analyse prête";
 
-  const getRingPosition = useCallback((index, total) => {
-    if (total <= 1) {
-      return { left: "50%", top: "50%" };
-    }
-
-    if (index === 0) {
-      return { left: "50%", top: "50%" };
-    }
-
-    const orbitCount = total - 1;
-    const radius =
-      orbitCount <= 2 ? 20 : orbitCount === 3 ? 24 : orbitCount === 4 ? 27 : 30;
-    const angle = ((index - 1) / orbitCount) * 360 - 90;
-    const radians = (angle * Math.PI) / 180;
-    const x = 50 + radius * Math.cos(radians);
-    const y = 50 + radius * Math.sin(radians);
-
-    return {
-      left: `${x}%`,
-      top: `${y}%`,
-    };
-  }, []);
-
   const getTextColor = useCallback((color) => {
     const luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
     return luminance > 155 ? "rgba(15, 23, 42, 0.9)" : "#f8fafc";
@@ -2127,44 +2882,122 @@ export default function Home() {
         </header>
 
         <section className="workspace">
-          <div
-            className={`dropzone${isDragging ? " dropzone--active" : ""}${imageSrc ? " dropzone--filled" : ""}`}
-            onDrop={onDrop}
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
-            role="button"
-            tabIndex={0}
-            onClick={onBrowseClick}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onBrowseClick();
-              }
-            }}
-          >
-            {imageSrc ? (
-              <img src={imageSrc} alt="Aperçu de la référence importée" className="dropzone__preview" />
+          <div className="reference">
+            <div className="reference__header">
+              <div className="reference__title">
+                <h2>Référence créative</h2>
+              </div>
+              <div className="input-switch" role="radiogroup" aria-label="Mode d'analyse">
+                <span
+                  className="input-switch__thumb"
+                  style={{ transform: inputMode === "image" ? "translateX(0%)" : "translateX(100%)" }}
+                  aria-hidden="true"
+                />
+                <button
+                  type="button"
+                  className={`input-switch__option${isImageMode ? " is-active" : ""}`}
+                  onClick={() => setInputMode("image")}
+                  role="radio"
+                  aria-checked={isImageMode}
+                >
+                  Image
+                </button>
+                <button
+                  type="button"
+                  className={`input-switch__option${!isImageMode ? " is-active" : ""}`}
+                  onClick={() => setInputMode("color")}
+                  role="radio"
+                  aria-checked={!isImageMode}
+                >
+                  Couleur
+                </button>
+              </div>
+            </div>
+            {isImageMode ? (
+              <div
+                className={`dropzone${isDragging ? " dropzone--active" : ""}${imageSrc ? " dropzone--filled" : ""}`}
+                onDrop={onDrop}
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeave}
+                role="button"
+                tabIndex={0}
+                onClick={onBrowseClick}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onBrowseClick();
+                  }
+                }}
+              >
+                {imageSrc ? (
+                  <img src={imageSrc} alt="Aperçu de la référence importée" className="dropzone__preview" />
+                ) : (
+                  <div className="dropzone__placeholder">
+                    <strong>Glisse ton visuel ici</strong>
+                    <span>… ou colle-le directement depuis ton presse-papiers</span>
+                    <em>Formats acceptés : PNG, JPG, WebP, GIF statique</em>
+                  </div>
+                )}
+                <input
+                  ref={inputRef}
+                  className="dropzone__input"
+                  type="file"
+                  accept="image/*"
+                  onChange={onFileInputChange}
+                />
+                <div className="dropzone__hint">Cliquer ouvre l&apos;explorateur de fichiers</div>
+              </div>
             ) : (
-              <div className="dropzone__placeholder">
-                <strong>Glisse ton visuel ici</strong>
-                <span>… ou colle-le directement depuis ton presse-papiers</span>
-                <em>Formats acceptés : PNG, JPG, WebP, GIF statique</em>
+              <div className="color-picker">
+                <div
+                  className="color-picker__preview"
+                  style={{ backgroundImage: buildGradientFromHex(selectedColor) }}
+                >
+                  <span className="color-picker__preview-value">{selectedColor}</span>
+                </div>
+                <div className="color-picker__controls">
+                  <label className="color-picker__label" htmlFor="seed-color">
+                    Choisis ta teinte de départ
+                  </label>
+                  <div className="color-picker__inputs">
+                    <input
+                      id="seed-color"
+                      className="color-picker__input"
+                      type="color"
+                      value={selectedColor}
+                      onChange={handleColorInput}
+                    />
+                    <button type="button" className="color-picker__random" onClick={handleRandomizeColor}>
+                      Nuance surprise
+                    </button>
+                  </div>
+                  <div className="color-picker__swatch-tray" role="list" aria-label="Suggestions de couleurs">
+                    {CURATED_COLOR_SWATCHES.map((hex) => {
+                      const isActive = selectedColor === hex.toUpperCase();
+                      return (
+                        <button
+                          key={hex}
+                          type="button"
+                          className={`color-picker__swatch${isActive ? " is-active" : ""}`}
+                          style={{ backgroundImage: buildGradientFromHex(hex) }}
+                          onClick={() => handleSeedClick(hex)}
+                          aria-pressed={isActive}
+                        >
+                          <span className="sr-only">Utiliser la couleur {hex}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             )}
-            <input
-              ref={inputRef}
-              className="dropzone__input"
-              type="file"
-              accept="image/*"
-              onChange={onFileInputChange}
-            />
-            <div className="dropzone__hint">Cliquer ouvre l'explorateur de fichiers</div>
           </div>
 
           <div className="palette">
             <div className="palette__header">
               <div className="palette__title">
                 <h2>Palette extraite</h2>
+                <p>Cliquer sur une teinte la copie instantanément.</p>
               </div>
               <div className="palette__actions">
                 {isProcessing ? <span className="badge badge--pulse">Analyse en cours…</span> : null}
@@ -2191,29 +3024,159 @@ export default function Home() {
                 </div>
               </div>
             </div>
+            <div className="palette__identity" role="group" aria-label="Configuration du personnage Dofus">
+              <div className="palette__identity-intro">
+                <span className="palette__identity-label">Avatar Dofus</span>
+                <span className="palette__identity-hint">
+                  Choisis le sexe et la classe qui serviront à générer les aperçus Barbofus.
+                </span>
+              </div>
+              <div className="palette__identity-section" role="group" aria-label="Sélection du sexe">
+                <span className="palette__identity-section-title">Choix du sexe</span>
+                <div className="palette__gender" role="radiogroup" aria-label="Sexe du personnage">
+                  <button
+                    type="button"
+                    className={`palette__gender-option${selectedGender === "male" ? " is-active" : ""}`}
+                    onClick={() => setSelectedGender("male")}
+                    role="radio"
+                    aria-checked={selectedGender === "male"}
+                  >
+                    <span className="palette__gender-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                          d="M15 3h6v6m0-6-7.5 7.5m1.5-1.5a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
+                    <span className="palette__gender-text">Homme</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`palette__gender-option${selectedGender === "female" ? " is-active" : ""}`}
+                    onClick={() => setSelectedGender("female")}
+                    role="radio"
+                    aria-checked={selectedGender === "female"}
+                  >
+                    <span className="palette__gender-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                          d="M12 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm0 12v8m-4-4h8"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
+                    <span className="palette__gender-text">Femme</span>
+                  </button>
+                </div>
+              </div>
+              <div className="palette__identity-section" role="group" aria-label="Sélection de la classe">
+                <span className="palette__identity-section-title">Choix de la classe</span>
+                {breedsError ? (
+                  <div className="palette__identity-status palette__identity-status--error" role="alert">
+                    <span>{breedsError}</span>
+                    <button
+                      type="button"
+                      className="palette__identity-retry"
+                      onClick={handleRetryBreeds}
+                      disabled={breedsLoading}
+                    >
+                      Réessayer
+                    </button>
+                  </div>
+                ) : null}
+                {breedsLoading ? (
+                  <div className="palette__identity-status" role="status" aria-live="polite">
+                    Chargement des classes…
+                  </div>
+                ) : null}
+                <div className="palette__identity-grid" role="radiogroup" aria-label="Classe du personnage">
+                  {breeds.map((breed) => {
+                    if (!Number.isFinite(breed.id)) {
+                      return null;
+                    }
+                    const isActive = breed.id === selectedBreedId;
+                    const fallbackLetter = breed.name?.charAt(0)?.toUpperCase() ?? "?";
+
+                    return (
+                      <button
+                        key={breed.slug ?? `breed-${breed.id}`}
+                        type="button"
+                        className={`palette__identity-chip${isActive ? " is-active" : ""}`}
+                        onClick={() => setSelectedBreedId(breed.id)}
+                        role="radio"
+                        aria-checked={isActive}
+                        aria-label={`Choisir ${breed.name}`}
+                      >
+                        <span className="palette__identity-chip-icon">
+                          {breed.icon ? (
+                            <img src={breed.icon} alt="" loading="lazy" />
+                          ) : (
+                            <span className="palette__identity-chip-letter" aria-hidden="true">
+                              {fallbackLetter}
+                            </span>
+                          )}
+                        </span>
+                        <span className="palette__identity-chip-label" aria-hidden="true">
+                          {breed.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            {colors.length > 0 ? (
+              <div className="palette__skin-control" role="group" aria-label="Gestion de la teinte de peau">
+                <div className="palette__skin-meta">
+                  <span className="palette__skin-label">Teinte de peau</span>
+                  <span className="palette__skin-hint">#1 peau · #2 cheveux</span>
+                </div>
+                <div className="palette__skin-options" role="radiogroup" aria-label="Choix de la teinte de peau">
+                  <button
+                    type="button"
+                    className={`palette__skin-option${!useCustomSkinTone ? " is-active" : ""}`}
+                    onClick={() => setUseCustomSkinTone(false)}
+                    role="radio"
+                    aria-checked={!useCustomSkinTone}
+                  >
+                    Peau par défaut
+                  </button>
+                  <button
+                    type="button"
+                    className={`palette__skin-option${useCustomSkinTone ? " is-active" : ""}`}
+                    onClick={() => setUseCustomSkinTone(true)}
+                    role="radio"
+                    aria-checked={useCustomSkinTone}
+                  >
+                    Peau personnalisée
+                  </button>
+                </div>
+              </div>
+            ) : null}
             {error ? <p className="palette__error">{error}</p> : null}
             {colors.length > 0 ? (
-              <ul className="palette__ring">
+              <ul className="palette__list">
                 {colors.map((color, index) => {
                   const value = codeFormat === "hex" ? color.hex : color.rgb;
-                  const position = getRingPosition(index, colors.length);
-                  const textColor = getTextColor(color);
                   const isCopied = copiedCode === value;
-
+                  const textColor = getTextColor(color);
                   return (
-                    <li
-                      key={`${color.hex}-${index}`}
-                      className="palette__ring-item"
-                      style={position}
-                    >
+                    <li key={`${color.hex}-${index}`} className="palette__item">
                       <button
                         type="button"
-                        className={`swatch-hex${isCopied ? " is-copied" : ""}`}
+                        className={`palette__chip${isCopied ? " is-copied" : ""}`}
                         onClick={() => handleCopy(value)}
-                        style={{ backgroundColor: color.hex, color: textColor }}
-                        title="Cliquer pour copier"
+                        style={{ backgroundImage: buildGradientFromHex(color.hex), color: textColor }}
                       >
-                        <span className="swatch-hex__value">{value}</span>
+                        <span className="palette__chip-index">#{String(index + 1).padStart(2, "0")}</span>
+                        <span className="palette__chip-value">{value}</span>
                       </button>
                     </li>
                   );
@@ -2222,8 +3185,8 @@ export default function Home() {
             ) : (
               <div className="palette__empty">
                 <p>
-                  Dépose une image pour révéler automatiquement ses teintes dominantes. Les codes Hex et RGB
-                  sont prêts à être copiés.
+                  Glisse un visuel ou sélectionne une couleur d&apos;ambiance : KrosPalette s&apos;occupe de générer
+                  automatiquement une palette harmonieuse.
                 </p>
               </div>
             )}
@@ -2235,23 +3198,10 @@ export default function Home() {
             <div className="suggestions__intro">
               <h2>Correspondances Dofus</h2>
             </div>
-            {barbofusLink ? (
-              <a
-                className="suggestions__cta"
-                href={barbofusLink}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Tester sur Barbofus
-                <span aria-hidden="true" className="suggestions__cta-icon">
-                  ↗
-                </span>
-              </a>
-            ) : null}
           </div>
           {colors.length === 0 ? (
             <div className="suggestions__empty">
-              <p>Importe d&apos;abord une image pour générer des propositions personnalisées.</p>
+              <p>Lance une analyse pour découvrir des correspondances Dofus adaptées.</p>
             </div>
           ) : !hasCatalogData && itemsLoading ? (
             <div className="suggestions__status suggestions__status--loading">
@@ -2265,102 +3215,312 @@ export default function Home() {
             </div>
           ) : (
             <>
-              {itemsError ? (
-                <p className="suggestions__status suggestions__status--error suggestions__status--inline">
-                  {itemsError}
-                </p>
-              ) : null}
-              {itemsLoading ? (
-                <p className="suggestions__status suggestions__status--loading suggestions__status--inline">
-                  Mise à jour des suggestions…
-                </p>
-              ) : null}
-              <div className="suggestions__grid">
-                {ITEM_TYPES.map((type) => {
-                  const items = recommendations?.[type] ?? [];
-                  return (
-                    <section key={type} className="suggestions__group">
-                      <header className="suggestions__group-header">
-                        <span className="suggestions__group-type">{ITEM_TYPE_LABELS[type] ?? type}</span>
-                        {items.length > 0 ? (
-                          <span className="suggestions__group-badge">Meilleur match</span>
-                        ) : null}
-                      </header>
-                      {items.length === 0 ? (
-                        <p className="suggestions__group-empty">Aucune correspondance probante pour cette teinte.</p>
-                      ) : (
-                        <ul className="suggestions__deck">
-                          {items.map((item) => {
-                            const hasPalette = item.palette.length > 0;
-                            const paletteFromImage = item.paletteSource === "image" && hasPalette;
-                            const notes = [];
-                            if (!hasPalette) {
-                              notes.push("Palette non détectée sur l'illustration.");
-                            } else if (!paletteFromImage) {
-                              notes.push("Palette estimée à partir des données DofusDB.");
-                            }
-                            if (!item.imageUrl) {
-                              notes.push("Illustration manquante sur DofusDB.");
-                            }
-
-                            return (
-                              <li key={item.id} className="suggestions__card">
-                                <div className="suggestions__thumb">
-                                  {item.imageUrl ? (
-                                    <img
-                                      src={item.imageUrl}
-                                      alt={`Illustration de ${item.name}`}
-                                      loading="lazy"
-                                    />
+              {proposals.length ? (
+                <div className="skin-carousel" aria-live="polite">
+                  <div className="skin-carousel__controls">
+                    <button
+                      type="button"
+                      className="skin-carousel__nav"
+                      onClick={handlePrevProposal}
+                      disabled={proposalCount <= 1}
+                      aria-label="Skin précédent"
+                    >
+                      <img
+                        src="/icons/arrow-left.svg"
+                        alt=""
+                        className="skin-carousel__nav-icon"
+                        aria-hidden="true"
+                      />
+                    </button>
+                    <span className="skin-carousel__legend">
+                      Skin {activeProposal + 1} / {proposalCount}
+                    </span>
+                    <button
+                      type="button"
+                      className="skin-carousel__nav"
+                      onClick={handleNextProposal}
+                      disabled={proposalCount <= 1}
+                      aria-label="Skin suivant"
+                    >
+                      <img
+                        src="/icons/arrow-right.svg"
+                        alt=""
+                        className="skin-carousel__nav-icon"
+                        aria-hidden="true"
+                      />
+                    </button>
+                  </div>
+                  <div className="skin-carousel__viewport">
+                    <div
+                      className="skin-carousel__track"
+                      style={{ transform: `translateX(-${activeProposal * 100}%)` }}
+                    >
+                      {proposals.map((proposal) => {
+                        const primaryColor = proposal.palette[0] ?? "#1f2937";
+                        const canvasBackground = buildGradientFromHex(primaryColor);
+                        const previewFailed = Boolean(previewErrors?.[proposal.id]);
+                        const hasBarbofusPreview = proposal.barbofusPreview && !previewFailed;
+                        const previewAlt = `Aperçu Barbofus du skin ${proposal.index + 1}`;
+                        const subtitleParts = [];
+                        if (proposal.className) {
+                          subtitleParts.push(proposal.className);
+                        }
+                        if (proposal.genderLabel) {
+                          subtitleParts.push(proposal.genderLabel);
+                        }
+                        const subtitle = subtitleParts.join(" · ");
+                        return (
+                          <article key={proposal.id} className="skin-card">
+                            <header className="skin-card__header">
+                              <div className="skin-card__heading">
+                                <h3 className="skin-card__title">Skin chromatique</h3>
+                                {subtitle ? <span className="skin-card__subtitle">{subtitle}</span> : null}
+                              </div>
+                            </header>
+                            <div className="skin-card__body">
+                              <div
+                                className="skin-card__canvas"
+                                style={{ backgroundImage: canvasBackground }}
+                              >
+                                <div className="skin-card__glow" aria-hidden="true" />
+                                {hasBarbofusPreview ? (
+                                  <img
+                                    src={proposal.barbofusPreview}
+                                    alt={previewAlt}
+                                    loading="lazy"
+                                    className="skin-card__preview"
+                                    onError={() => handlePreviewFallback(proposal.id)}
+                                  />
+                                ) : proposal.heroImage ? (
+                                  <img
+                                    src={proposal.heroImage}
+                                    alt={`Aperçu principal de la proposition ${proposal.index + 1}`}
+                                    loading="lazy"
+                                    className="skin-card__hero"
+                                  />
+                                ) : (
+                                  <div className="skin-card__placeholder" aria-hidden="true">
+                                    Aperçu indisponible
+                                  </div>
+                                )}
+                                <ul className="skin-card__equipment" role="list">
+                                  {proposal.items.map((item) => (
+                                    <li key={`${proposal.id}-${item.id}`} className="skin-card__equipment-slot">
+                                      {item.imageUrl ? (
+                                        <img
+                                          src={item.imageUrl}
+                                          alt={`Illustration de ${item.name}`}
+                                          loading="lazy"
+                                        />
+                                      ) : (
+                                        <span>{ITEM_TYPE_LABELS[item.slotType] ?? item.slotType}</span>
+                                      )}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                              <div className="skin-card__details">
+                                <ul className="skin-card__swatches" role="list">
+                                  {proposal.palette.length ? (
+                                    proposal.palette.map((hex) => (
+                                      <li key={`${proposal.id}-${hex}`} className="skin-card__swatch">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCopy(hex)}
+                                          style={{ backgroundImage: buildGradientFromHex(hex) }}
+                                          className="skin-card__swatch-button"
+                                        >
+                                          <span>{hex}</span>
+                                        </button>
+                                      </li>
+                                    ))
                                   ) : (
-                                    <div className="suggestions__thumb-placeholder" aria-hidden="true">
-                                      Aperçu indisponible
-                                    </div>
+                                    <li className="skin-card__swatch skin-card__swatch--empty">
+                                      Palette indisponible
+                                    </li>
+                                  )}
+                                </ul>
+                                <ul className="skin-card__list" role="list">
+                                  {proposal.items.map((item) => (
+                                    <li key={`${proposal.id}-${item.id}-entry`} className="skin-card__list-item">
+                                      <span className="skin-card__list-type">
+                                        {ITEM_TYPE_LABELS[item.slotType] ?? item.slotType}
+                                      </span>
+                                      <a
+                                        href={item.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="skin-card__list-link"
+                                      >
+                                        {item.name}
+                                      </a>
+                                    </li>
+                                  ))}
+                                </ul>
+                                <div className="skin-card__actions">
+                                  {proposal.barbofusLink ? (
+                                    <a
+                                      href={proposal.barbofusLink}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="skin-card__cta"
+                                    >
+                                      Tester sur Barbofus
+                                      <span aria-hidden="true" className="skin-card__cta-icon">
+                                        ↗
+                                      </span>
+                                    </a>
+                                  ) : (
+                                    <span className="skin-card__cta skin-card__cta--disabled">
+                                      Lien Barbofus indisponible
+                                    </span>
                                   )}
                                 </div>
-                                <div className="suggestions__card-body">
-                                  <a
-                                    href={item.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="suggestions__title"
-                                  >
-                                    {item.name}
-                                  </a>
-                                  <div
-                                    className={`suggestions__swatches${hasPalette ? "" : " suggestions__swatches--empty"}`}
-                                    aria-hidden={hasPalette}
-                                  >
-                                    {hasPalette ? (
-                                      item.palette.map((hex) => (
-                                        <span
-                                          key={hex}
-                                          className="suggestions__swatch"
-                                          style={{ backgroundColor: hex }}
-                                        />
-                                      ))
+                              </div>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="skin-carousel__dots" role="tablist" aria-label="Choisir une proposition">
+                    {proposals.map((proposal, index) => (
+                      <button
+                        key={`${proposal.id}-dot`}
+                        type="button"
+                        className={`skin-carousel__dot${index === activeProposal ? " is-active" : ""}`}
+                        onClick={() => handleSelectProposal(index)}
+                        aria-label={`Afficher le skin ${index + 1}`}
+                        aria-pressed={index === activeProposal}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              <div className="suggestions__details-toggle">
+                <button
+                  type="button"
+                  className={`suggestions__toggle${showDetailedMatches ? " is-open" : ""}`}
+                  onClick={toggleDetailedMatches}
+                  aria-expanded={showDetailedMatches}
+                >
+                  <span>
+                    {showDetailedMatches
+                      ? "Masquer les correspondances détaillées"
+                      : "Afficher les correspondances détaillées"}
+                  </span>
+                  <span className="suggestions__toggle-icon" aria-hidden="true" />
+                </button>
+                {itemsLoading ? (
+                  <span className="suggestions__inline-status">Mise à jour…</span>
+                ) : null}
+                {itemsError && !showDetailedMatches ? (
+                  <span className="suggestions__inline-status suggestions__inline-status--error">
+                    {itemsError}
+                  </span>
+                ) : null}
+              </div>
+              <div
+                className={`suggestions__details${showDetailedMatches ? " is-visible" : ""}`}
+                hidden={!showDetailedMatches}
+              >
+                {itemsError ? (
+                  <p className="suggestions__status suggestions__status--error suggestions__status--inline">
+                    {itemsError}
+                  </p>
+                ) : null}
+                {itemsLoading ? (
+                  <p className="suggestions__status suggestions__status--loading suggestions__status--inline">
+                    Mise à jour des suggestions…
+                  </p>
+                ) : null}
+                <div className="suggestions__grid">
+                  {ITEM_TYPES.map((type) => {
+                    const items = recommendations?.[type] ?? [];
+                    return (
+                      <section key={type} className="suggestions__group">
+                        <header className="suggestions__group-header">
+                          <span className="suggestions__group-type">{ITEM_TYPE_LABELS[type] ?? type}</span>
+                          {items.length > 0 ? (
+                            <span className="suggestions__group-badge">Meilleur match</span>
+                          ) : null}
+                        </header>
+                        {items.length === 0 ? (
+                          <p className="suggestions__group-empty">Aucune correspondance probante pour cette teinte.</p>
+                        ) : (
+                          <ul className="suggestions__deck">
+                            {items.map((item) => {
+                              const hasPalette = item.palette.length > 0;
+                              const paletteFromImage = item.paletteSource === "image" && hasPalette;
+                              const notes = [];
+                              if (!hasPalette) {
+                                notes.push("Palette non détectée sur l'illustration.");
+                              } else if (!paletteFromImage) {
+                                notes.push("Palette estimée à partir des données DofusDB.");
+                              }
+                              if (!item.imageUrl) {
+                                notes.push("Illustration manquante sur DofusDB.");
+                              }
+
+                              return (
+                                <li key={item.id} className="suggestions__card">
+                                  <div className="suggestions__thumb">
+                                    {item.imageUrl ? (
+                                      <img
+                                        src={item.imageUrl}
+                                        alt={`Illustration de ${item.name}`}
+                                        loading="lazy"
+                                      />
                                     ) : (
-                                      <span className="suggestions__swatch-note">Palette indisponible</span>
+                                      <div className="suggestions__thumb-placeholder" aria-hidden="true">
+                                        Aperçu indisponible
+                                      </div>
                                     )}
                                   </div>
-                                  {notes.length ? (
-                                    <div className="suggestions__notes">
-                                      {notes.map((note, index) => (
-                                        <span key={`${item.id}-note-${index}`} className="suggestions__note">
-                                          {note}
-                                        </span>
-                                      ))}
+                                  <div className="suggestions__card-body">
+                                    <a
+                                      href={item.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="suggestions__title"
+                                    >
+                                      {item.name}
+                                    </a>
+                                    <div
+                                      className={`suggestions__swatches${hasPalette ? "" : " suggestions__swatches--empty"}`}
+                                      aria-hidden={hasPalette}
+                                    >
+                                      {hasPalette ? (
+                                        item.palette.map((hex) => (
+                                          <span
+                                            key={hex}
+                                            className="suggestions__swatch"
+                                            style={{ backgroundColor: hex }}
+                                          />
+                                        ))
+                                      ) : (
+                                        <span className="suggestions__swatch-note">Palette indisponible</span>
+                                      )}
                                     </div>
-                                  ) : null}
-                                </div>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </section>
-                  );
-                })}
+                                    {notes.length ? (
+                                      <div className="suggestions__notes">
+                                        {notes.map((note, index) => (
+                                          <span key={`${item.id}-note-${index}`} className="suggestions__note">
+                                            {note}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </section>
+                    );
+                  })}
+                </div>
               </div>
             </>
           )}
@@ -2368,4 +3528,39 @@ export default function Home() {
       </main>
     </>
   );
+}
+
+export async function getStaticProps() {
+  try {
+    if (typeof fetch !== "function") {
+      return {
+        props: { initialBreeds: [BARBOFUS_DEFAULT_BREED] },
+        revalidate: 3600,
+      };
+    }
+
+    const response = await fetch(DOFUS_BREEDS_API_URL, {
+      headers: { Accept: "application/json" },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const payload = await response.json();
+    const dataset = normalizeBreedsDataset(payload);
+
+    return {
+      props: {
+        initialBreeds: dataset.length ? dataset : [BARBOFUS_DEFAULT_BREED],
+      },
+      revalidate: 3600,
+    };
+  } catch (error) {
+    console.error("Unable to prefetch Dofus breeds:", error);
+    return {
+      props: { initialBreeds: [BARBOFUS_DEFAULT_BREED] },
+      revalidate: 3600,
+    };
+  }
 }
