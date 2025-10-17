@@ -553,7 +553,7 @@ const TONE_CONFIDENCE_DISTANCE = 0.72;
 const TONE_CONFIDENCE_WEIGHT = 0.18;
 const MIN_ALPHA_WEIGHT = 0.05;
 const MAX_RECOMMENDATIONS = 3;
-const PROPOSAL_COUNT = 3;
+const PROPOSAL_COUNT = 5;
 const HASH_CONFIDENCE_DISTANCE = 0.32;
 const HASH_CONFIDENCE_WEIGHT = 0.18;
 const HASH_STRONG_THRESHOLD = 0.12;
@@ -2378,6 +2378,14 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
 
     const total = Math.min(PROPOSAL_COUNT, maxLength || 0);
     const combos = [];
+    const subtitleParts = [];
+    if (activeBreed?.name) {
+      subtitleParts.push(activeBreed.name);
+    }
+    if (activeGenderLabel) {
+      subtitleParts.push(activeGenderLabel);
+    }
+    const sharedSubtitle = subtitleParts.join(" · ");
 
     for (let index = 0; index < total; index += 1) {
       const items = ITEM_TYPES.map((type) => {
@@ -2430,6 +2438,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         className: activeBreed?.name ?? null,
         genderLabel: activeGenderLabel,
         classIcon: activeBreed?.icon ?? null,
+        subtitle: sharedSubtitle,
       });
     }
 
@@ -2447,6 +2456,11 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   ]);
 
   const proposalCount = proposals.length;
+  const safeActiveProposalIndex = proposalCount
+    ? Math.min(activeProposal, proposalCount - 1)
+    : 0;
+  const activeProposalDetails = proposalCount ? proposals[safeActiveProposalIndex] : null;
+  const activeProposalSubtitle = activeProposalDetails?.subtitle ?? "";
 
   useEffect(() => {
     if (!proposals.length) {
@@ -2835,7 +2849,8 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     setSelectedColor(hex.toUpperCase());
   }, []);
 
-  const handleCopy = useCallback(async (value) => {
+  const handleCopy = useCallback(async (value, options = {}) => {
+    const { swatch = null } = options;
     const fallbackCopy = (text) => {
       const textarea = document.createElement("textarea");
       textarea.value = text;
@@ -2861,14 +2876,14 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       }
       setError(null);
       setCopiedCode(value);
-      setToast({ id: Date.now(), label: "Couleur copiée", value });
+      setToast({ id: Date.now(), label: "Couleur copiée", value, swatch });
     } catch (err) {
       console.error(err);
       try {
         fallbackCopy(value);
         setError(null);
         setCopiedCode(value);
-        setToast({ id: Date.now(), label: "Couleur copiée", value });
+        setToast({ id: Date.now(), label: "Couleur copiée", value, swatch });
       } catch (fallbackErr) {
         console.error(fallbackErr);
         setError("Impossible de copier dans le presse-papiers.");
@@ -2921,6 +2936,13 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
           {toast ? (
             <div className="toast">
               <span className="toast__icon" aria-hidden="true">✓</span>
+              {toast.swatch ? (
+                <span
+                  className="toast__swatch"
+                  style={{ backgroundImage: buildGradientFromHex(toast.swatch) }}
+                  aria-hidden="true"
+                />
+              ) : null}
               <div className="toast__body">
                 <span className="toast__title">{toast.label}</span>
                 <span className="toast__value">{toast.value}</span>
@@ -3113,7 +3135,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                       <button
                         type="button"
                         className={`palette__chip${isCopied ? " is-copied" : ""}`}
-                        onClick={() => handleCopy(value)}
+                        onClick={() => handleCopy(value, { swatch: color.hex })}
                         style={{ backgroundImage: buildGradientFromHex(color.hex), color: textColor }}
                       >
                         <span className="palette__chip-index">#{String(index + 1).padStart(2, "0")}</span>
@@ -3134,7 +3156,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
           </div>
           <div className="identity-card" role="group" aria-label="Configuration du personnage Dofus">
             <div className="identity-card__section" role="group" aria-label="Sélection du sexe">
-              <span className="identity-card__section-title">Choix du sexe</span>
+              <span className="identity-card__section-title">Choix de la classe et du sexe</span>
               <div className="identity-card__gender" role="radiogroup" aria-label="Sexe du personnage">
                 <button
                   type="button"
@@ -3179,7 +3201,6 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
               </div>
             </div>
             <div className="identity-card__section" role="group" aria-label="Sélection de la classe">
-              <span className="identity-card__section-title">Choix de la classe</span>
               {breedsError ? (
                 <div className="identity-card__status identity-card__status--error" role="alert">
                   <span>{breedsError}</span>
@@ -3273,9 +3294,19 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                         aria-hidden="true"
                       />
                     </button>
-                    <span className="skin-carousel__legend">
-                      Skin {activeProposal + 1} / {proposalCount}
-                    </span>
+                    <div className="skin-carousel__legend" role="presentation">
+                      <span className="skin-carousel__count">
+                        Skin {safeActiveProposalIndex + 1} / {proposalCount}
+                      </span>
+                      {activeProposalSubtitle ? (
+                        <>
+                          <span className="skin-carousel__separator" aria-hidden="true">
+                            •
+                          </span>
+                          <span className="skin-carousel__subtitle">{activeProposalSubtitle}</span>
+                        </>
+                      ) : null}
+                    </div>
                     <button
                       type="button"
                       className="skin-carousel__nav"
@@ -3294,7 +3325,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                   <div className="skin-carousel__viewport">
                     <div
                       className="skin-carousel__track"
-                      style={{ transform: `translateX(-${activeProposal * 100}%)` }}
+                      style={{ transform: `translateX(-${safeActiveProposalIndex * 100}%)` }}
                     >
                       {proposals.map((proposal) => {
                         const primaryColor = proposal.palette[0] ?? "#1f2937";
@@ -3302,22 +3333,9 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                         const previewFailed = Boolean(previewErrors?.[proposal.id]);
                         const hasBarbofusPreview = proposal.barbofusPreview && !previewFailed;
                         const previewAlt = `Aperçu Barbofus du skin ${proposal.index + 1}`;
-                        const subtitleParts = [];
-                        if (proposal.className) {
-                          subtitleParts.push(proposal.className);
-                        }
-                        if (proposal.genderLabel) {
-                          subtitleParts.push(proposal.genderLabel);
-                        }
-                        const subtitle = subtitleParts.join(" · ");
                         return (
                           <article key={proposal.id} className="skin-card">
-                            <header className="skin-card__header">
-                              <div className="skin-card__heading">
-                                <h3 className="skin-card__title sr-only">{`Proposition ${proposal.index + 1}`}</h3>
-                                {subtitle ? <span className="skin-card__subtitle">{subtitle}</span> : null}
-                              </div>
-                            </header>
+                            <h3 className="sr-only">{`Proposition ${proposal.index + 1}`}</h3>
                             <div className="skin-card__body">
                               <div
                                 className="skin-card__canvas"
@@ -3367,7 +3385,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                       <li key={`${proposal.id}-${hex}`} className="skin-card__swatch">
                                         <button
                                           type="button"
-                                          onClick={() => handleCopy(hex)}
+                                          onClick={() => handleCopy(hex, { swatch: hex })}
                                           style={{ backgroundImage: buildGradientFromHex(hex) }}
                                           className="skin-card__swatch-button"
                                         >
@@ -3429,10 +3447,10 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                       <button
                         key={`${proposal.id}-dot`}
                         type="button"
-                        className={`skin-carousel__dot${index === activeProposal ? " is-active" : ""}`}
+                        className={`skin-carousel__dot${index === safeActiveProposalIndex ? " is-active" : ""}`}
                         onClick={() => handleSelectProposal(index)}
                         aria-label={`Afficher le skin ${index + 1}`}
-                        aria-pressed={index === activeProposal}
+                        aria-pressed={index === safeActiveProposalIndex}
                       />
                     ))}
                   </div>
