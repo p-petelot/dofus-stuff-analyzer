@@ -62,12 +62,12 @@ const CANVAS_OBJECT_DATA_PATTERN =
 const CANVAS_IMAGE_TAG_PATTERN =
   /<img[^>]+id=["']canvas0["'][^>]*(?:data-[^=\s"']+|src)=["']([^"']+)["'][^>]*>/gi;
 const CANVAS_DATA_ATTRIBUTE_PATTERN =
-  /<canvas[^>]+id=["']canvas0["'][^>]*(data-(?:src|source|image|preview|asset)|src)=["']([^"']+)["'][^>]*>/gi;
+  /<canvas[^>]+id=["']canvas0["'][^>]*(data-(?:src|source|image|preview|asset|href|url)(?:-[^=\s"']+)?|src)=["']([^"']+)["'][^>]*>/gi;
 const CANVAS_JSON_OBJECT_PATTERN =
   /["']canvas0["']\s*:\s*\{[^{}]*?(?:["'](src|source|image|url|href)["']\s*:\s*["']([^"']+)["'])[^{}]*\}/gi;
 const CANVAS_JSON_STRING_PATTERN = /["']canvas0["']\s*:\s*["']([^"']+)["']/gi;
 const CANVAS_GENERIC_ASSIGNMENT_PATTERN =
-  /canvas0[^<>{}\[\]]*?(?:data|src|source|image|preview|href|url)\s*[:=]\s*["']([^"']+)["']/gi;
+  /canvas0[^<>{}\[\]]*?(?:data|src|source|image|preview|href|url)[-\w:]*\s*[:=]\s*["']([^"']+)["']/gi;
 const CANVAS_CONTEXT_URL_PATTERN =
   /canvas0[^<>{}\[\]]*?(https?:\\\/\\\/[^"'\s<>]+|https?:\/\/[^"'\s<>]+)/gi;
 const CANVAS_DIRECT_PATTERNS = [
@@ -78,6 +78,92 @@ const CANVAS_DIRECT_PATTERNS = [
   { pattern: CANVAS_JSON_STRING_PATTERN, source: "json:string" },
   { pattern: CANVAS_GENERIC_ASSIGNMENT_PATTERN, source: "generic" },
 ];
+const CANVAS_TAG_PATTERN = /<canvas[^>]+id=["']canvas0["'][^>]*>/gi;
+const CANVAS_ATTRIBUTE_PATTERN =
+  /([a-zA-Z_:][-\.\w:]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
+const CANVAS_ATTRIBUTE_KEYWORDS = [
+  "src",
+  "image",
+  "preview",
+  "href",
+  "asset",
+  "url",
+];
+
+function collectCanvasAttributeMatches(html, baseUrl, results) {
+  if (!html) {
+    return;
+  }
+
+  CANVAS_TAG_PATTERN.lastIndex = 0;
+  let tagMatch;
+  while ((tagMatch = CANVAS_TAG_PATTERN.exec(html))) {
+    const tag = tagMatch[0];
+    if (!tag) {
+      continue;
+    }
+
+    CANVAS_ATTRIBUTE_PATTERN.lastIndex = 0;
+    let attributeMatch;
+    while ((attributeMatch = CANVAS_ATTRIBUTE_PATTERN.exec(tag))) {
+      const [, rawName, doubleQuotedValue, singleQuotedValue] = attributeMatch;
+      const rawValue = doubleQuotedValue ?? singleQuotedValue ?? "";
+      if (!rawName || !rawValue) {
+        continue;
+      }
+
+      const name = rawName.toLowerCase();
+
+      if (name === "style") {
+        const stylePattern = /url\((['"]?)([^"')]+)\1\)/gi;
+        let styleMatch;
+        while ((styleMatch = stylePattern.exec(rawValue))) {
+          const decoded = decodePotentialUrl(styleMatch[2], baseUrl);
+          if (decoded && isLikelyCanvasPreviewUrl(decoded, baseUrl)) {
+            console.log("[skin-preview] matched canvas attribute", {
+              source: "canvas:style",
+              attribute: name,
+              decoded,
+            });
+            results.push({ url: decoded, source: "canvas:style" });
+          } else if (decoded) {
+            console.log("[skin-preview] discarded canvas attribute", {
+              source: "canvas:style",
+              attribute: name,
+              decoded,
+            });
+          }
+        }
+        continue;
+      }
+
+      const matchesKeyword = CANVAS_ATTRIBUTE_KEYWORDS.some((keyword) =>
+        name.includes(keyword)
+      );
+      if (!matchesKeyword) {
+        continue;
+      }
+
+      const decoded = decodePotentialUrl(rawValue, baseUrl);
+      if (decoded && isLikelyCanvasPreviewUrl(decoded, baseUrl)) {
+        console.log("[skin-preview] matched canvas attribute", {
+          source: "canvas:attr", // reuse same label for attribute-derived matches
+          attribute: name,
+          decoded,
+        });
+        results.push({ url: decoded, source: "canvas:attr" });
+      } else if (decoded) {
+        console.log("[skin-preview] discarded canvas attribute", {
+          source: "canvas:attr",
+          attribute: name,
+          decoded,
+        });
+      }
+    }
+  }
+
+  CANVAS_TAG_PATTERN.lastIndex = 0;
+}
 
 function isLikelyCanvasPreviewUrl(url, baseUrl) {
   if (!url) {
@@ -169,6 +255,8 @@ function extractCanvasPreviewCandidates(html, baseUrl) {
     collectCanvasMatches(pattern, html, baseUrl, source, results);
   }
 
+  collectCanvasAttributeMatches(html, baseUrl, results);
+
   const mentionPattern = /canvas0/gi;
   let mentionMatch;
   while ((mentionMatch = mentionPattern.exec(html))) {
@@ -176,7 +264,7 @@ function extractCanvasPreviewCandidates(html, baseUrl) {
     const snippet = html.slice(start, start + 1024);
 
     const propertyMatch = snippet.match(
-      /(?:data|src|source|image|preview|href|url)\s*[:=]\s*["']([^"']+)["']/i
+      /(?:data|src|source|image|preview|href|url)[-\w:]*\s*[:=]\s*["']([^"']+)["']/i
     );
     if (propertyMatch) {
       const decoded = decodePotentialUrl(propertyMatch[1], baseUrl);
@@ -429,3 +517,5 @@ export default async function handler(req, res) {
     res.status(502).json({ error: "Preview generation failed" });
   }
 }
+
+export { extractCanvasPreviewCandidates };
