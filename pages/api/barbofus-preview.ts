@@ -13,7 +13,7 @@ type ErrorResponse = {
 };
 
 const BARBOFUS_ORIGIN = "https://barbofus.com";
-const BARBOFUS_RENDER_PATH = "/skinator/render";
+const BARBOFUS_ALLOWED_PATHS = ["/skinator", "/skinator/render"] as const;
 const DEFAULT_VIEWPORT = { width: 512, height: 512 } as const;
 const PAGE_TIMEOUT = 15000;
 
@@ -90,10 +90,16 @@ function sanitizePreviewUrl(value: unknown): string | null {
       return null;
     }
 
-    if (!parsed.pathname.startsWith(BARBOFUS_RENDER_PATH)) {
+    let normalizedPath = parsed.pathname;
+    while (normalizedPath.length > 1 && normalizedPath.endsWith("/")) {
+      normalizedPath = normalizedPath.slice(0, -1);
+    }
+
+    if (!BARBOFUS_ALLOWED_PATHS.includes(normalizedPath)) {
       return null;
     }
 
+    parsed.pathname = normalizedPath;
     parsed.hash = "";
     return parsed.toString();
   } catch {

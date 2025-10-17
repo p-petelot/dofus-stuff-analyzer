@@ -878,7 +878,7 @@ function buildBarbofusConfiguration(
       return { link: null, preview: null };
     }
     const link = `${BARBOFUS_BASE_URL}?s=${encoded}`;
-    const preview = `${BARBOFUS_BASE_URL}/render?s=${encoded}`;
+    const preview = link;
     return { link, preview };
   } catch (err) {
     console.error(err);
