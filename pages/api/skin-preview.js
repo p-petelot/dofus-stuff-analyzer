@@ -1,5 +1,24 @@
 const BARBOFUS_RENDER_BASE_URL = "https://barbofus.com/skinator";
 
+function extractMetaContent(html, attribute, value) {
+  if (!html) {
+    return null;
+  }
+
+  const pattern = new RegExp(
+    `<meta[^>]+${attribute}=["']${value}["'][^>]*>`,
+    "i"
+  );
+  const match = html.match(pattern);
+  if (!match) {
+    return null;
+  }
+
+  const tag = match[0];
+  const contentMatch = tag.match(/content=["']([^"']+)["']/i);
+  return contentMatch ? contentMatch[1].trim() : null;
+}
+
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
@@ -24,33 +43,60 @@ export default async function handler(req, res) {
   const target = `${BARBOFUS_RENDER_BASE_URL}?s=${encodeURIComponent(config)}`;
 
   try {
-    const response = await fetch(target, {
+    const pageResponse = await fetch(target, {
+      headers: {
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
+      cache: "no-store",
+    });
+
+    if (!pageResponse.ok) {
+      res.status(pageResponse.status).json({ error: "Unable to resolve preview page" });
+      return;
+    }
+
+    const html = await pageResponse.text();
+    const ogImage =
+      extractMetaContent(html, "property", "og:image") ??
+      extractMetaContent(html, "name", "twitter:image") ??
+      null;
+
+    if (!ogImage) {
+      res.status(404).json({ error: "Preview image not found" });
+      return;
+    }
+
+    const previewUrl = new URL(ogImage, target).toString();
+
+    const imageResponse = await fetch(previewUrl, {
       headers: {
         Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
       },
       cache: "no-store",
     });
 
-    if (!response.ok) {
-      res.status(response.status).json({ error: "Unable to fetch preview" });
+    if (!imageResponse.ok) {
+      res.status(imageResponse.status).json({ error: "Unable to fetch preview image" });
       return;
     }
 
-    const arrayBuffer = await response.arrayBuffer();
+    const arrayBuffer = await imageResponse.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    const contentType = response.headers.get("content-type") ?? "image/webp";
+    const contentType = imageResponse.headers.get("content-type") ?? "image/webp";
     res.setHeader("Content-Type", contentType);
 
-    const cacheControl = response.headers.get("cache-control");
+    const cacheControl = imageResponse.headers.get("cache-control");
     if (cacheControl) {
       res.setHeader("Cache-Control", cacheControl);
     } else {
-      res.setHeader("Cache-Control", "public, max-age=0, s-maxage=86400, stale-while-revalidate=86400");
+      res.setHeader(
+        "Cache-Control",
+        "public, max-age=0, s-maxage=86400, stale-while-revalidate=86400"
+      );
     }
 
-    const contentLength = buffer.length.toString();
-    res.setHeader("Content-Length", contentLength);
+    res.setHeader("Content-Length", buffer.length.toString());
     res.status(200).send(buffer);
   } catch (error) {
     console.error("Failed to proxy Barbofus preview:", error);
