@@ -3024,114 +3024,6 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                 </div>
               </div>
             </div>
-            <div className="palette__identity" role="group" aria-label="Configuration du personnage Dofus">
-              <div className="palette__identity-intro">
-                <span className="palette__identity-label">Avatar Dofus</span>
-                <span className="palette__identity-hint">
-                  Choisis le sexe et la classe qui serviront à générer les aperçus Barbofus.
-                </span>
-              </div>
-              <div className="palette__identity-section" role="group" aria-label="Sélection du sexe">
-                <span className="palette__identity-section-title">Choix du sexe</span>
-                <div className="palette__gender" role="radiogroup" aria-label="Sexe du personnage">
-                  <button
-                    type="button"
-                    className={`palette__gender-option${selectedGender === "male" ? " is-active" : ""}`}
-                    onClick={() => setSelectedGender("male")}
-                    role="radio"
-                    aria-checked={selectedGender === "male"}
-                  >
-                    <span className="palette__gender-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path
-                          d="M15 3h6v6m0-6-7.5 7.5m1.5-1.5a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </span>
-                    <span className="palette__gender-text">Homme</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`palette__gender-option${selectedGender === "female" ? " is-active" : ""}`}
-                    onClick={() => setSelectedGender("female")}
-                    role="radio"
-                    aria-checked={selectedGender === "female"}
-                  >
-                    <span className="palette__gender-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path
-                          d="M12 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm0 12v8m-4-4h8"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </span>
-                    <span className="palette__gender-text">Femme</span>
-                  </button>
-                </div>
-              </div>
-              <div className="palette__identity-section" role="group" aria-label="Sélection de la classe">
-                <span className="palette__identity-section-title">Choix de la classe</span>
-                {breedsError ? (
-                  <div className="palette__identity-status palette__identity-status--error" role="alert">
-                    <span>{breedsError}</span>
-                    <button
-                      type="button"
-                      className="palette__identity-retry"
-                      onClick={handleRetryBreeds}
-                      disabled={breedsLoading}
-                    >
-                      Réessayer
-                    </button>
-                  </div>
-                ) : null}
-                {breedsLoading ? (
-                  <div className="palette__identity-status" role="status" aria-live="polite">
-                    Chargement des classes…
-                  </div>
-                ) : null}
-                <div className="palette__identity-grid" role="radiogroup" aria-label="Classe du personnage">
-                  {breeds.map((breed) => {
-                    if (!Number.isFinite(breed.id)) {
-                      return null;
-                    }
-                    const isActive = breed.id === selectedBreedId;
-                    const fallbackLetter = breed.name?.charAt(0)?.toUpperCase() ?? "?";
-
-                    return (
-                      <button
-                        key={breed.slug ?? `breed-${breed.id}`}
-                        type="button"
-                        className={`palette__identity-chip${isActive ? " is-active" : ""}`}
-                        onClick={() => setSelectedBreedId(breed.id)}
-                        role="radio"
-                        aria-checked={isActive}
-                        aria-label={`Choisir ${breed.name}`}
-                      >
-                        <span className="palette__identity-chip-icon">
-                          {breed.icon ? (
-                            <img src={breed.icon} alt="" loading="lazy" />
-                          ) : (
-                            <span className="palette__identity-chip-letter" aria-hidden="true">
-                              {fallbackLetter}
-                            </span>
-                          )}
-                        </span>
-                        <span className="palette__identity-chip-label" aria-hidden="true">
-                          {breed.name}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
             {colors.length > 0 ? (
               <div className="palette__skin-control" role="group" aria-label="Gestion de la teinte de peau">
                 <div className="palette__skin-meta">
@@ -3190,6 +3082,114 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                 </p>
               </div>
             )}
+          </div>
+          <div className="identity-card" role="group" aria-label="Configuration du personnage Dofus">
+            <div className="identity-card__intro">
+              <span className="identity-card__label">Avatar Dofus</span>
+              <span className="identity-card__hint">
+                Choisis le sexe et la classe qui serviront à générer les aperçus Barbofus.
+              </span>
+            </div>
+            <div className="identity-card__section" role="group" aria-label="Sélection du sexe">
+              <span className="identity-card__section-title">Choix du sexe</span>
+              <div className="identity-card__gender" role="radiogroup" aria-label="Sexe du personnage">
+                <button
+                  type="button"
+                  className={`identity-card__gender-option${selectedGender === "male" ? " is-active" : ""}`}
+                  onClick={() => setSelectedGender("male")}
+                  role="radio"
+                  aria-checked={selectedGender === "male"}
+                >
+                  <span className="identity-card__gender-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path
+                        d="M15 3h6v6m0-6-7.5 7.5m1.5-1.5a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                  <span className="identity-card__gender-text">Homme</span>
+                </button>
+                <button
+                  type="button"
+                  className={`identity-card__gender-option${selectedGender === "female" ? " is-active" : ""}`}
+                  onClick={() => setSelectedGender("female")}
+                  role="radio"
+                  aria-checked={selectedGender === "female"}
+                >
+                  <span className="identity-card__gender-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path
+                        d="M12 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm0 12v8m-4-4h8"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                  <span className="identity-card__gender-text">Femme</span>
+                </button>
+              </div>
+            </div>
+            <div className="identity-card__section" role="group" aria-label="Sélection de la classe">
+              <span className="identity-card__section-title">Choix de la classe</span>
+              {breedsError ? (
+                <div className="identity-card__status identity-card__status--error" role="alert">
+                  <span>{breedsError}</span>
+                  <button
+                    type="button"
+                    className="identity-card__retry"
+                    onClick={handleRetryBreeds}
+                    disabled={breedsLoading}
+                  >
+                    Réessayer
+                  </button>
+                </div>
+              ) : null}
+              {breedsLoading ? (
+                <div className="identity-card__status" role="status" aria-live="polite">
+                  Chargement des classes…
+                </div>
+              ) : null}
+              <div className="identity-card__grid" role="radiogroup" aria-label="Classe du personnage">
+                {breeds.map((breed) => {
+                  if (!Number.isFinite(breed.id)) {
+                    return null;
+                  }
+                  const isActive = breed.id === selectedBreedId;
+                  const fallbackLetter = breed.name?.charAt(0)?.toUpperCase() ?? "?";
+
+                  return (
+                    <button
+                      key={breed.slug ?? `breed-${breed.id}`}
+                      type="button"
+                      className={`identity-card__chip${isActive ? " is-active" : ""}`}
+                      onClick={() => setSelectedBreedId(breed.id)}
+                      role="radio"
+                      aria-checked={isActive}
+                      aria-label={`Choisir ${breed.name}`}
+                    >
+                      <span className="identity-card__chip-icon">
+                        {breed.icon ? (
+                          <img src={breed.icon} alt="" loading="lazy" />
+                        ) : (
+                          <span className="identity-card__chip-letter" aria-hidden="true">
+                            {fallbackLetter}
+                          </span>
+                        )}
+                      </span>
+                      <span className="identity-card__chip-label" aria-hidden="true">
+                        {breed.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -3273,7 +3273,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                           <article key={proposal.id} className="skin-card">
                             <header className="skin-card__header">
                               <div className="skin-card__heading">
-                                <h3 className="skin-card__title">Skin chromatique</h3>
+                                <h3 className="skin-card__title sr-only">{`Proposition ${proposal.index + 1}`}</h3>
                                 {subtitle ? <span className="skin-card__subtitle">{subtitle}</span> : null}
                               </div>
                             </header>

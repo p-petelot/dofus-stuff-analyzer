@@ -523,104 +523,104 @@ a {
   gap: 6px;
 }
 
-.palette__identity {
+.identity-card {
+  background: var(--card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--card-border);
+  padding: 16px;
+  box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(10, 17, 40, 0.45);
+  gap: 20px;
 }
 
-.palette__identity-intro {
+.identity-card__intro {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-width: 420px;
+  gap: 6px;
 }
 
-.palette__identity-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.palette__identity-section-title {
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: rgba(226, 232, 240, 0.78);
-}
-
-.palette__identity-label {
+.identity-card__label {
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: rgba(226, 232, 240, 0.82);
 }
 
-.palette__identity-hint {
+.identity-card__hint {
   font-size: 0.75rem;
   color: rgba(148, 163, 184, 0.75);
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
-.palette__gender {
+.identity-card__section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.identity-card__section-title {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(226, 232, 240, 0.78);
+}
+
+.identity-card__gender {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(5, 8, 22, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.identity-card__gender-option {
+  border: none;
+  background: none;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.78rem;
+  color: rgba(226, 232, 240, 0.7);
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(5, 8, 22, 0.5);
-  border-radius: 999px;
-  padding: 4px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
-.palette__gender-option {
-  border: none;
-  background: none;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font: inherit;
-  font-size: 0.84rem;
-  color: rgba(226, 232, 240, 0.7);
-  cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.palette__gender-option.is-active {
+.identity-card__gender-option.is-active {
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.88), rgba(56, 189, 248, 0.82));
   color: #0b1222;
   font-weight: 600;
-  box-shadow: 0 12px 24px -18px rgba(56, 189, 248, 0.9);
+  box-shadow: 0 10px 22px -18px rgba(56, 189, 248, 0.9);
 }
 
-.palette__gender-option:focus-visible {
+.identity-card__gender-option:focus-visible {
   outline: 2px solid rgba(248, 250, 252, 0.85);
   outline-offset: 3px;
 }
 
-.palette__gender-icon {
-  width: 18px;
-  height: 18px;
+.identity-card__gender-icon {
+  width: 16px;
+  height: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
-.palette__gender-icon svg {
+.identity-card__gender-icon svg {
   width: 100%;
   height: 100%;
 }
 
-.palette__gender-text {
+.identity-card__gender-text {
   font-weight: 600;
 }
 
-.palette__identity-status {
+.identity-card__status {
   font-size: 0.78rem;
   color: rgba(148, 163, 184, 0.8);
   display: flex;
@@ -628,11 +628,11 @@ a {
   gap: 8px;
 }
 
-.palette__identity-status--error {
+.identity-card__status--error {
   color: rgba(248, 113, 113, 0.9);
 }
 
-.palette__identity-retry {
+.identity-card__retry {
   border: none;
   background: none;
   color: rgba(56, 189, 248, 0.88);
@@ -643,29 +643,29 @@ a {
   padding: 0;
 }
 
-.palette__identity-retry:hover {
+.identity-card__retry:hover {
   color: rgba(96, 165, 250, 0.95);
 }
 
-.palette__identity-retry:disabled {
+.identity-card__retry:disabled {
   color: rgba(148, 163, 184, 0.6);
   cursor: not-allowed;
   text-decoration: none;
 }
 
-.palette__identity-retry:focus-visible {
+.identity-card__retry:focus-visible {
   outline: 2px solid rgba(148, 163, 184, 0.6);
   outline-offset: 2px;
   border-radius: 4px;
 }
 
-.palette__identity-grid {
+.identity-card__grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
   gap: 12px;
 }
 
-.palette__identity-chip {
+.identity-card__chip {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -680,15 +680,15 @@ a {
   cursor: pointer;
   transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease,
     box-shadow 0.2s ease;
-  min-height: 120px;
+  min-height: 112px;
 }
 
-.palette__identity-chip:hover {
+.identity-card__chip:hover {
   border-color: rgba(148, 163, 184, 0.42);
   transform: translateY(-1px);
 }
 
-.palette__identity-chip.is-active {
+.identity-card__chip.is-active {
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.88), rgba(56, 189, 248, 0.78));
   color: #07102a;
   font-weight: 600;
@@ -696,39 +696,43 @@ a {
   box-shadow: 0 16px 38px -24px rgba(56, 189, 248, 0.92);
 }
 
-.palette__identity-chip:focus-visible {
+.identity-card__chip:focus-visible {
   outline: 2px solid rgba(248, 250, 252, 0.85);
   outline-offset: 3px;
 }
 
-.palette__identity-chip-icon {
-  width: 64px;
-  height: 64px;
+
+.identity-card__chip-icon {
+  width: 52px;
+  height: 52px;
   border-radius: 14px;
-  background: rgba(8, 13, 28, 0.65);
-  display: grid;
-  place-items: center;
+  background: rgba(8, 12, 26, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
 }
 
-.palette__identity-chip-icon img {
+.identity-card__chip-icon img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 
-.palette__identity-chip-letter {
+.identity-card__chip-letter {
   width: 100%;
   height: 100%;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-weight: 600;
   font-size: 1rem;
   color: inherit;
   background: rgba(148, 163, 184, 0.12);
 }
 
-.palette__identity-chip-label {
+.identity-card__chip-label {
   text-align: center;
   font-weight: 600;
   line-height: 1.2;
@@ -1491,6 +1495,10 @@ a {
   margin-top: 10px;
   display: grid;
   gap: 16px;
+}
+
+.suggestions__details[hidden] {
+  display: none !important;
 }
 
 .suggestions__status {
