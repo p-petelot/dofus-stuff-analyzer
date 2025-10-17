@@ -70,6 +70,14 @@ const CANVAS_GENERIC_ASSIGNMENT_PATTERN =
   /canvas0[^<>{}\[\]]*?(?:data|src|source|image|preview|href|url)\s*[:=]\s*["']([^"']+)["']/gi;
 const CANVAS_CONTEXT_URL_PATTERN =
   /canvas0[^<>{}\[\]]*?(https?:\\\/\\\/[^"'\s<>]+|https?:\/\/[^"'\s<>]+)/gi;
+const CANVAS_DIRECT_PATTERNS = [
+  { pattern: CANVAS_OBJECT_DATA_PATTERN, source: "object:data" },
+  { pattern: CANVAS_IMAGE_TAG_PATTERN, source: "img:attr" },
+  { pattern: CANVAS_DATA_ATTRIBUTE_PATTERN, source: "canvas:attr" },
+  { pattern: CANVAS_JSON_OBJECT_PATTERN, source: "json:object" },
+  { pattern: CANVAS_JSON_STRING_PATTERN, source: "json:string" },
+  { pattern: CANVAS_GENERIC_ASSIGNMENT_PATTERN, source: "generic" },
+];
 
 function isLikelyCanvasPreviewUrl(url, baseUrl) {
   if (!url) {
@@ -114,9 +122,9 @@ function isLikelyCanvasPreviewUrl(url, baseUrl) {
   }
 }
 
-function findCanvasMatch(pattern, html, baseUrl, source) {
+function collectCanvasMatches(pattern, html, baseUrl, source, results) {
   if (!html) {
-    return null;
+    return;
   }
 
   pattern.lastIndex = 0;
@@ -134,7 +142,8 @@ function findCanvasMatch(pattern, html, baseUrl, source) {
         raw,
         decoded,
       });
-      return { url: decoded, source };
+      results.push({ url: decoded, source });
+      continue;
     }
 
     if (decoded) {
@@ -147,28 +156,17 @@ function findCanvasMatch(pattern, html, baseUrl, source) {
   }
 
   pattern.lastIndex = 0;
-  return null;
 }
 
-function extractCanvasPreviewUrl(html, baseUrl) {
+function extractCanvasPreviewCandidates(html, baseUrl) {
   if (!html) {
-    return null;
+    return [];
   }
 
-  const directPatterns = [
-    { pattern: CANVAS_OBJECT_DATA_PATTERN, source: "object:data" },
-    { pattern: CANVAS_IMAGE_TAG_PATTERN, source: "img:attr" },
-    { pattern: CANVAS_DATA_ATTRIBUTE_PATTERN, source: "canvas:attr" },
-    { pattern: CANVAS_JSON_OBJECT_PATTERN, source: "json:object" },
-    { pattern: CANVAS_JSON_STRING_PATTERN, source: "json:string" },
-    { pattern: CANVAS_GENERIC_ASSIGNMENT_PATTERN, source: "generic" },
-  ];
+  const results = [];
 
-  for (const { pattern, source } of directPatterns) {
-    const result = findCanvasMatch(pattern, html, baseUrl, source);
-    if (result) {
-      return result;
-    }
+  for (const { pattern, source } of CANVAS_DIRECT_PATTERNS) {
+    collectCanvasMatches(pattern, html, baseUrl, source, results);
   }
 
   const mentionPattern = /canvas0/gi;
@@ -188,10 +186,8 @@ function extractCanvasPreviewUrl(html, baseUrl) {
           raw: propertyMatch[1],
           decoded,
         });
-        return { url: decoded, source: "snippet:property" };
-      }
-
-      if (decoded) {
+        results.push({ url: decoded, source: "snippet:property" });
+      } else if (decoded) {
         console.log("[skin-preview] discarded canvas snippet", {
           source: "snippet:property",
           raw: propertyMatch[1],
@@ -211,10 +207,8 @@ function extractCanvasPreviewUrl(html, baseUrl) {
           raw: httpMatch[1],
           decoded,
         });
-        return { url: decoded, source: "snippet:http" };
-      }
-
-      if (decoded) {
+        results.push({ url: decoded, source: "snippet:http" });
+      } else if (decoded) {
         console.log("[skin-preview] discarded canvas snippet", {
           source: "snippet:http",
           raw: httpMatch[1],
@@ -232,10 +226,8 @@ function extractCanvasPreviewUrl(html, baseUrl) {
           raw: assignmentMatch[1],
           decoded,
         });
-        return { url: decoded, source: "snippet:assignment" };
-      }
-
-      if (decoded) {
+        results.push({ url: decoded, source: "snippet:assignment" });
+      } else if (decoded) {
         console.log("[skin-preview] discarded canvas snippet", {
           source: "snippet:assignment",
           raw: assignmentMatch[1],
@@ -247,17 +239,28 @@ function extractCanvasPreviewUrl(html, baseUrl) {
 
   mentionPattern.lastIndex = 0;
 
-  const contextMatch = findCanvasMatch(
+  collectCanvasMatches(
     CANVAS_CONTEXT_URL_PATTERN,
     html,
     baseUrl,
-    "context"
+    "context",
+    results
   );
-  if (contextMatch) {
-    return contextMatch;
+
+  const unique = [];
+  const seen = new Set();
+  for (const entry of results) {
+    if (!entry?.url) {
+      continue;
+    }
+    if (seen.has(entry.url)) {
+      continue;
+    }
+    seen.add(entry.url);
+    unique.push(entry);
   }
 
-  return null;
+  return unique;
 }
 
 export default async function handler(req, res) {
@@ -297,24 +300,20 @@ export default async function handler(req, res) {
     }
 
     const html = await pageResponse.text();
-    const canvasPreview = extractCanvasPreviewUrl(html, target);
+    const canvasCandidates = extractCanvasPreviewCandidates(html, target);
 
-    let previewUrl = canvasPreview?.url ?? null;
-    let previewSource = canvasPreview?.source ?? null;
-
-    if (!previewUrl) {
-      const ogImage =
-        extractMetaContent(html, "property", "og:image") ??
-        extractMetaContent(html, "name", "twitter:image") ??
-        null;
-
-      if (ogImage) {
-        previewUrl = decodePotentialUrl(ogImage, target);
-        previewSource = previewUrl ? "meta" : null;
+    const metaImage =
+      extractMetaContent(html, "property", "og:image") ??
+      extractMetaContent(html, "name", "twitter:image") ??
+      null;
+    if (metaImage) {
+      const decodedMeta = decodePotentialUrl(metaImage, target);
+      if (decodedMeta) {
+        canvasCandidates.push({ url: decodedMeta, source: "meta" });
       }
     }
 
-    if (!previewUrl) {
+    if (!canvasCandidates.length) {
       console.warn("[skin-preview] preview image not found", {
         config: config.slice(0, 64),
       });
@@ -322,81 +321,109 @@ export default async function handler(req, res) {
       return;
     }
 
-    console.log("[skin-preview] resolved preview url", {
-      previewUrl,
-      previewSource,
-    });
+    for (const candidate of canvasCandidates) {
+      if (!candidate?.url) {
+        continue;
+      }
 
-    if (/^data:image\//i.test(previewUrl)) {
-      const [meta, dataPart] = previewUrl.split(",", 2);
-      if (!dataPart) {
-        res.status(415).json({ error: "Invalid data URL" });
+      if (/^data:image\//i.test(candidate.url)) {
+        const [meta, dataPart] = candidate.url.split(",", 2);
+        if (!dataPart) {
+          continue;
+        }
+
+        const isBase64 = /;base64/i.test(meta);
+        const mimeMatch = meta.match(/^data:([^;,]+)/i);
+        const contentType = mimeMatch ? mimeMatch[1] : "image/png";
+        const buffer = isBase64
+          ? Buffer.from(dataPart, "base64")
+          : Buffer.from(decodeURIComponent(dataPart));
+
+        console.log("[skin-preview] streaming inline preview response", {
+          previewSource: candidate.source,
+          contentType,
+          contentLength: buffer.length,
+        });
+
+        res.setHeader("Content-Type", contentType);
+        res.setHeader(
+          "Cache-Control",
+          "public, max-age=0, s-maxage=86400, stale-while-revalidate=86400"
+        );
+        res.setHeader("Content-Length", buffer.length.toString());
+        res.status(200).send(buffer);
         return;
       }
 
-      const isBase64 = /;base64/i.test(meta);
-      const mimeMatch = meta.match(/^data:([^;,]+)/i);
-      const contentType = mimeMatch ? mimeMatch[1] : "image/png";
-      const buffer = isBase64
-        ? Buffer.from(dataPart, "base64")
-        : Buffer.from(decodeURIComponent(dataPart));
+      try {
+        const imageResponse = await fetch(candidate.url, {
+          headers: {
+            Accept:
+              "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+            Referer: target,
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          },
+          cache: "no-store",
+        });
 
-      console.log("[skin-preview] streaming inline preview response", {
-        previewSource,
-        contentType,
-        contentLength: buffer.length,
-      });
+        if (!imageResponse.ok) {
+          console.warn("[skin-preview] candidate fetch failed", {
+            status: imageResponse.status,
+            previewUrl: candidate.url,
+            previewSource: candidate.source,
+          });
+          continue;
+        }
 
-      res.setHeader("Content-Type", contentType);
-      res.setHeader(
-        "Cache-Control",
-        "public, max-age=0, s-maxage=86400, stale-while-revalidate=86400"
-      );
-      res.setHeader("Content-Length", buffer.length.toString());
-      res.status(200).send(buffer);
-      return;
+        const contentType = imageResponse.headers.get("content-type");
+        if (!contentType || !/^image\//i.test(contentType)) {
+          console.warn("[skin-preview] rejected non-image candidate", {
+            previewUrl: candidate.url,
+            previewSource: candidate.source,
+            contentType,
+          });
+          continue;
+        }
+
+        const arrayBuffer = await imageResponse.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+
+        console.log("[skin-preview] streaming preview response", {
+          previewUrl: candidate.url,
+          previewSource: candidate.source,
+          contentType,
+          contentLength: buffer.length,
+        });
+
+        res.setHeader("Content-Type", contentType);
+
+        const cacheControl = imageResponse.headers.get("cache-control");
+        if (cacheControl) {
+          res.setHeader("Cache-Control", cacheControl);
+        } else {
+          res.setHeader(
+            "Cache-Control",
+            "public, max-age=0, s-maxage=86400, stale-while-revalidate=86400"
+          );
+        }
+
+        res.setHeader("Content-Length", buffer.length.toString());
+        res.status(200).send(buffer);
+        return;
+      } catch (candidateError) {
+        console.warn("[skin-preview] candidate request errored", {
+          previewUrl: candidate.url,
+          previewSource: candidate.source,
+          error: candidateError?.message,
+        });
+      }
     }
 
-    const imageResponse = await fetch(previewUrl, {
-      headers: {
-        Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-        Referer: target,
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      },
-      cache: "no-store",
+    console.warn("[skin-preview] preview candidates exhausted", {
+      config: config.slice(0, 64),
     });
-
-    if (!imageResponse.ok) {
-      res.status(imageResponse.status).json({ error: "Unable to fetch preview image" });
-      return;
-    }
-
-    const arrayBuffer = await imageResponse.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    const contentType = imageResponse.headers.get("content-type") ?? "image/webp";
-    console.log("[skin-preview] streaming preview response", {
-      previewUrl,
-      previewSource,
-      contentType,
-      contentLength: buffer.length,
-    });
-
-    res.setHeader("Content-Type", contentType);
-
-    const cacheControl = imageResponse.headers.get("cache-control");
-    if (cacheControl) {
-      res.setHeader("Cache-Control", cacheControl);
-    } else {
-      res.setHeader(
-        "Cache-Control",
-        "public, max-age=0, s-maxage=86400, stale-while-revalidate=86400"
-      );
-    }
-
-    res.setHeader("Content-Length", buffer.length.toString());
-    res.status(200).send(buffer);
+    res.status(502).json({ error: "Unable to fetch preview image" });
   } catch (error) {
     console.error("Failed to proxy Barbofus preview:", error);
     res.status(502).json({ error: "Preview generation failed" });
