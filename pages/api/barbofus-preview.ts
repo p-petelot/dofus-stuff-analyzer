@@ -14,7 +14,7 @@ type ErrorResponse = {
 
 const BARBOFUS_ORIGIN = "https://barbofus.com";
 const BARBOFUS_ALLOWED_PATHS = ["/skinator", "/skinator/render"] as const;
-const DEFAULT_VIEWPORT = { width: 512, height: 512 } as const;
+const DEFAULT_VIEWPORT = { width: 1280, height: 720 } as const;
 const PAGE_TIMEOUT = 15000;
 
 let browserPromise: Promise<Browser> | null = null;
@@ -47,47 +47,75 @@ async function captureCanvasFromUrl(url: string): Promise<CanvasPayload> {
     await page.goto(url, { waitUntil: "networkidle", timeout: PAGE_TIMEOUT });
 
     await page.waitForFunction(
-      () => {
-        const canvas = document.querySelector<HTMLCanvasElement>("canvas");
-        return Boolean(canvas && canvas.width > 0 && canvas.height > 0);
-      },
+      () => typeof (window as any).generateFinalInputImage === "function",
       undefined,
       { timeout: PAGE_TIMEOUT }
     );
 
-    const canvasLocator = page.locator("canvas");
-    await canvasLocator.waitFor({ state: "visible", timeout: PAGE_TIMEOUT });
-
-    const metadata = await page.evaluate<
-      | {
-          width: number;
-          height: number;
-        }
-      | null
-    >(() => {
-      const canvas = document.querySelector<HTMLCanvasElement>("canvas");
-      if (!canvas || canvas.width <= 0 || canvas.height <= 0) {
-        return null;
+    const capture = await page.evaluate(async () => {
+      const shareFunction = (window as any).generateFinalInputImage;
+      if (typeof shareFunction !== "function") {
+        throw new Error("Missing Barbofus share helper");
       }
 
+      const form = document.getElementById("skinator-form") as HTMLFormElement | null;
+      const fileInput = document.getElementById("image_path") as HTMLInputElement | null;
+
+      if (!form || !fileInput) {
+        throw new Error("Missing Barbofus share form controls");
+      }
+
+      let generatedFile: File | null = null;
+      const originalSubmit = form.submit.bind(form);
+      form.submit = () => {
+        generatedFile = fileInput.files?.[0] ?? null;
+      };
+
+      try {
+        await shareFunction();
+      } finally {
+        form.submit = originalSubmit;
+      }
+
+      if (!generatedFile) {
+        throw new Error("Barbofus preview generation did not yield a file");
+      }
+
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const value = typeof reader.result === "string" ? reader.result : null;
+          if (!value) {
+            reject(new Error("Unable to read preview blob"));
+            return;
+          }
+          resolve(value);
+        };
+        reader.onerror = () => reject(reader.error ?? new Error("Failed to read preview file"));
+        reader.readAsDataURL(generatedFile as Blob);
+      });
+
+      const dimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => {
+          resolve({ width: image.naturalWidth, height: image.naturalHeight });
+        };
+        image.onerror = () => reject(new Error("Unable to determine preview dimensions"));
+        image.src = dataUrl;
+      });
+
       return {
-        width: canvas.width,
-        height: canvas.height,
+        dataUrl,
+        width: dimensions.width,
+        height: dimensions.height,
       };
     });
 
-    if (!metadata) {
+    if (!capture) {
       return null;
     }
 
-    const screenshot = await canvasLocator.screenshot({ type: "png" });
-    const dataUrl = `data:image/png;base64,${screenshot.toString("base64")}`;
-
-    return {
-      dataUrl,
-      width: metadata.width,
-      height: metadata.height,
-    };
+    return capture;
   } finally {
     await context.close();
   }
@@ -109,11 +137,11 @@ function sanitizePreviewUrl(value: unknown): string | null {
       normalizedPath = normalizedPath.slice(0, -1);
     }
 
-    if (!BARBOFUS_ALLOWED_PATHS.includes(normalizedPath)) {
+    if (!BARBOFUS_ALLOWED_PATHS.includes(normalizedPath as (typeof BARBOFUS_ALLOWED_PATHS)[number])) {
       return null;
     }
 
-    parsed.pathname = normalizedPath;
+    parsed.pathname = normalizedPath === "/skinator/render" ? "/skinator" : normalizedPath;
     parsed.hash = "";
     return parsed.toString();
   } catch {
