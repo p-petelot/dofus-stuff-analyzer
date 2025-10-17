@@ -970,6 +970,13 @@ function createCorsError(originalError) {
   return error;
 }
 
+function createFrameAncestorsError(originalError) {
+  const error = new Error("barbofus_canvas_frame_ancestors");
+  error.type = "frame-ancestors";
+  error.cause = originalError;
+  return error;
+}
+
 function showBarbofusCanvasError(message) {
   if (typeof document === "undefined") {
     return;
@@ -977,7 +984,12 @@ function showBarbofusCanvasError(message) {
 
   const existing = document.getElementById(BARBOFUS_CANVAS_ERROR_BANNER_ID);
   if (existing) {
-    existing.textContent = message;
+    const messageElement = existing.querySelector("[data-role='message']");
+    if (messageElement) {
+      messageElement.textContent = message;
+    } else {
+      existing.textContent = message;
+    }
     existing.classList.add("is-visible");
     existing.setAttribute("aria-hidden", "false");
     return;
@@ -988,11 +1000,30 @@ function showBarbofusCanvasError(message) {
   banner.className = "canvas-error-banner";
   banner.setAttribute("role", "status");
   banner.setAttribute("aria-live", "polite");
-  banner.textContent = message;
+  banner.setAttribute("aria-hidden", "true");
+
+  const messageElement = document.createElement("span");
+  messageElement.className = "canvas-error-banner__message";
+  messageElement.setAttribute("data-role", "message");
+  messageElement.textContent = message;
+
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "canvas-error-banner__close";
+  closeButton.setAttribute("aria-label", "Fermer l'alerte Barbofus");
+  closeButton.textContent = "×";
+  closeButton.addEventListener("click", () => {
+    banner.classList.remove("is-visible");
+    banner.setAttribute("aria-hidden", "true");
+  });
+
+  banner.appendChild(messageElement);
+  banner.appendChild(closeButton);
   document.body.appendChild(banner);
 
   requestAnimationFrame(() => {
     banner.classList.add("is-visible");
+    banner.setAttribute("aria-hidden", "false");
   });
 }
 
@@ -1068,7 +1099,9 @@ function loadBarbofusCanvasImage(url, overrides = {}) {
     };
 
     function onError() {
-      scheduleRetry(new Error("iframe_load_error"));
+      scheduleRetry(createFrameAncestorsError(new Error("iframe_load_error")), {
+        retryable: false,
+      });
     }
 
     function onLoad() {
@@ -1141,7 +1174,9 @@ function loadBarbofusCanvasImage(url, overrides = {}) {
     iframe.addEventListener("error", onError);
 
     loadTimer = window.setTimeout(() => {
-      scheduleRetry(new Error("iframe_load_timeout"));
+      scheduleRetry(createFrameAncestorsError(new Error("iframe_load_timeout")), {
+        retryable: false,
+      });
     }, settings.loadTimeout);
 
     document.body.appendChild(iframe);
@@ -2806,6 +2841,10 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
           if (error?.type === "cors") {
             showBarbofusCanvasError(
               "Impossible d'afficher l'aperçu Barbofus à cause d'une restriction CORS."
+            );
+          } else if (error?.type === "frame-ancestors") {
+            showBarbofusCanvasError(
+              "Impossible d'afficher l'aperçu Barbofus car le site refuse l'intégration dans une iframe (directive CSP “frame-ancestors”)."
             );
           } else {
             console.warn("Barbofus preview extraction failed", error);
