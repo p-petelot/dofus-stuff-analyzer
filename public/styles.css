@@ -141,7 +141,7 @@ a {
   display: grid;
   gap: 12px;
   grid-template-columns: minmax(400px, 1fr);
-  align-items: start;
+  align-items: stretch;
 }
 
 @media (min-width: 960px) {
@@ -152,7 +152,7 @@ a {
 
 @media (min-width: 1340px) {
   .workspace {
-    grid-template-columns: minmax(400px, 1fr) minmax(400px, 1fr) minmax(420px, 2fr);
+    grid-template-columns: repeat(3, minmax(400px, 1fr));
   }
 }
 
@@ -290,11 +290,11 @@ a {
 
 .dropzone {
   position: relative;
-  padding: 14px;
+  padding: 18px;
   border-radius: var(--radius-lg);
   border: 1px dashed rgba(148, 163, 184, 0.32);
   background: rgba(10, 17, 40, 0.58);
-  min-height: 168px;
+  min-height: 176px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -331,9 +331,10 @@ a {
 .dropzone__placeholder {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   color: var(--text-soft);
   max-width: 320px;
+  align-items: center;
 }
 
 .dropzone__placeholder strong {
@@ -364,58 +365,56 @@ a {
 }
 
 .dropzone__hint {
-  position: absolute;
-  bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 0.85rem;
-  color: rgba(248, 250, 252, 0.55);
-  background: rgba(2, 6, 23, 0.6);
-  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.82rem;
+  color: var(--text);
+  background: rgba(8, 12, 26, 0.68);
+  padding: 7px 16px;
   border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  backdrop-filter: blur(12px);
-}
-
-.dropzone--filled .dropzone__hint {
-  opacity: 0;
-  pointer-events: none;
+  border: 1px solid rgba(248, 250, 252, 0.28);
+  backdrop-filter: blur(10px);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 600;
+  box-shadow: 0 18px 30px -28px rgba(15, 23, 42, 0.92);
 }
 
 
 .color-picker {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-  gap: 10px;
-  align-items: stretch;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
 }
 
 .color-picker__preview {
   border-radius: var(--radius-md);
   border: 1px solid rgba(148, 163, 184, 0.2);
-  min-height: 118px;
-  padding: 10px;
+  min-height: 100px;
+  padding: 8px;
   display: grid;
   place-items: center;
   color: var(--text);
-  font-size: clamp(1.15rem, 3vw, 1.7rem);
+  font-size: clamp(1.05rem, 2.8vw, 1.5rem);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.15);
 }
 
 .color-picker__preview-value {
-  background: rgba(5, 8, 22, 0.45);
-  padding: 8px 16px;
+  background: rgba(5, 8, 22, 0.6);
+  padding: 6px 14px;
   border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  backdrop-filter: blur(18px);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  backdrop-filter: blur(14px);
 }
 
 .color-picker__controls {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .color-picker__label {
@@ -426,16 +425,17 @@ a {
 
 .color-picker__inputs {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .color-picker__input {
   -webkit-appearance: none;
   appearance: none;
   border: none;
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: 12px;
   cursor: pointer;
   background: transparent;
@@ -454,14 +454,15 @@ a {
 
 .color-picker__random {
   border: 1px solid rgba(139, 92, 246, 0.45);
-  background: rgba(139, 92, 246, 0.18);
+  background: rgba(139, 92, 246, 0.16);
   color: var(--highlight-strong);
-  padding: 8px 12px;
+  padding: 7px 14px;
   border-radius: 12px;
   cursor: pointer;
   font-weight: 600;
-  font-size: 0.88rem;
+  font-size: 0.86rem;
   transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  white-space: nowrap;
 }
 
 .color-picker__random:hover,
@@ -480,7 +481,7 @@ a {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
   gap: 6px;
-  max-height: 96px;
+  max-height: 84px;
   overflow-y: auto;
 }
 
@@ -591,7 +592,7 @@ a {
 
 .identity-card__gender-option.is-active {
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.88), rgba(56, 189, 248, 0.82));
-  color: #0b1222;
+  color: #ffffff;
   font-weight: 600;
   box-shadow: 0 10px 22px -18px rgba(56, 189, 248, 0.9);
 }
@@ -671,7 +672,7 @@ a {
   gap: 6px;
   padding: 10px 6px;
   border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.24);
+  border: 2px solid rgba(148, 163, 184, 0.24);
   background: rgba(15, 23, 42, 0.65);
   color: rgba(226, 232, 240, 0.82);
   font: inherit;
@@ -689,9 +690,9 @@ a {
 
 .identity-card__chip.is-active {
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.88), rgba(56, 189, 248, 0.78));
-  color: #07102a;
+  color: #ffffff;
   font-weight: 600;
-  border-color: transparent;
+  border-color: rgba(248, 250, 252, 0.95);
   box-shadow: 0 16px 38px -24px rgba(56, 189, 248, 0.92);
 }
 
@@ -780,7 +781,7 @@ a {
 
 .palette__skin-option.is-active {
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.88), rgba(56, 189, 248, 0.82));
-  color: #0b1222;
+  color: #ffffff;
   font-weight: 600;
   box-shadow: 0 12px 24px -18px rgba(56, 189, 248, 0.9);
 }

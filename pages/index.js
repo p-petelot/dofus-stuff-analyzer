@@ -2987,6 +2987,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                     <strong>Glisse ton visuel ici</strong>
                     <span>… ou colle-le directement depuis ton presse-papiers</span>
                     <em>Formats acceptés : PNG, JPG, WebP, GIF statique</em>
+                    <span className="dropzone__hint">Clique pour ouvrir l&apos;explorateur de fichiers</span>
                   </div>
                 )}
                 <input
@@ -2996,7 +2997,6 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                   accept="image/*"
                   onChange={onFileInputChange}
                 />
-                <div className="dropzone__hint">Cliquer ouvre l&apos;explorateur de fichiers</div>
               </div>
             ) : (
               <div className="color-picker">
@@ -3007,8 +3007,8 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                   <span className="color-picker__preview-value">{selectedColor}</span>
                 </div>
                 <div className="color-picker__controls">
-                  <label className="color-picker__label" htmlFor="seed-color">
-                    Choisis ta teinte de départ
+                  <label className="color-picker__label sr-only" htmlFor="seed-color">
+                    Sélectionne ta teinte de départ
                   </label>
                   <div className="color-picker__inputs">
                     <input
@@ -3019,7 +3019,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                       onChange={handleColorInput}
                     />
                     <button type="button" className="color-picker__random" onClick={handleRandomizeColor}>
-                      Nuance surprise
+                      Nuance aléatoire
                     </button>
                   </div>
                   <div className="color-picker__swatch-tray" role="list" aria-label="Suggestions de couleurs">
