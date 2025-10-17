@@ -658,9 +658,10 @@ a {
   border-radius: 4px;
 }
 
+
 .identity-card__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(30px, 1fr));
   gap: 10px;
 }
 
@@ -670,21 +671,19 @@ a {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 10px 6px;
+  padding: 8px 4px;
   border-radius: 12px;
-  border: 2px solid rgba(148, 163, 184, 0.24);
-  background: rgba(15, 23, 42, 0.65);
+  border: none;
+  background: transparent;
   color: rgba(226, 232, 240, 0.82);
   font: inherit;
   font-size: 0.78rem;
   cursor: pointer;
-  transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease,
-    box-shadow 0.2s ease;
-  min-height: 72px;
+  transition: transform 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  min-height: 64px;
 }
 
 .identity-card__chip:hover {
-  border-color: rgba(148, 163, 184, 0.42);
   transform: translateY(-1px);
 }
 
@@ -692,7 +691,7 @@ a {
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.88), rgba(56, 189, 248, 0.78));
   color: #ffffff;
   font-weight: 600;
-  border-color: rgba(248, 250, 252, 0.95);
+  border: 2px solid rgba(248, 250, 252, 0.95);
   box-shadow: 0 16px 38px -24px rgba(56, 189, 248, 0.92);
 }
 
@@ -703,8 +702,8 @@ a {
 
 
 .identity-card__chip-icon {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border-radius: 10px;
   background: rgba(8, 12, 26, 0.55);
   border: 1px solid rgba(148, 163, 184, 0.2);
@@ -891,7 +890,7 @@ a {
   padding: 0;
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 8px;
 }
 
