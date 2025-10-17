@@ -791,15 +791,13 @@ function buildBarbofusConfiguration(
   const initialColors = new Array(MAX_ITEM_PALETTE_COLORS).fill(null);
 
   if (!useCustomSkinTone && defaultColorValues.length) {
-    defaultColorValues.forEach((value, index) => {
-      if (index >= MAX_ITEM_PALETTE_COLORS || !Number.isFinite(value)) {
-        return;
-      }
-      initialColors[index] = value;
-    });
+    const defaultSkin = defaultColorValues.find((value) => Number.isFinite(value));
+    if (defaultSkin !== undefined) {
+      initialColors[0] = defaultSkin;
+    }
   }
 
-  const startIndex = !useCustomSkinTone && defaultColorValues.length ? 1 : 0;
+  const startIndex = !useCustomSkinTone && Number.isFinite(initialColors[0]) ? 1 : 0;
 
   overlayValues.forEach((value) => {
     if (!Number.isFinite(value)) {
@@ -3050,7 +3048,6 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
             <div className="palette__header">
               <div className="palette__title">
                 <h2>Palette extraite</h2>
-                <p>Cliquer sur une teinte la copie instantanément.</p>
               </div>
               <div className="palette__actions">
                 {isProcessing ? <span className="badge badge--pulse">Analyse en cours…</span> : null}
@@ -3081,7 +3078,6 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
               <div className="palette__skin-control" role="group" aria-label="Gestion de la teinte de peau">
                 <div className="palette__skin-meta">
                   <span className="palette__skin-label">Teinte de peau</span>
-                  <span className="palette__skin-hint">#1 peau · #2 cheveux</span>
                 </div>
                 <div className="palette__skin-options" role="radiogroup" aria-label="Choix de la teinte de peau">
                   <button

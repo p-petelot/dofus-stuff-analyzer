@@ -140,19 +140,19 @@ a {
   max-width: 1360px;
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(280px, 1fr);
+  grid-template-columns: minmax(400px, 1fr);
   align-items: start;
 }
 
 @media (min-width: 960px) {
   .workspace {
-    grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr);
+    grid-template-columns: minmax(400px, 1fr) minmax(400px, 1fr);
   }
 }
 
 @media (min-width: 1340px) {
   .workspace {
-    grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr) minmax(420px, 2fr);
+    grid-template-columns: minmax(400px, 1fr) minmax(400px, 1fr) minmax(420px, 2fr);
   }
 }
 
@@ -778,11 +778,6 @@ a {
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: rgba(226, 232, 240, 0.82);
-}
-
-.palette__skin-hint {
-  font-size: 0.75rem;
-  color: rgba(148, 163, 184, 0.75);
 }
 
 .palette__skin-options {
