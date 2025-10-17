@@ -68,6 +68,49 @@ const CANVAS_GENERIC_ASSIGNMENT_PATTERN =
 const CANVAS_CONTEXT_URL_PATTERN =
   /canvas0[^<>{}\[\]]*?(https?:\\\/\\\/[^"'\s<>]+|https?:\/\/[^"'\s<>]+)/gi;
 
+function isLikelyCanvasPreviewUrl(url, baseUrl) {
+  if (!url) {
+    return false;
+  }
+
+  if (url.startsWith("data:image/")) {
+    return true;
+  }
+
+  if (/w3\.org\/2000\/svg/i.test(url)) {
+    return false;
+  }
+
+  try {
+    const normalized = baseUrl ? new URL(url, baseUrl) : new URL(url);
+    const hostname = normalized.hostname.toLowerCase();
+
+    if (hostname === "www.w3.org") {
+      return false;
+    }
+
+    if (hostname === "barbofus.com" || hostname.endsWith(".barbofus.com")) {
+      return true;
+    }
+
+    if (
+      hostname.endsWith(".ankama.com") ||
+      hostname.endsWith(".akamaized.net") ||
+      hostname.includes("ankama")
+    ) {
+      return true;
+    }
+
+    if (/(?:png|webp|jpe?g|gif|avif|apng|svg)$/i.test(normalized.pathname)) {
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    return false;
+  }
+}
+
 function findCanvasMatch(pattern, html, baseUrl, source) {
   if (!html) {
     return null;
@@ -82,13 +125,21 @@ function findCanvasMatch(pattern, html, baseUrl, source) {
     }
 
     const decoded = decodePotentialUrl(raw, baseUrl);
-    if (decoded) {
+    if (decoded && isLikelyCanvasPreviewUrl(decoded, baseUrl)) {
       console.log("[skin-preview] matched canvas preview", {
         source,
         raw,
         decoded,
       });
       return { url: decoded, source };
+    }
+
+    if (decoded) {
+      console.log("[skin-preview] discarded canvas preview", {
+        source,
+        raw,
+        decoded,
+      });
     }
   }
 
@@ -127,13 +178,21 @@ function extractCanvasPreviewUrl(html, baseUrl) {
     );
     if (propertyMatch) {
       const decoded = decodePotentialUrl(propertyMatch[1], baseUrl);
-      if (decoded) {
+      if (decoded && isLikelyCanvasPreviewUrl(decoded, baseUrl)) {
         console.log("[skin-preview] matched canvas snippet", {
           source: "snippet:property",
           raw: propertyMatch[1],
           decoded,
         });
         return { url: decoded, source: "snippet:property" };
+      }
+
+      if (decoded) {
+        console.log("[skin-preview] discarded canvas snippet", {
+          source: "snippet:property",
+          raw: propertyMatch[1],
+          decoded,
+        });
       }
     }
 
@@ -142,7 +201,7 @@ function extractCanvasPreviewUrl(html, baseUrl) {
     );
     if (httpMatch) {
       const decoded = decodePotentialUrl(httpMatch[1], baseUrl);
-      if (decoded) {
+      if (decoded && isLikelyCanvasPreviewUrl(decoded, baseUrl)) {
         console.log("[skin-preview] matched canvas snippet", {
           source: "snippet:http",
           raw: httpMatch[1],
@@ -150,18 +209,34 @@ function extractCanvasPreviewUrl(html, baseUrl) {
         });
         return { url: decoded, source: "snippet:http" };
       }
+
+      if (decoded) {
+        console.log("[skin-preview] discarded canvas snippet", {
+          source: "snippet:http",
+          raw: httpMatch[1],
+          decoded,
+        });
+      }
     }
 
     const assignmentMatch = snippet.match(/=\s*["']([^"']+)["']/i);
     if (assignmentMatch) {
       const decoded = decodePotentialUrl(assignmentMatch[1], baseUrl);
-      if (decoded) {
+      if (decoded && isLikelyCanvasPreviewUrl(decoded, baseUrl)) {
         console.log("[skin-preview] matched canvas snippet", {
           source: "snippet:assignment",
           raw: assignmentMatch[1],
           decoded,
         });
         return { url: decoded, source: "snippet:assignment" };
+      }
+
+      if (decoded) {
+        console.log("[skin-preview] discarded canvas snippet", {
+          source: "snippet:assignment",
+          raw: assignmentMatch[1],
+          decoded,
+        });
       }
     }
   }
