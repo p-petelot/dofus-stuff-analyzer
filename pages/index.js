@@ -3133,12 +3133,6 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
             )}
           </div>
           <div className="identity-card" role="group" aria-label="Configuration du personnage Dofus">
-            <div className="identity-card__intro">
-              <span className="identity-card__label">Avatar Dofus</span>
-              <span className="identity-card__hint">
-                Choisis le sexe et la classe qui serviront à générer les aperçus Barbofus.
-              </span>
-            </div>
             <div className="identity-card__section" role="group" aria-label="Sélection du sexe">
               <span className="identity-card__section-title">Choix du sexe</span>
               <div className="identity-card__gender" role="radiogroup" aria-label="Sexe du personnage">
@@ -3221,6 +3215,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                       role="radio"
                       aria-checked={isActive}
                       aria-label={`Choisir ${breed.name}`}
+                      title={breed.name}
                     >
                       <span className="identity-card__chip-icon">
                         {breed.icon ? (
@@ -3230,9 +3225,6 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                             {fallbackLetter}
                           </span>
                         )}
-                      </span>
-                      <span className="identity-card__chip-label" aria-hidden="true">
-                        {breed.name}
                       </span>
                     </button>
                   );

@@ -551,25 +551,6 @@ a {
   gap: 16px;
 }
 
-.identity-card__intro {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.identity-card__label {
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: rgba(226, 232, 240, 0.82);
-}
-
-.identity-card__hint {
-  font-size: 0.75rem;
-  color: rgba(148, 163, 184, 0.75);
-  line-height: 1.45;
-}
-
 .identity-card__section {
   display: flex;
   flex-direction: column;
@@ -678,17 +659,18 @@ a {
 
 .identity-card__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+  gap: 10px;
 }
 
 .identity-card__chip {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 12px 8px 10px;
-  border-radius: 16px;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.24);
   background: rgba(15, 23, 42, 0.65);
   color: rgba(226, 232, 240, 0.82);
@@ -697,7 +679,7 @@ a {
   cursor: pointer;
   transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease,
     box-shadow 0.2s ease;
-  min-height: 112px;
+  min-height: 72px;
 }
 
 .identity-card__chip:hover {
@@ -720,9 +702,9 @@ a {
 
 
 .identity-card__chip-icon {
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
   background: rgba(8, 12, 26, 0.55);
   border: 1px solid rgba(148, 163, 184, 0.2);
   display: flex;
@@ -747,12 +729,6 @@ a {
   font-size: 1rem;
   color: inherit;
   background: rgba(148, 163, 184, 0.12);
-}
-
-.identity-card__chip-label {
-  text-align: center;
-  font-weight: 600;
-  line-height: 1.2;
 }
 
 .palette__skin-control {
