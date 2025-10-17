@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
+import Link from "next/link";
 
 const ITEM_TYPES = ["coiffe", "cape", "bouclier", "familier"];
 const DOFUS_API_HOST = "https://api.dofusdb.fr";
@@ -3340,6 +3341,11 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         </div>
         <header className="hero">
           <h1>{BRAND_NAME}</h1>
+          <p className="hero__cta">
+            <Link href="/grab-canvas" className="hero__link">
+              Extraire un canvas Barbofus
+            </Link>
+          </p>
         </header>
 
         <section className="workspace">

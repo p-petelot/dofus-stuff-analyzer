@@ -145,6 +145,21 @@ a {
   letter-spacing: -0.04em;
 }
 
+.hero__cta {
+  margin: 0;
+}
+
+.hero__link {
+  color: inherit;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.hero__link:hover,
+.hero__link:focus-visible {
+  text-decoration: underline;
+}
+
 .workspace {
   width: 100%;
   max-width: 1360px;
