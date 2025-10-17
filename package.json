@@ -5,10 +5,12 @@
     "dev": "next dev",
     "start": "next start",
     "build": "next build",
-    "test": "vitest"
+    "test": "vitest",
+    "postinstall": "playwright install chromium"
   },
   "dependencies": {
     "next": "14.2.5",
+    "playwright": "1.44.1",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
