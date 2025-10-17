@@ -4,6 +4,11 @@ import {
   extractMetaContent,
 } from "./skin-preview";
 
+const HEADLESS_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+const PUPPETEER_VIEWPORT = { width: 1440, height: 900 };
+const RENDER_IDLE_WAIT_MS = 600;
+
 const IMAGE_TAG_PATTERN = /<img[^>]*>/gi;
 const ATTRIBUTE_PATTERN = /([a-zA-Z_:][-\.\w:]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
 const IMAGE_ATTRIBUTE_KEYWORDS = [
@@ -20,6 +25,180 @@ const IMAGE_ATTRIBUTE_KEYWORDS = [
 const STYLE_URL_PATTERN = /url\((['"]?)([^"')]+)\1\)/gi;
 const SRCSET_DELIMITER = /\s+/;
 const TEST_PAGE_PATH = "/image-inspector";
+
+async function renderPageDom(url) {
+  let puppeteer;
+  try {
+    const module = await import("puppeteer");
+    puppeteer = module?.default ?? module;
+  } catch (importError) {
+    console.warn("[site-images] Unable to load puppeteer, falling back to HTTP fetch", {
+      error: importError?.message ?? String(importError),
+    });
+    return {
+      html: null,
+      canvasSnapshots: [],
+      renderer: "http",
+      error: importError?.message ?? String(importError),
+    };
+  }
+
+  let browser = null;
+  let page = null;
+
+  try {
+    browser = await puppeteer.launch({
+      headless: "new",
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+
+    page = await browser.newPage();
+    await page.setUserAgent(HEADLESS_USER_AGENT);
+    await page.setViewport(PUPPETEER_VIEWPORT);
+
+    await page.goto(url, { waitUntil: "networkidle0", timeout: 45000 });
+
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve))
+        )
+    );
+
+    await page.waitForTimeout(RENDER_IDLE_WAIT_MS);
+
+    const html = await page.content();
+    const canvasSnapshots = await page.evaluate(() => {
+      const entries = [];
+      const canvases = Array.from(document.querySelectorAll("canvas"));
+
+      for (const canvas of canvases) {
+        let dataUrl = null;
+        let error = null;
+
+        try {
+          dataUrl = canvas.toDataURL("image/png");
+        } catch (captureError) {
+          error = captureError instanceof Error ? captureError.message : String(captureError);
+        }
+
+        entries.push({
+          id: canvas.id ?? null,
+          className: canvas.className ?? null,
+          width: Number.isFinite(canvas.width) ? canvas.width : null,
+          height: Number.isFinite(canvas.height) ? canvas.height : null,
+          dataUrl,
+          error,
+        });
+      }
+
+      return entries;
+    });
+
+    return {
+      html,
+      canvasSnapshots,
+      renderer: "puppeteer",
+      error: null,
+    };
+  } catch (error) {
+    console.warn("[site-images] headless render failed", {
+      url,
+      error: error?.message ?? String(error),
+    });
+
+    return {
+      html: null,
+      canvasSnapshots: [],
+      renderer: "puppeteer",
+      error: error?.message ?? String(error),
+    };
+  } finally {
+    if (page) {
+      try {
+        await page.close();
+      } catch (closePageError) {
+        console.warn("[site-images] failed to close puppeteer page", closePageError);
+      }
+    }
+
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (closeBrowserError) {
+        console.warn("[site-images] failed to close puppeteer browser", closeBrowserError);
+      }
+    }
+  }
+}
+
+function mapCanvasSnapshotsToCandidates(snapshots) {
+  if (!Array.isArray(snapshots)) {
+    return { candidates: [], diagnostics: [] };
+  }
+
+  const candidates = [];
+  const diagnostics = [];
+
+  snapshots.forEach((snapshot, index) => {
+    if (!snapshot) {
+      return;
+    }
+
+    const id = typeof snapshot.id === "string" && snapshot.id.length > 0 ? snapshot.id : null;
+    const className =
+      typeof snapshot.className === "string" && snapshot.className.length > 0
+        ? snapshot.className
+        : null;
+
+    if (snapshot.error) {
+      diagnostics.push({
+        index,
+        elementId: id,
+        elementClass: className,
+        error: snapshot.error,
+      });
+    }
+
+    if (!snapshot.dataUrl || typeof snapshot.dataUrl !== "string") {
+      return;
+    }
+
+    if (!snapshot.dataUrl.startsWith("data:")) {
+      diagnostics.push({
+        index,
+        elementId: id,
+        elementClass: className,
+        error: "Rendered canvas did not return a data URI",
+      });
+      return;
+    }
+
+    let descriptor = null;
+    const width = Number.isFinite(snapshot.width) ? snapshot.width : null;
+    const height = Number.isFinite(snapshot.height) ? snapshot.height : null;
+
+    if (width && height) {
+      descriptor = `toDataURL (${width}×${height})`;
+    } else if (width) {
+      descriptor = `toDataURL (width: ${width})`;
+    } else if (height) {
+      descriptor = `toDataURL (height: ${height})`;
+    }
+
+    candidates.push({
+      url: snapshot.dataUrl,
+      source: "canvas:rendered",
+      attribute: "toDataURL",
+      element: "canvas",
+      elementId: id,
+      elementClass: className,
+      descriptor,
+    });
+  });
+
+  return { candidates, diagnostics };
+}
 
 function extractImageTagCandidates(html, baseUrl) {
   if (!html) {
@@ -323,21 +502,36 @@ export default async function handler(req, res) {
   }
 
   try {
-    const pageResponse = await fetch(normalizedUrl, {
-      headers: {
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-      cache: "no-store",
-    });
+    const renderResult = await renderPageDom(normalizedUrl);
+    let html = renderResult.html;
+    const attemptedHeadless = renderResult.renderer === "puppeteer";
+    const { candidates: renderedCanvasCandidates, diagnostics: canvasDiagnostics } =
+      mapCanvasSnapshotsToCandidates(renderResult.canvasSnapshots);
 
-    if (!pageResponse.ok) {
-      res
-        .status(pageResponse.status)
-        .json({ error: "Unable to fetch page content", status: pageResponse.status });
-      return;
+    let fallbackStatus = null;
+    let renderingMode = html ? "puppeteer" : "http";
+    let renderingError = renderResult.error ?? null;
+
+    if (!html) {
+      const pageResponse = await fetch(normalizedUrl, {
+        headers: {
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+        cache: "no-store",
+      });
+
+      fallbackStatus = pageResponse.status;
+
+      if (!pageResponse.ok) {
+        res
+          .status(pageResponse.status)
+          .json({ error: "Unable to fetch page content", status: pageResponse.status });
+        return;
+      }
+
+      html = await pageResponse.text();
+      renderingMode = "http";
     }
-
-    const html = await pageResponse.text();
 
     const canvasCandidates = extractCanvasPreviewCandidates(html, normalizedUrl).map(
       (candidate) => ({
@@ -350,6 +544,7 @@ export default async function handler(req, res) {
 
     const aggregated = aggregateImageCandidates([
       ...canvasCandidates,
+      ...renderedCanvasCandidates,
       ...imageCandidates,
       ...metaCandidates,
     ]);
@@ -363,6 +558,17 @@ export default async function handler(req, res) {
       uniqueImages: aggregated.length,
       totalMatches: summarizeMatches(aggregated),
       images: aggregated,
+      rendering: {
+        mode: renderingMode,
+        attemptedHeadless,
+        canvasCount: Array.isArray(renderResult.canvasSnapshots)
+          ? renderResult.canvasSnapshots.length
+          : 0,
+        captured: renderedCanvasCandidates.length,
+        diagnostics: canvasDiagnostics,
+        error: renderingError,
+        fallbackStatus,
+      },
     });
   } catch (error) {
     console.error("Failed to fetch site images", error);
@@ -370,4 +576,9 @@ export default async function handler(req, res) {
   }
 }
 
-export { extractImageTagCandidates, extractMetaImageCandidates, aggregateImageCandidates };
+export {
+  extractImageTagCandidates,
+  extractMetaImageCandidates,
+  aggregateImageCandidates,
+  mapCanvasSnapshotsToCandidates,
+};

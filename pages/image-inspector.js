@@ -60,6 +60,11 @@ export default function ImageInspector() {
   );
 
   const images = useMemo(() => response?.images ?? [], [response]);
+  const rendering = response?.rendering ?? null;
+  const renderingDiagnostics = useMemo(
+    () => rendering?.diagnostics ?? [],
+    [rendering]
+  );
 
   return (
     <div className="inspector-page">
@@ -125,6 +130,54 @@ export default function ImageInspector() {
               <p>
                 <span className="inspector-summary__label">Occurrences totales :</span> {response.totalMatches}
               </p>
+              {rendering ? (
+                <div className="inspector-rendering">
+                  <p>
+                    <span className="inspector-summary__label">Mode de rendu :</span>{" "}
+                    {rendering.mode === "puppeteer"
+                      ? "navigateur sans interface (Puppeteer)"
+                      : "requête HTTP"}
+                  </p>
+                  <p>
+                    <span className="inspector-summary__label">Canvas capturés :</span>{" "}
+                    {rendering.captured} / {rendering.canvasCount}
+                  </p>
+                  {rendering.attemptedHeadless && rendering.mode !== "puppeteer" ? (
+                    <p className="inspector-rendering__warning">
+                      Échec de la capture headless, retour au HTML brut.
+                    </p>
+                  ) : null}
+                  {rendering.error ? (
+                    <p className="inspector-rendering__error">Erreur : {rendering.error}</p>
+                  ) : null}
+                  {rendering.fallbackStatus ? (
+                    <p className="inspector-rendering__note">
+                      Statut HTTP du fallback : {rendering.fallbackStatus}
+                    </p>
+                  ) : null}
+                  {renderingDiagnostics.length ? (
+                    <details className="inspector-rendering__details">
+                      <summary>Canvas non exportables ({renderingDiagnostics.length})</summary>
+                      <ul>
+                        {renderingDiagnostics.map((diagnostic, diagIndex) => (
+                          <li key={diagIndex}>
+                            <div className="inspector-pill-row">
+                              <span className="inspector-pill">#{diagnostic.index}</span>
+                              {diagnostic.elementId ? (
+                                <span className="inspector-pill">id: {diagnostic.elementId}</span>
+                              ) : null}
+                              {diagnostic.elementClass ? (
+                                <span className="inspector-pill">class: {diagnostic.elementClass}</span>
+                              ) : null}
+                            </div>
+                            <p className="inspector-rendering__diagnostic">{diagnostic.error}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
             <div className="inspector-grid">
