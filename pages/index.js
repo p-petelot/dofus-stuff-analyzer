@@ -295,6 +295,22 @@ function normalizeBreedColors(input) {
   return { numeric, hex };
 }
 
+function getBarbofusFaceId(classId, genderKey, fallback) {
+  if (!Number.isFinite(classId)) {
+    return Number.isFinite(fallback) ? fallback : null;
+  }
+
+  const entry = BARBOFUS_FACE_ID_BY_CLASS[classId];
+  if (entry && Object.prototype.hasOwnProperty.call(entry, genderKey)) {
+    const value = entry[genderKey];
+    if (Number.isFinite(value)) {
+      return value;
+    }
+  }
+
+  return Number.isFinite(fallback) ? fallback : null;
+}
+
 function normalizeBreedEntry(entry) {
   if (!entry || typeof entry !== "object") {
     return null;
@@ -313,6 +329,8 @@ function normalizeBreedEntry(entry) {
     extractLookIdFromLookString(entry.femaleLook) ?? extractLookIdFromUrl(entry?.heads?.female);
   const maleColors = normalizeBreedColors(entry.maleColors);
   const femaleColors = normalizeBreedColors(entry.femaleColors);
+  const maleFaceId = getBarbofusFaceId(id, "male", maleLookId);
+  const femaleFaceId = getBarbofusFaceId(id, "female", femaleLookId);
 
   return {
     id,
@@ -322,10 +340,12 @@ function normalizeBreedEntry(entry) {
     sortIndex: Number.isFinite(entry.sortIndex) ? entry.sortIndex : id,
     male: {
       lookId: Number.isFinite(maleLookId) ? maleLookId : null,
+      faceId: maleFaceId,
       colors: maleColors,
     },
     female: {
       lookId: Number.isFinite(femaleLookId) ? femaleLookId : null,
+      faceId: femaleFaceId,
       colors: femaleColors,
     },
   };
@@ -533,7 +553,7 @@ const TONE_CONFIDENCE_DISTANCE = 0.72;
 const TONE_CONFIDENCE_WEIGHT = 0.18;
 const MIN_ALPHA_WEIGHT = 0.05;
 const MAX_RECOMMENDATIONS = 3;
-const PROPOSAL_COUNT = 3;
+const PROPOSAL_COUNT = 5;
 const HASH_CONFIDENCE_DISTANCE = 0.32;
 const HASH_CONFIDENCE_WEIGHT = 0.18;
 const HASH_STRONG_THRESHOLD = 0.12;
@@ -550,10 +570,35 @@ const ITEM_TYPE_LABELS = {
 };
 
 const BARBOFUS_BASE_URL = "https://barbofus.com/skinator";
+const BARBOFUS_FACE_ID_BY_CLASS = Object.freeze({
+  1: { male: 1, female: 9 },
+  2: { male: 17, female: 25 },
+  3: { male: 33, female: 41 },
+  4: { male: 49, female: 57 },
+  5: { male: 65, female: 73 },
+  6: { male: 81, female: 89 },
+  7: { male: 97, female: 105 },
+  8: { male: 113, female: 121 },
+  9: { male: 129, female: 137 },
+  10: { male: 145, female: 153 },
+  11: { male: 161, female: 169 },
+  12: { male: 177, female: 185 },
+  13: { male: 193, female: 201 },
+  14: { male: 209, female: 217 },
+  15: { male: 225, female: 233 },
+  16: { male: 241, female: 249 },
+  17: { male: 257, female: 265 },
+  18: { male: 273, female: 275 },
+  19: { male: 294, female: 302 },
+});
+const BARBOFUS_DEFAULT_FACE_ENTRY = BARBOFUS_FACE_ID_BY_CLASS[7] ?? {};
 const BARBOFUS_DEFAULTS = {
   gender: 1,
   classId: 7,
   lookId: 405,
+  faceId: Number.isFinite(BARBOFUS_DEFAULT_FACE_ENTRY.female)
+    ? BARBOFUS_DEFAULT_FACE_ENTRY.female
+    : 105,
 };
 const BARBOFUS_GENDER_VALUES = {
   male: 0,
@@ -570,10 +615,14 @@ const BARBOFUS_DEFAULT_BREED = Object.freeze({
   sortIndex: BARBOFUS_DEFAULTS.classId,
   male: {
     lookId: BARBOFUS_DEFAULTS.lookId,
+    faceId: Number.isFinite(BARBOFUS_DEFAULT_FACE_ENTRY.male)
+      ? BARBOFUS_DEFAULT_FACE_ENTRY.male
+      : null,
     colors: EMPTY_BREED_COLORS,
   },
   female: {
     lookId: BARBOFUS_DEFAULTS.lookId,
+    faceId: BARBOFUS_DEFAULTS.faceId,
     colors: EMPTY_BREED_COLORS,
   },
 });
@@ -720,7 +769,7 @@ function buildBarbofusConfiguration(
     useCustomSkinTone = true,
     classId = BARBOFUS_DEFAULTS.classId,
     gender = BARBOFUS_DEFAULTS.gender,
-    lookId = BARBOFUS_DEFAULTS.lookId,
+    faceId = BARBOFUS_DEFAULTS.faceId,
     classDefaults = [],
   } = options;
 
@@ -742,15 +791,13 @@ function buildBarbofusConfiguration(
   const initialColors = new Array(MAX_ITEM_PALETTE_COLORS).fill(null);
 
   if (!useCustomSkinTone && defaultColorValues.length) {
-    defaultColorValues.forEach((value, index) => {
-      if (index >= MAX_ITEM_PALETTE_COLORS || !Number.isFinite(value)) {
-        return;
-      }
-      initialColors[index] = value;
-    });
+    const defaultSkin = defaultColorValues.find((value) => Number.isFinite(value));
+    if (defaultSkin !== undefined) {
+      initialColors[0] = defaultSkin;
+    }
   }
 
-  const startIndex = !useCustomSkinTone && defaultColorValues.length ? 1 : 0;
+  const startIndex = !useCustomSkinTone && Number.isFinite(initialColors[0]) ? 1 : 0;
 
   overlayValues.forEach((value) => {
     if (!Number.isFinite(value)) {
@@ -820,9 +867,9 @@ function buildBarbofusConfiguration(
     5: equipment,
   };
 
-  const resolvedLookId = Number.isFinite(lookId) ? lookId : null;
-  if (resolvedLookId !== null) {
-    payload[3] = resolvedLookId;
+  const resolvedFaceId = Number.isFinite(faceId) ? faceId : null;
+  if (resolvedFaceId !== null) {
+    payload[3] = resolvedFaceId;
   }
 
   try {
@@ -2052,9 +2099,13 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   }, [activeBreed, selectedGender]);
 
   const activeClassDefaults = activeGenderConfig?.colors?.numeric ?? [];
-  const activeClassLookId =
-    typeof activeGenderConfig?.lookId === "number" ? activeGenderConfig.lookId : BARBOFUS_DEFAULTS.lookId;
   const activeClassId = typeof activeBreed?.id === "number" ? activeBreed.id : BARBOFUS_DEFAULTS.classId;
+  const fallbackFaceId = Number.isFinite(activeGenderConfig?.faceId)
+    ? activeGenderConfig.faceId
+    : Number.isFinite(activeGenderConfig?.lookId)
+    ? activeGenderConfig.lookId
+    : BARBOFUS_DEFAULTS.faceId;
+  const activeClassFaceId = getBarbofusFaceId(activeClassId, selectedGender, fallbackFaceId);
   const activeGenderValue = BARBOFUS_GENDER_VALUES[selectedGender] ?? BARBOFUS_DEFAULTS.gender;
   const activeGenderLabel = selectedGender === "male" ? "Homme" : "Femme";
 
@@ -2327,6 +2378,14 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
 
     const total = Math.min(PROPOSAL_COUNT, maxLength || 0);
     const combos = [];
+    const subtitleParts = [];
+    if (activeBreed?.name) {
+      subtitleParts.push(activeBreed.name);
+    }
+    if (activeGenderLabel) {
+      subtitleParts.push(activeGenderLabel);
+    }
+    const sharedSubtitle = subtitleParts.join(" · ");
 
     for (let index = 0; index < total; index += 1) {
       const items = ITEM_TYPES.map((type) => {
@@ -2363,7 +2422,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
           useCustomSkinTone,
           classId: activeClassId,
           gender: activeGenderValue,
-          lookId: activeClassLookId,
+          faceId: activeClassFaceId,
           classDefaults: activeClassDefaults,
         }
       );
@@ -2379,6 +2438,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         className: activeBreed?.name ?? null,
         genderLabel: activeGenderLabel,
         classIcon: activeBreed?.icon ?? null,
+        subtitle: sharedSubtitle,
       });
     }
 
@@ -2386,8 +2446,8 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   }, [
     activeBreed,
     activeClassDefaults,
+    activeClassFaceId,
     activeClassId,
-    activeClassLookId,
     activeGenderLabel,
     activeGenderValue,
     fallbackColorValues,
@@ -2396,6 +2456,11 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   ]);
 
   const proposalCount = proposals.length;
+  const safeActiveProposalIndex = proposalCount
+    ? Math.min(activeProposal, proposalCount - 1)
+    : 0;
+  const activeProposalDetails = proposalCount ? proposals[safeActiveProposalIndex] : null;
+  const activeProposalSubtitle = activeProposalDetails?.subtitle ?? "";
 
   useEffect(() => {
     if (!proposals.length) {
@@ -2784,7 +2849,8 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     setSelectedColor(hex.toUpperCase());
   }, []);
 
-  const handleCopy = useCallback(async (value) => {
+  const handleCopy = useCallback(async (value, options = {}) => {
+    const { swatch = null } = options;
     const fallbackCopy = (text) => {
       const textarea = document.createElement("textarea");
       textarea.value = text;
@@ -2810,14 +2876,14 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       }
       setError(null);
       setCopiedCode(value);
-      setToast({ id: Date.now(), label: "Couleur copiée", value });
+      setToast({ id: Date.now(), label: "Couleur copiée", value, swatch });
     } catch (err) {
       console.error(err);
       try {
         fallbackCopy(value);
         setError(null);
         setCopiedCode(value);
-        setToast({ id: Date.now(), label: "Couleur copiée", value });
+        setToast({ id: Date.now(), label: "Couleur copiée", value, swatch });
       } catch (fallbackErr) {
         console.error(fallbackErr);
         setError("Impossible de copier dans le presse-papiers.");
@@ -2870,6 +2936,13 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
           {toast ? (
             <div className="toast">
               <span className="toast__icon" aria-hidden="true">✓</span>
+              {toast.swatch ? (
+                <span
+                  className="toast__swatch"
+                  style={{ backgroundImage: buildGradientFromHex(toast.swatch) }}
+                  aria-hidden="true"
+                />
+              ) : null}
               <div className="toast__body">
                 <span className="toast__title">{toast.label}</span>
                 <span className="toast__value">{toast.value}</span>
@@ -2936,6 +3009,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                     <strong>Glisse ton visuel ici</strong>
                     <span>… ou colle-le directement depuis ton presse-papiers</span>
                     <em>Formats acceptés : PNG, JPG, WebP, GIF statique</em>
+                    <span className="dropzone__hint">Clique pour ouvrir l&apos;explorateur de fichiers</span>
                   </div>
                 )}
                 <input
@@ -2945,7 +3019,6 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                   accept="image/*"
                   onChange={onFileInputChange}
                 />
-                <div className="dropzone__hint">Cliquer ouvre l&apos;explorateur de fichiers</div>
               </div>
             ) : (
               <div className="color-picker">
@@ -2956,8 +3029,8 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                   <span className="color-picker__preview-value">{selectedColor}</span>
                 </div>
                 <div className="color-picker__controls">
-                  <label className="color-picker__label" htmlFor="seed-color">
-                    Choisis ta teinte de départ
+                  <label className="color-picker__label sr-only" htmlFor="seed-color">
+                    Sélectionne ta teinte de départ
                   </label>
                   <div className="color-picker__inputs">
                     <input
@@ -2968,7 +3041,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                       onChange={handleColorInput}
                     />
                     <button type="button" className="color-picker__random" onClick={handleRandomizeColor}>
-                      Nuance surprise
+                      Nuance aléatoire
                     </button>
                   </div>
                   <div className="color-picker__swatch-tray" role="list" aria-label="Suggestions de couleurs">
@@ -2997,7 +3070,6 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
             <div className="palette__header">
               <div className="palette__title">
                 <h2>Palette extraite</h2>
-                <p>Cliquer sur une teinte la copie instantanément.</p>
               </div>
               <div className="palette__actions">
                 {isProcessing ? <span className="badge badge--pulse">Analyse en cours…</span> : null}
@@ -3024,119 +3096,10 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                 </div>
               </div>
             </div>
-            <div className="palette__identity" role="group" aria-label="Configuration du personnage Dofus">
-              <div className="palette__identity-intro">
-                <span className="palette__identity-label">Avatar Dofus</span>
-                <span className="palette__identity-hint">
-                  Choisis le sexe et la classe qui serviront à générer les aperçus Barbofus.
-                </span>
-              </div>
-              <div className="palette__identity-section" role="group" aria-label="Sélection du sexe">
-                <span className="palette__identity-section-title">Choix du sexe</span>
-                <div className="palette__gender" role="radiogroup" aria-label="Sexe du personnage">
-                  <button
-                    type="button"
-                    className={`palette__gender-option${selectedGender === "male" ? " is-active" : ""}`}
-                    onClick={() => setSelectedGender("male")}
-                    role="radio"
-                    aria-checked={selectedGender === "male"}
-                  >
-                    <span className="palette__gender-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path
-                          d="M15 3h6v6m0-6-7.5 7.5m1.5-1.5a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </span>
-                    <span className="palette__gender-text">Homme</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`palette__gender-option${selectedGender === "female" ? " is-active" : ""}`}
-                    onClick={() => setSelectedGender("female")}
-                    role="radio"
-                    aria-checked={selectedGender === "female"}
-                  >
-                    <span className="palette__gender-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path
-                          d="M12 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm0 12v8m-4-4h8"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </span>
-                    <span className="palette__gender-text">Femme</span>
-                  </button>
-                </div>
-              </div>
-              <div className="palette__identity-section" role="group" aria-label="Sélection de la classe">
-                <span className="palette__identity-section-title">Choix de la classe</span>
-                {breedsError ? (
-                  <div className="palette__identity-status palette__identity-status--error" role="alert">
-                    <span>{breedsError}</span>
-                    <button
-                      type="button"
-                      className="palette__identity-retry"
-                      onClick={handleRetryBreeds}
-                      disabled={breedsLoading}
-                    >
-                      Réessayer
-                    </button>
-                  </div>
-                ) : null}
-                {breedsLoading ? (
-                  <div className="palette__identity-status" role="status" aria-live="polite">
-                    Chargement des classes…
-                  </div>
-                ) : null}
-                <div className="palette__identity-grid" role="radiogroup" aria-label="Classe du personnage">
-                  {breeds.map((breed) => {
-                    if (!Number.isFinite(breed.id)) {
-                      return null;
-                    }
-                    const isActive = breed.id === selectedBreedId;
-                    const fallbackLetter = breed.name?.charAt(0)?.toUpperCase() ?? "?";
-
-                    return (
-                      <button
-                        key={breed.slug ?? `breed-${breed.id}`}
-                        type="button"
-                        className={`palette__identity-chip${isActive ? " is-active" : ""}`}
-                        onClick={() => setSelectedBreedId(breed.id)}
-                        role="radio"
-                        aria-checked={isActive}
-                        aria-label={`Choisir ${breed.name}`}
-                      >
-                        <span className="palette__identity-chip-icon">
-                          {breed.icon ? (
-                            <img src={breed.icon} alt="" loading="lazy" />
-                          ) : (
-                            <span className="palette__identity-chip-letter" aria-hidden="true">
-                              {fallbackLetter}
-                            </span>
-                          )}
-                        </span>
-                        <span className="palette__identity-chip-label" aria-hidden="true">
-                          {breed.name}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
             {colors.length > 0 ? (
               <div className="palette__skin-control" role="group" aria-label="Gestion de la teinte de peau">
                 <div className="palette__skin-meta">
                   <span className="palette__skin-label">Teinte de peau</span>
-                  <span className="palette__skin-hint">#1 peau · #2 cheveux</span>
                 </div>
                 <div className="palette__skin-options" role="radiogroup" aria-label="Choix de la teinte de peau">
                   <button
@@ -3172,7 +3135,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                       <button
                         type="button"
                         className={`palette__chip${isCopied ? " is-copied" : ""}`}
-                        onClick={() => handleCopy(value)}
+                        onClick={() => handleCopy(value, { swatch: color.hex })}
                         style={{ backgroundImage: buildGradientFromHex(color.hex), color: textColor }}
                       >
                         <span className="palette__chip-index">#{String(index + 1).padStart(2, "0")}</span>
@@ -3190,6 +3153,105 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                 </p>
               </div>
             )}
+          </div>
+          <div className="identity-card" role="group" aria-label="Configuration du personnage Dofus">
+            <div className="identity-card__section" role="group" aria-label="Sélection du sexe">
+              <span className="identity-card__section-title">Choix de la classe et du sexe</span>
+              <div className="identity-card__gender" role="radiogroup" aria-label="Sexe du personnage">
+                <button
+                  type="button"
+                  className={`identity-card__gender-option${selectedGender === "male" ? " is-active" : ""}`}
+                  onClick={() => setSelectedGender("male")}
+                  role="radio"
+                  aria-checked={selectedGender === "male"}
+                >
+                  <span className="identity-card__gender-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path
+                        d="M15 3h6v6m0-6-7.5 7.5m1.5-1.5a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                  <span className="identity-card__gender-text">Homme</span>
+                </button>
+                <button
+                  type="button"
+                  className={`identity-card__gender-option${selectedGender === "female" ? " is-active" : ""}`}
+                  onClick={() => setSelectedGender("female")}
+                  role="radio"
+                  aria-checked={selectedGender === "female"}
+                >
+                  <span className="identity-card__gender-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path
+                        d="M12 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm0 12v8m-4-4h8"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                  <span className="identity-card__gender-text">Femme</span>
+                </button>
+              </div>
+            </div>
+            <div className="identity-card__section" role="group" aria-label="Sélection de la classe">
+              {breedsError ? (
+                <div className="identity-card__status identity-card__status--error" role="alert">
+                  <span>{breedsError}</span>
+                  <button
+                    type="button"
+                    className="identity-card__retry"
+                    onClick={handleRetryBreeds}
+                    disabled={breedsLoading}
+                  >
+                    Réessayer
+                  </button>
+                </div>
+              ) : null}
+              {breedsLoading ? (
+                <div className="identity-card__status" role="status" aria-live="polite">
+                  Chargement des classes…
+                </div>
+              ) : null}
+              <div className="identity-card__grid" role="radiogroup" aria-label="Classe du personnage">
+                {breeds.map((breed) => {
+                  if (!Number.isFinite(breed.id)) {
+                    return null;
+                  }
+                  const isActive = breed.id === selectedBreedId;
+                  const fallbackLetter = breed.name?.charAt(0)?.toUpperCase() ?? "?";
+
+                  return (
+                    <button
+                      key={breed.slug ?? `breed-${breed.id}`}
+                      type="button"
+                      className={`identity-card__chip${isActive ? " is-active" : ""}`}
+                      onClick={() => setSelectedBreedId(breed.id)}
+                      role="radio"
+                      aria-checked={isActive}
+                      aria-label={`Choisir ${breed.name}`}
+                      title={breed.name}
+                    >
+                      <span className="identity-card__chip-icon">
+                        {breed.icon ? (
+                          <img src={breed.icon} alt="" loading="lazy" />
+                        ) : (
+                          <span className="identity-card__chip-letter" aria-hidden="true">
+                            {fallbackLetter}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -3232,9 +3294,19 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                         aria-hidden="true"
                       />
                     </button>
-                    <span className="skin-carousel__legend">
-                      Skin {activeProposal + 1} / {proposalCount}
-                    </span>
+                    <div className="skin-carousel__legend" role="presentation">
+                      <span className="skin-carousel__count">
+                        Skin {safeActiveProposalIndex + 1} / {proposalCount}
+                      </span>
+                      {activeProposalSubtitle ? (
+                        <>
+                          <span className="skin-carousel__separator" aria-hidden="true">
+                            •
+                          </span>
+                          <span className="skin-carousel__subtitle">{activeProposalSubtitle}</span>
+                        </>
+                      ) : null}
+                    </div>
                     <button
                       type="button"
                       className="skin-carousel__nav"
@@ -3253,7 +3325,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                   <div className="skin-carousel__viewport">
                     <div
                       className="skin-carousel__track"
-                      style={{ transform: `translateX(-${activeProposal * 100}%)` }}
+                      style={{ transform: `translateX(-${safeActiveProposalIndex * 100}%)` }}
                     >
                       {proposals.map((proposal) => {
                         const primaryColor = proposal.palette[0] ?? "#1f2937";
@@ -3261,22 +3333,9 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                         const previewFailed = Boolean(previewErrors?.[proposal.id]);
                         const hasBarbofusPreview = proposal.barbofusPreview && !previewFailed;
                         const previewAlt = `Aperçu Barbofus du skin ${proposal.index + 1}`;
-                        const subtitleParts = [];
-                        if (proposal.className) {
-                          subtitleParts.push(proposal.className);
-                        }
-                        if (proposal.genderLabel) {
-                          subtitleParts.push(proposal.genderLabel);
-                        }
-                        const subtitle = subtitleParts.join(" · ");
                         return (
                           <article key={proposal.id} className="skin-card">
-                            <header className="skin-card__header">
-                              <div className="skin-card__heading">
-                                <h3 className="skin-card__title">Skin chromatique</h3>
-                                {subtitle ? <span className="skin-card__subtitle">{subtitle}</span> : null}
-                              </div>
-                            </header>
+                            <h3 className="sr-only">{`Proposition ${proposal.index + 1}`}</h3>
                             <div className="skin-card__body">
                               <div
                                 className="skin-card__canvas"
@@ -3326,7 +3385,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                       <li key={`${proposal.id}-${hex}`} className="skin-card__swatch">
                                         <button
                                           type="button"
-                                          onClick={() => handleCopy(hex)}
+                                          onClick={() => handleCopy(hex, { swatch: hex })}
                                           style={{ backgroundImage: buildGradientFromHex(hex) }}
                                           className="skin-card__swatch-button"
                                         >
@@ -3388,10 +3447,10 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                       <button
                         key={`${proposal.id}-dot`}
                         type="button"
-                        className={`skin-carousel__dot${index === activeProposal ? " is-active" : ""}`}
+                        className={`skin-carousel__dot${index === safeActiveProposalIndex ? " is-active" : ""}`}
                         onClick={() => handleSelectProposal(index)}
                         aria-label={`Afficher le skin ${index + 1}`}
-                        aria-pressed={index === activeProposal}
+                        aria-pressed={index === safeActiveProposalIndex}
                       />
                     ))}
                   </div>
