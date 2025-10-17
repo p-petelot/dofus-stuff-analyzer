@@ -526,26 +526,31 @@ a {
 .palette__identity {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   padding: 12px;
   border-radius: var(--radius-md);
   border: 1px solid rgba(148, 163, 184, 0.18);
   background: rgba(10, 17, 40, 0.45);
 }
 
-.palette__identity-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.palette__identity-meta {
+.palette__identity-intro {
   display: flex;
   flex-direction: column;
   gap: 4px;
   max-width: 420px;
+}
+
+.palette__identity-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.palette__identity-section-title {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(226, 232, 240, 0.78);
 }
 
 .palette__identity-label {
@@ -577,10 +582,13 @@ a {
   padding: 6px 12px;
   border-radius: 999px;
   font: inherit;
-  font-size: 0.82rem;
+  font-size: 0.84rem;
   color: rgba(226, 232, 240, 0.7);
   cursor: pointer;
   transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .palette__gender-option.is-active {
@@ -593,6 +601,23 @@ a {
 .palette__gender-option:focus-visible {
   outline: 2px solid rgba(248, 250, 252, 0.85);
   outline-offset: 3px;
+}
+
+.palette__gender-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.palette__gender-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.palette__gender-text {
+  font-weight: 600;
 }
 
 .palette__identity-status {
@@ -634,100 +659,28 @@ a {
   border-radius: 4px;
 }
 
-.palette__identity-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.palette__identity-picker-label {
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: rgba(226, 232, 240, 0.78);
-}
-
-.palette__identity-select {
-  position: relative;
-  display: flex;
-  align-items: center;
-  background: rgba(5, 8, 22, 0.48);
-  border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.26);
-  padding: 0 12px;
-  min-height: 42px;
-}
-
-.palette__identity-select::after {
-  content: "";
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid rgba(226, 232, 240, 0.78);
-  border-bottom: 2px solid rgba(226, 232, 240, 0.78);
-  transform: translateY(-60%) rotate(45deg);
-  pointer-events: none;
-}
-
-.palette__identity-select select {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 100%;
-  border: none;
-  background: transparent;
-  color: rgba(226, 232, 240, 0.92);
-  font: inherit;
-  font-size: 0.86rem;
-  padding: 8px 24px 8px 0;
-  cursor: pointer;
-}
-
-.palette__identity-select select:focus-visible {
-  outline: none;
-}
-
 .palette__identity-grid {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: 8px;
-  max-height: 220px;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.palette__identity-grid::-webkit-scrollbar {
-  width: 6px;
-}
-
-.palette__identity-grid::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.22);
-  border-radius: 999px;
-}
-
-.palette__identity-grid::-webkit-scrollbar-track {
-  background: transparent;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 12px;
 }
 
 .palette__identity-chip {
-  position: relative;
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
+  gap: 8px;
+  padding: 12px 8px 10px;
   border-radius: 16px;
   border: 1px solid rgba(148, 163, 184, 0.24);
   background: rgba(15, 23, 42, 0.65);
   color: rgba(226, 232, 240, 0.82);
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   cursor: pointer;
   transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease,
     box-shadow 0.2s ease;
-  min-width: 132px;
-  flex: 1 1 180px;
+  min-height: 120px;
 }
 
 .palette__identity-chip:hover {
@@ -749,14 +702,13 @@ a {
 }
 
 .palette__identity-chip-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: rgba(15, 23, 42, 0.7);
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  background: rgba(8, 13, 28, 0.65);
   display: grid;
   place-items: center;
   overflow: hidden;
-  flex-shrink: 0;
 }
 
 .palette__identity-chip-icon img {
@@ -766,34 +718,20 @@ a {
 }
 
 .palette__identity-chip-letter {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: rgba(148, 163, 184, 0.16);
+  width: 100%;
+  height: 100%;
   display: grid;
   place-items: center;
   font-weight: 600;
-  font-size: 0.82rem;
+  font-size: 1rem;
   color: inherit;
-  flex-shrink: 0;
+  background: rgba(148, 163, 184, 0.12);
 }
 
 .palette__identity-chip-label {
+  text-align: center;
   font-weight: 600;
-}
-
-.palette__identity-chip-swatches {
-  display: inline-flex;
-  gap: 4px;
-  margin-left: auto;
-}
-
-.palette__identity-chip-swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.45);
-  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.25);
+  line-height: 1.2;
 }
 
 .palette__skin-control {

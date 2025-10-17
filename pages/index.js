@@ -331,12 +331,37 @@ function normalizeBreedEntry(entry) {
   };
 }
 
+function extractBreedEntries(entries) {
+  if (Array.isArray(entries)) {
+    return entries;
+  }
+
+  if (entries && typeof entries === "object") {
+    const candidateKeys = ["data", "value", "values", "results", "items", "breeds"];
+    for (const key of candidateKeys) {
+      if (Array.isArray(entries[key])) {
+        return entries[key];
+      }
+    }
+
+    if (entries.data && typeof entries.data === "object") {
+      const nested = extractBreedEntries(entries.data);
+      if (nested.length) {
+        return nested;
+      }
+    }
+  }
+
+  return [];
+}
+
 function normalizeBreedsDataset(entries) {
-  if (!Array.isArray(entries)) {
+  const dataset = extractBreedEntries(entries);
+  if (!dataset.length) {
     return [];
   }
 
-  return entries
+  return dataset
     .map((entry) => normalizeBreedEntry(entry))
     .filter(Boolean)
     .sort((a, b) => {
@@ -534,6 +559,8 @@ const BARBOFUS_GENDER_VALUES = {
   male: 0,
   female: 1,
 };
+const BARBOFUS_DEFAULT_GENDER_KEY =
+  BARBOFUS_DEFAULTS.gender === BARBOFUS_GENDER_VALUES.male ? "male" : "female";
 const EMPTY_BREED_COLORS = Object.freeze({ numeric: [], hex: [] });
 const BARBOFUS_DEFAULT_BREED = Object.freeze({
   id: BARBOFUS_DEFAULTS.classId,
@@ -1995,7 +2022,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     }
     return BARBOFUS_DEFAULTS.classId;
   });
-  const [selectedGender, setSelectedGender] = useState("female");
+  const [selectedGender, setSelectedGender] = useState(BARBOFUS_DEFAULT_GENDER_KEY);
   const progressHandles = useRef({ frame: null, timeout: null, value: 0 });
   const breedsRequestRef = useRef(null);
 
@@ -2029,7 +2056,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     typeof activeGenderConfig?.lookId === "number" ? activeGenderConfig.lookId : BARBOFUS_DEFAULTS.lookId;
   const activeClassId = typeof activeBreed?.id === "number" ? activeBreed.id : BARBOFUS_DEFAULTS.classId;
   const activeGenderValue = BARBOFUS_GENDER_VALUES[selectedGender] ?? BARBOFUS_DEFAULTS.gender;
-  const activeGenderLabel = selectedGender === "male" ? "Masculin" : "Féminin";
+  const activeGenderLabel = selectedGender === "male" ? "Homme" : "Femme";
 
   const fallbackColorValues = useMemo(() => {
     if (!colors.length) {
@@ -2998,23 +3025,15 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
               </div>
             </div>
             <div className="palette__identity" role="group" aria-label="Configuration du personnage Dofus">
-              <div className="palette__identity-header">
-                <div className="palette__identity-meta">
-                  <span className="palette__identity-label">Avatar Dofus</span>
-                  <span className="palette__identity-hint">
-                    Sélectionne la classe et le sexe utilisés pour générer les aperçus Barbofus.
-                  </span>
-                </div>
+              <div className="palette__identity-intro">
+                <span className="palette__identity-label">Avatar Dofus</span>
+                <span className="palette__identity-hint">
+                  Choisis le sexe et la classe qui serviront à générer les aperçus Barbofus.
+                </span>
+              </div>
+              <div className="palette__identity-section" role="group" aria-label="Sélection du sexe">
+                <span className="palette__identity-section-title">Choix du sexe</span>
                 <div className="palette__gender" role="radiogroup" aria-label="Sexe du personnage">
-                  <button
-                    type="button"
-                    className={`palette__gender-option${selectedGender === "female" ? " is-active" : ""}`}
-                    onClick={() => setSelectedGender("female")}
-                    role="radio"
-                    aria-checked={selectedGender === "female"}
-                  >
-                    Féminin
-                  </button>
                   <button
                     type="button"
                     className={`palette__gender-option${selectedGender === "male" ? " is-active" : ""}`}
@@ -3022,101 +3041,95 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                     role="radio"
                     aria-checked={selectedGender === "male"}
                   >
-                    Masculin
+                    <span className="palette__gender-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                          d="M15 3h6v6m0-6-7.5 7.5m1.5-1.5a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
+                    <span className="palette__gender-text">Homme</span>
                   </button>
-                </div>
-              </div>
-              {breedsError ? (
-                <div className="palette__identity-status palette__identity-status--error" role="alert">
-                  <span>{breedsError}</span>
                   <button
                     type="button"
-                    className="palette__identity-retry"
-                    onClick={handleRetryBreeds}
-                    disabled={breedsLoading}
+                    className={`palette__gender-option${selectedGender === "female" ? " is-active" : ""}`}
+                    onClick={() => setSelectedGender("female")}
+                    role="radio"
+                    aria-checked={selectedGender === "female"}
                   >
-                    Réessayer
+                    <span className="palette__gender-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                          d="M12 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm0 12v8m-4-4h8"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
+                    <span className="palette__gender-text">Femme</span>
                   </button>
                 </div>
-              ) : null}
-              {breedsLoading ? (
-                <div className="palette__identity-status" role="status" aria-live="polite">
-                  Chargement des classes…
-                </div>
-              ) : null}
-              <div className="palette__identity-picker">
-                <label className="palette__identity-picker-label" htmlFor="palette-class-select">
-                  Classe Dofus
-                </label>
-                <div className="palette__identity-select">
-                  <select
-                    id="palette-class-select"
-                    value={selectedBreedId}
-                    onChange={(event) => {
-                      const nextId = Number(event.target.value);
-                      setSelectedBreedId(Number.isFinite(nextId) ? nextId : BARBOFUS_DEFAULTS.classId);
-                    }}
-                  >
-                    {breeds.map((breed) => {
-                      if (!Number.isFinite(breed.id)) {
-                        return null;
-                      }
-                      return (
-                        <option key={breed.slug ?? `breed-${breed.id}`} value={breed.id}>
-                          {breed.name}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
               </div>
-              <div className="palette__identity-grid" role="radiogroup" aria-label="Classe du personnage">
-                {breeds.map((breed) => {
-                  if (!Number.isFinite(breed.id)) {
-                    return null;
-                  }
-                  const isActive = breed.id === selectedBreedId;
-                  const genderColors =
-                    selectedGender === "male"
-                      ? breed.male?.colors?.hex ?? []
-                      : breed.female?.colors?.hex ?? [];
-                  const swatches = genderColors.slice(0, 2).filter(Boolean);
-                  const fallbackLetter = breed.name?.charAt(0)?.toUpperCase() ?? "?";
-
-                  return (
+              <div className="palette__identity-section" role="group" aria-label="Sélection de la classe">
+                <span className="palette__identity-section-title">Choix de la classe</span>
+                {breedsError ? (
+                  <div className="palette__identity-status palette__identity-status--error" role="alert">
+                    <span>{breedsError}</span>
                     <button
-                      key={breed.slug ?? `breed-${breed.id}`}
                       type="button"
-                      className={`palette__identity-chip${isActive ? " is-active" : ""}`}
-                      onClick={() => setSelectedBreedId(breed.id)}
-                      role="radio"
-                      aria-checked={isActive}
-                      aria-label={`Choisir ${breed.name}`}
+                      className="palette__identity-retry"
+                      onClick={handleRetryBreeds}
+                      disabled={breedsLoading}
                     >
-                      {breed.icon ? (
-                        <span className="palette__identity-chip-icon">
-                          <img src={breed.icon} alt="" loading="lazy" />
-                        </span>
-                      ) : (
-                        <span className="palette__identity-chip-letter" aria-hidden="true">
-                          {fallbackLetter}
-                        </span>
-                      )}
-                      <span className="palette__identity-chip-label">{breed.name}</span>
-                      {swatches.length ? (
-                        <span className="palette__identity-chip-swatches" aria-hidden="true">
-                          {swatches.map((hex, index) => (
-                            <span
-                              key={`${breed.slug}-swatch-${index}`}
-                              className="palette__identity-chip-swatch"
-                              style={{ backgroundColor: hex }}
-                            />
-                          ))}
-                        </span>
-                      ) : null}
+                      Réessayer
                     </button>
-                  );
-                })}
+                  </div>
+                ) : null}
+                {breedsLoading ? (
+                  <div className="palette__identity-status" role="status" aria-live="polite">
+                    Chargement des classes…
+                  </div>
+                ) : null}
+                <div className="palette__identity-grid" role="radiogroup" aria-label="Classe du personnage">
+                  {breeds.map((breed) => {
+                    if (!Number.isFinite(breed.id)) {
+                      return null;
+                    }
+                    const isActive = breed.id === selectedBreedId;
+                    const fallbackLetter = breed.name?.charAt(0)?.toUpperCase() ?? "?";
+
+                    return (
+                      <button
+                        key={breed.slug ?? `breed-${breed.id}`}
+                        type="button"
+                        className={`palette__identity-chip${isActive ? " is-active" : ""}`}
+                        onClick={() => setSelectedBreedId(breed.id)}
+                        role="radio"
+                        aria-checked={isActive}
+                        aria-label={`Choisir ${breed.name}`}
+                      >
+                        <span className="palette__identity-chip-icon">
+                          {breed.icon ? (
+                            <img src={breed.icon} alt="" loading="lazy" />
+                          ) : (
+                            <span className="palette__identity-chip-letter" aria-hidden="true">
+                              {fallbackLetter}
+                            </span>
+                          )}
+                        </span>
+                        <span className="palette__identity-chip-label" aria-hidden="true">
+                          {breed.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
             {colors.length > 0 ? (
