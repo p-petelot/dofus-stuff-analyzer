@@ -707,54 +707,60 @@ function buildBarbofusConfiguration(
     ? classDefaults.filter((value) => Number.isFinite(value))
     : [];
 
-  let combinedColors = paletteValues.length ? [...paletteValues] : [...fallbackColorValues];
+  const fallbackValues = Array.isArray(fallbackColorValues)
+    ? fallbackColorValues.filter((value) => Number.isFinite(value))
+    : [];
 
-  if (defaultColorValues.length) {
-    combinedColors = combinedColors.concat(defaultColorValues);
-  }
+  const overlayValues = paletteValues.length ? paletteValues : fallbackValues;
+  const initialColors = new Array(MAX_ITEM_PALETTE_COLORS).fill(null);
 
-  if (!combinedColors.length) {
-    return { link: null, preview: null };
-  }
-
-  const uniqueColors = [];
-  const seenColors = new Set();
-
-  combinedColors.forEach((value) => {
-    if (seenColors.has(value)) {
-      return;
-    }
-    seenColors.add(value);
-    uniqueColors.push(value);
-  });
-
-  if (!uniqueColors.length) {
-    return { link: null, preview: null };
-  }
-
-  const colorValues = uniqueColors.slice(0, MAX_ITEM_PALETTE_COLORS);
-
-  if (defaultColorValues.length && colorValues.length < MAX_ITEM_PALETTE_COLORS) {
-    defaultColorValues.forEach((value) => {
-      if (!Number.isFinite(value) || colorValues.length >= MAX_ITEM_PALETTE_COLORS) {
+  if (!useCustomSkinTone && defaultColorValues.length) {
+    defaultColorValues.forEach((value, index) => {
+      if (index >= MAX_ITEM_PALETTE_COLORS || !Number.isFinite(value)) {
         return;
       }
-      if (colorValues.includes(value)) {
-        return;
-      }
-      colorValues.push(value);
+      initialColors[index] = value;
     });
   }
 
-  if (!useCustomSkinTone) {
-    const defaultSkin = defaultColorValues.length ? defaultColorValues[0] : null;
-    if (colorValues.length) {
-      colorValues[0] = defaultSkin;
-    } else if (defaultSkin !== null) {
-      colorValues.push(defaultSkin);
-    } else {
-      colorValues.push(null);
+  const startIndex = !useCustomSkinTone && defaultColorValues.length ? 1 : 0;
+
+  overlayValues.forEach((value) => {
+    if (!Number.isFinite(value)) {
+      return;
     }
+    if (initialColors.includes(value)) {
+      return;
+    }
+    const targetIndex = initialColors.findIndex((entry, index) => entry === null && index >= startIndex);
+    if (targetIndex !== -1) {
+      initialColors[targetIndex] = value;
+    }
+  });
+
+  if (initialColors.every((value) => value === null) && defaultColorValues.length) {
+    defaultColorValues.forEach((value, index) => {
+      if (index < MAX_ITEM_PALETTE_COLORS && Number.isFinite(value)) {
+        initialColors[index] = value;
+      }
+    });
+  }
+
+  if (useCustomSkinTone && !defaultColorValues.length && !overlayValues.length) {
+    return { link: null, preview: null };
+  }
+
+  const resolvedColors = initialColors.filter((value) => Number.isFinite(value));
+
+  if (!resolvedColors.length && !useCustomSkinTone) {
+    const defaultSkin = defaultColorValues.length ? defaultColorValues[0] : null;
+    if (defaultSkin !== null) {
+      resolvedColors.push(defaultSkin);
+    }
+  }
+
+  if (!resolvedColors.length) {
+    return { link: null, preview: null };
   }
 
   const equipment = BARBOFUS_EQUIPMENT_SLOTS.reduce((accumulator, slot) => {
@@ -783,7 +789,7 @@ function buildBarbofusConfiguration(
   const payload = {
     1: Number.isFinite(gender) ? gender : BARBOFUS_DEFAULTS.gender,
     2: Number.isFinite(classId) ? classId : BARBOFUS_DEFAULTS.classId,
-    4: colorValues,
+    4: resolvedColors,
     5: equipment,
   };
 
@@ -1948,7 +1954,7 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
   return enriched;
 }
 
-export default function Home() {
+export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   const [imageSrc, setImageSrc] = useState(null);
   const [colors, setColors] = useState([]);
   const [imageSignature, setImageSignature] = useState(null);
@@ -1972,10 +1978,23 @@ export default function Home() {
   const [previewErrors, setPreviewErrors] = useState({});
   const [useCustomSkinTone, setUseCustomSkinTone] = useState(false);
   const [showDetailedMatches, setShowDetailedMatches] = useState(false);
-  const [breeds, setBreeds] = useState([BARBOFUS_DEFAULT_BREED]);
+  const [breeds, setBreeds] = useState(() =>
+    Array.isArray(initialBreeds) && initialBreeds.length
+      ? initialBreeds
+      : [BARBOFUS_DEFAULT_BREED]
+  );
   const [breedsLoading, setBreedsLoading] = useState(false);
   const [breedsError, setBreedsError] = useState(null);
-  const [selectedBreedId, setSelectedBreedId] = useState(BARBOFUS_DEFAULTS.classId);
+  const [selectedBreedId, setSelectedBreedId] = useState(() => {
+    if (Array.isArray(initialBreeds) && initialBreeds.length) {
+      const fallbackEntry =
+        initialBreeds.find((entry) => entry.id === BARBOFUS_DEFAULTS.classId) ?? initialBreeds[0];
+      if (fallbackEntry && Number.isFinite(fallbackEntry.id)) {
+        return fallbackEntry.id;
+      }
+    }
+    return BARBOFUS_DEFAULTS.classId;
+  });
   const [selectedGender, setSelectedGender] = useState("female");
   const progressHandles = useRef({ frame: null, timeout: null, value: 0 });
   const breedsRequestRef = useRef(null);
@@ -2013,50 +2032,54 @@ export default function Home() {
   const activeGenderLabel = selectedGender === "male" ? "Masculin" : "Féminin";
 
   const fallbackColorValues = useMemo(() => {
-    if (!colors.length && !activeClassDefaults.length) {
+    if (!colors.length) {
       return [];
     }
     const seen = new Set();
     const values = [];
-    const register = (value) => {
-      if (value === null || !Number.isFinite(value) || seen.has(value)) {
-        return;
-      }
-      seen.add(value);
-      values.push(value);
-    };
-
     colors.forEach((entry) => {
       const numeric = hexToNumeric(entry?.hex);
-      if (numeric !== null) {
-        register(numeric);
+      if (numeric === null || seen.has(numeric)) {
+        return;
       }
+      seen.add(numeric);
+      values.push(numeric);
     });
-
-    activeClassDefaults.forEach(register);
-
     return values.slice(0, MAX_ITEM_PALETTE_COLORS);
-  }, [activeClassDefaults, colors]);
+  }, [colors]);
 
   const loadBreeds = useCallback(async () => {
-    if (typeof fetch !== "function" || typeof AbortController === "undefined") {
+    if (typeof fetch !== "function") {
       return;
     }
 
-    if (breedsRequestRef.current) {
-      breedsRequestRef.current.abort();
+    if (breedsRequestRef.current && typeof breedsRequestRef.current.abort === "function") {
+      try {
+        breedsRequestRef.current.abort();
+      } catch (err) {
+        console.error(err);
+      }
     }
 
-    const controller = new AbortController();
-    breedsRequestRef.current = controller;
+    const supportsAbort = typeof AbortController !== "undefined";
+    const controller = supportsAbort ? new AbortController() : null;
+    if (controller) {
+      breedsRequestRef.current = controller;
+    } else {
+      breedsRequestRef.current = null;
+    }
     setBreedsLoading(true);
     setBreedsError(null);
 
     try {
-      const response = await fetch(DOFUS_BREEDS_API_URL, {
-        signal: controller.signal,
+      const fetchOptions = {
         headers: { Accept: "application/json" },
-      });
+      };
+      if (controller) {
+        fetchOptions.signal = controller.signal;
+      }
+
+      const response = await fetch(DOFUS_BREEDS_API_URL, fetchOptions);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -2064,7 +2087,7 @@ export default function Home() {
 
       const payload = await response.json();
 
-      if (controller.signal.aborted) {
+      if (controller?.signal?.aborted) {
         return;
       }
 
@@ -2081,7 +2104,7 @@ export default function Home() {
         return fallbackEntry?.id ?? previous ?? BARBOFUS_DEFAULTS.classId;
       });
     } catch (err) {
-      if (controller.signal.aborted) {
+      if (controller?.signal?.aborted) {
         return;
       }
       console.error(err);
@@ -2089,9 +2112,12 @@ export default function Home() {
       setBreeds([BARBOFUS_DEFAULT_BREED]);
       setSelectedBreedId(BARBOFUS_DEFAULT_BREED.id);
     } finally {
-      if (breedsRequestRef.current === controller) {
+      if (controller && breedsRequestRef.current === controller) {
         setBreedsLoading(false);
         breedsRequestRef.current = null;
+      }
+      if (!controller) {
+        setBreedsLoading(false);
       }
     }
   }, []);
@@ -2101,13 +2127,41 @@ export default function Home() {
   }, [loadBreeds]);
 
   useEffect(() => {
-    loadBreeds();
+    if (!Array.isArray(initialBreeds) || !initialBreeds.length) {
+      return;
+    }
+    setBreeds((previous) => {
+      if (
+        previous.length === initialBreeds.length &&
+        previous.every((entry, index) => entry.id === (initialBreeds[index]?.id ?? null))
+      ) {
+        return previous;
+      }
+      return initialBreeds;
+    });
+    setSelectedBreedId((previous) => {
+      if (initialBreeds.some((entry) => entry.id === previous)) {
+        return previous;
+      }
+      const fallbackEntry =
+        initialBreeds.find((entry) => entry.id === BARBOFUS_DEFAULTS.classId) ?? initialBreeds[0];
+      return fallbackEntry?.id ?? BARBOFUS_DEFAULTS.classId;
+    });
+  }, [initialBreeds]);
+
+  const shouldPreloadBreeds = !Array.isArray(initialBreeds) || initialBreeds.length <= 1;
+
+  useEffect(() => {
+    if (shouldPreloadBreeds) {
+      loadBreeds();
+    }
     return () => {
-      if (breedsRequestRef.current) {
-        breedsRequestRef.current.abort();
+      const controller = breedsRequestRef.current;
+      if (controller && typeof controller.abort === "function") {
+        controller.abort();
       }
     };
-  }, [loadBreeds]);
+  }, [loadBreeds, shouldPreloadBreeds]);
 
   useEffect(() => {
     setShowDetailedMatches(false);
@@ -2990,8 +3044,37 @@ export default function Home() {
                   Chargement des classes…
                 </div>
               ) : null}
-              <div className="palette__identity-scroller" role="radiogroup" aria-label="Classe du personnage">
+              <div className="palette__identity-picker">
+                <label className="palette__identity-picker-label" htmlFor="palette-class-select">
+                  Classe Dofus
+                </label>
+                <div className="palette__identity-select">
+                  <select
+                    id="palette-class-select"
+                    value={selectedBreedId}
+                    onChange={(event) => {
+                      const nextId = Number(event.target.value);
+                      setSelectedBreedId(Number.isFinite(nextId) ? nextId : BARBOFUS_DEFAULTS.classId);
+                    }}
+                  >
+                    {breeds.map((breed) => {
+                      if (!Number.isFinite(breed.id)) {
+                        return null;
+                      }
+                      return (
+                        <option key={breed.slug ?? `breed-${breed.id}`} value={breed.id}>
+                          {breed.name}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              </div>
+              <div className="palette__identity-grid" role="radiogroup" aria-label="Classe du personnage">
                 {breeds.map((breed) => {
+                  if (!Number.isFinite(breed.id)) {
+                    return null;
+                  }
                   const isActive = breed.id === selectedBreedId;
                   const genderColors =
                     selectedGender === "male"
@@ -3002,7 +3085,7 @@ export default function Home() {
 
                   return (
                     <button
-                      key={breed.slug}
+                      key={breed.slug ?? `breed-${breed.id}`}
                       type="button"
                       className={`palette__identity-chip${isActive ? " is-active" : ""}`}
                       onClick={() => setSelectedBreedId(breed.id)}
@@ -3432,4 +3515,39 @@ export default function Home() {
       </main>
     </>
   );
+}
+
+export async function getStaticProps() {
+  try {
+    if (typeof fetch !== "function") {
+      return {
+        props: { initialBreeds: [BARBOFUS_DEFAULT_BREED] },
+        revalidate: 3600,
+      };
+    }
+
+    const response = await fetch(DOFUS_BREEDS_API_URL, {
+      headers: { Accept: "application/json" },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const payload = await response.json();
+    const dataset = normalizeBreedsDataset(payload);
+
+    return {
+      props: {
+        initialBreeds: dataset.length ? dataset : [BARBOFUS_DEFAULT_BREED],
+      },
+      revalidate: 3600,
+    };
+  } catch (error) {
+    console.error("Unable to prefetch Dofus breeds:", error);
+    return {
+      props: { initialBreeds: [BARBOFUS_DEFAULT_BREED] },
+      revalidate: 3600,
+    };
+  }
 }

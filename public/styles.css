@@ -634,26 +634,80 @@ a {
   border-radius: 4px;
 }
 
-.palette__identity-scroller {
+.palette__identity-picker {
   display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.palette__identity-picker-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(226, 232, 240, 0.78);
+}
+
+.palette__identity-select {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: rgba(5, 8, 22, 0.48);
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  padding: 0 12px;
+  min-height: 42px;
+}
+
+.palette__identity-select::after {
+  content: "";
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid rgba(226, 232, 240, 0.78);
+  border-bottom: 2px solid rgba(226, 232, 240, 0.78);
+  transform: translateY(-60%) rotate(45deg);
+  pointer-events: none;
+}
+
+.palette__identity-select select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: rgba(226, 232, 240, 0.92);
+  font: inherit;
+  font-size: 0.86rem;
+  padding: 8px 24px 8px 0;
+  cursor: pointer;
+}
+
+.palette__identity-select select:focus-visible {
+  outline: none;
+}
+
+.palette__identity-grid {
+  display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
   gap: 8px;
-  overflow-x: auto;
-  padding: 4px;
-  margin: 0 -4px;
-  scroll-snap-type: x proximity;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
-.palette__identity-scroller::-webkit-scrollbar {
-  height: 6px;
+.palette__identity-grid::-webkit-scrollbar {
+  width: 6px;
 }
 
-.palette__identity-scroller::-webkit-scrollbar-thumb {
+.palette__identity-grid::-webkit-scrollbar-thumb {
   background: rgba(148, 163, 184, 0.22);
   border-radius: 999px;
 }
 
-.palette__identity-scroller::-webkit-scrollbar-track {
+.palette__identity-grid::-webkit-scrollbar-track {
   background: transparent;
 }
 
@@ -673,7 +727,7 @@ a {
   transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease,
     box-shadow 0.2s ease;
   min-width: 132px;
-  scroll-snap-align: start;
+  flex: 1 1 180px;
 }
 
 .palette__identity-chip:hover {
