@@ -600,6 +600,19 @@ const BARBOFUS_DEFAULTS = {
     ? BARBOFUS_DEFAULT_FACE_ENTRY.female
     : 105,
 };
+
+const TRANSPARENT_PIXEL =
+  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+
+const BARBOFUS_CANVAS_CONFIG = Object.freeze({
+  loadTimeout: 20000,
+  canvasTimeout: 12000,
+  retryDelay: 1600,
+  maxRetries: 2,
+});
+
+const BARBOFUS_CANVAS_STATUS_ATTR = "barbofusStatus";
+const BARBOFUS_CANVAS_ERROR_BANNER_ID = "barbofus-canvas-error-banner";
 const BARBOFUS_GENDER_VALUES = {
   male: 0,
   female: 1,
@@ -884,6 +897,270 @@ function buildBarbofusConfiguration(
     console.error(err);
     return { link: null, preview: null };
   }
+}
+
+function pickLargestCanvas(canvases) {
+  if (!canvases) {
+    return null;
+  }
+
+  let largest = null;
+  const entries = Array.isArray(canvases) ? canvases : Array.from(canvases);
+
+  entries.forEach((canvas) => {
+    if (!canvas) {
+      return;
+    }
+
+    const width = Math.max(
+      Number(canvas.width) || 0,
+      Number(canvas.clientWidth) || 0,
+      Number(canvas.offsetWidth) || 0
+    );
+    const height = Math.max(
+      Number(canvas.height) || 0,
+      Number(canvas.clientHeight) || 0,
+      Number(canvas.offsetHeight) || 0
+    );
+
+    if (!width || !height) {
+      return;
+    }
+
+    const area = width * height;
+    if (!largest || area > largest.area) {
+      largest = { canvas, area };
+    }
+  });
+
+  return largest ? largest.canvas : null;
+}
+
+function isLikelyCorsError(error) {
+  if (!error) {
+    return false;
+  }
+
+  if (error.name === "SecurityError" || error.name === "NotAllowedError") {
+    return true;
+  }
+
+  if (error instanceof DOMException && error.code === 18) {
+    return true;
+  }
+
+  const message = typeof error.message === "string" ? error.message.toLowerCase() : "";
+  return (
+    message.includes("permission denied") ||
+    message.includes("blocked a frame") ||
+    message.includes("cross-origin") ||
+    message.includes("cors") ||
+    message.includes("taint")
+  );
+}
+
+function isTaintedCanvasError(error) {
+  return isLikelyCorsError(error);
+}
+
+function createCorsError(originalError) {
+  const error = new Error("barbofus_canvas_cors");
+  error.type = "cors";
+  error.cause = originalError;
+  return error;
+}
+
+function showBarbofusCanvasError(message) {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  const existing = document.getElementById(BARBOFUS_CANVAS_ERROR_BANNER_ID);
+  if (existing) {
+    existing.textContent = message;
+    existing.classList.add("is-visible");
+    existing.setAttribute("aria-hidden", "false");
+    return;
+  }
+
+  const banner = document.createElement("div");
+  banner.id = BARBOFUS_CANVAS_ERROR_BANNER_ID;
+  banner.className = "canvas-error-banner";
+  banner.setAttribute("role", "status");
+  banner.setAttribute("aria-live", "polite");
+  banner.textContent = message;
+  document.body.appendChild(banner);
+
+  requestAnimationFrame(() => {
+    banner.classList.add("is-visible");
+  });
+}
+
+function loadBarbofusCanvasImage(url, overrides = {}) {
+  const settings = { ...BARBOFUS_CANVAS_CONFIG, ...overrides };
+
+  const noop = () => {};
+  if (typeof document === "undefined" || !url) {
+    return { promise: Promise.resolve(null), cancel: noop };
+  }
+
+  let cancelled = false;
+  let activeCleanup = null;
+
+  const runAttempt = (resolve, reject, attemptIndex) => {
+    if (cancelled) {
+      return;
+    }
+
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.setAttribute("tabindex", "-1");
+    iframe.style.position = "absolute";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.opacity = "0";
+    iframe.style.pointerEvents = "none";
+    iframe.style.border = "0";
+    iframe.style.left = "-9999px";
+    iframe.style.top = "-9999px";
+
+    let loadTimer = null;
+    let canvasTimer = null;
+
+    const clearTimers = () => {
+      if (loadTimer !== null) {
+        window.clearTimeout(loadTimer);
+        loadTimer = null;
+      }
+      if (canvasTimer !== null) {
+        window.clearTimeout(canvasTimer);
+        canvasTimer = null;
+      }
+    };
+
+    const cleanup = () => {
+      clearTimers();
+      iframe.removeEventListener("load", onLoad);
+      iframe.removeEventListener("error", onError);
+      if (iframe.parentNode) {
+        iframe.parentNode.removeChild(iframe);
+      }
+      if (activeCleanup === cleanup) {
+        activeCleanup = null;
+      }
+    };
+
+    activeCleanup = cleanup;
+
+    const scheduleRetry = (error, { retryable = true } = {}) => {
+      cleanup();
+      if (cancelled) {
+        return;
+      }
+
+      if (retryable && attemptIndex < settings.maxRetries) {
+        window.setTimeout(() => {
+          runAttempt(resolve, reject, attemptIndex + 1);
+        }, settings.retryDelay);
+      } else {
+        reject(error);
+      }
+    };
+
+    function onError() {
+      scheduleRetry(new Error("iframe_load_error"));
+    }
+
+    function onLoad() {
+      if (cancelled) {
+        cleanup();
+        return;
+      }
+
+      let doc;
+      try {
+        doc = iframe.contentDocument || iframe.contentWindow?.document;
+      } catch (err) {
+        scheduleRetry(createCorsError(err), { retryable: false });
+        return;
+      }
+
+      if (!doc) {
+        scheduleRetry(new Error("iframe_document_unavailable"));
+        return;
+      }
+
+      const startedAt = Date.now();
+
+      const seekCanvas = () => {
+        if (cancelled) {
+          cleanup();
+          return;
+        }
+
+        let canvases;
+        try {
+          canvases = doc.getElementsByTagName("canvas");
+        } catch (err) {
+          scheduleRetry(createCorsError(err), { retryable: false });
+          return;
+        }
+
+        if (!canvases || canvases.length === 0) {
+          if (Date.now() - startedAt > settings.canvasTimeout) {
+            scheduleRetry(new Error("canvas_timeout"));
+            return;
+          }
+          canvasTimer = window.setTimeout(seekCanvas, 250);
+          return;
+        }
+
+        const target = pickLargestCanvas(canvases);
+        if (!target) {
+          scheduleRetry(new Error("canvas_missing"), { retryable: false });
+          return;
+        }
+
+        try {
+          const dataUrl = target.toDataURL("image/png");
+          cleanup();
+          resolve(dataUrl);
+        } catch (err) {
+          if (isTaintedCanvasError(err)) {
+            scheduleRetry(createCorsError(err), { retryable: false });
+          } else {
+            scheduleRetry(err, { retryable: false });
+          }
+        }
+      };
+
+      seekCanvas();
+    }
+
+    iframe.addEventListener("load", onLoad);
+    iframe.addEventListener("error", onError);
+
+    loadTimer = window.setTimeout(() => {
+      scheduleRetry(new Error("iframe_load_timeout"));
+    }, settings.loadTimeout);
+
+    document.body.appendChild(iframe);
+    iframe.src = url;
+  };
+
+  const promise = new Promise((resolve, reject) => {
+    runAttempt(resolve, reject, 0);
+  });
+
+  return {
+    promise,
+    cancel: () => {
+      cancelled = true;
+      if (activeCleanup) {
+        activeCleanup();
+      }
+    },
+  };
 }
 
 function componentToHex(value) {
@@ -2478,6 +2755,78 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   }, [proposals]);
 
   useEffect(() => {
+    if (typeof document === "undefined" || typeof window === "undefined") {
+      return undefined;
+    }
+
+    if (!proposals.length) {
+      return undefined;
+    }
+
+    let isDisposed = false;
+    const disposers = [];
+
+    const heroElements = Array.from(
+      document.querySelectorAll(".skin-card__hero[data-barbofus-link]")
+    ).filter((element) => element instanceof HTMLImageElement);
+
+    heroElements.forEach((element) => {
+      const image = element;
+      const link = image.getAttribute("data-barbofus-link");
+      if (!link) {
+        return;
+      }
+
+      const statusKey = BARBOFUS_CANVAS_STATUS_ATTR;
+      const currentStatus = image.dataset[statusKey];
+      if (currentStatus === "loading" || currentStatus === "loaded" || currentStatus === "error") {
+        return;
+      }
+
+      image.dataset[statusKey] = "loading";
+
+      const { promise, cancel } = loadBarbofusCanvasImage(link);
+      disposers.push(cancel);
+
+      promise
+        .then((dataUrl) => {
+          if (isDisposed || !dataUrl) {
+            return;
+          }
+          image.src = dataUrl;
+          image.dataset[statusKey] = "loaded";
+          if (image.style.display === "none") {
+            image.style.removeProperty("display");
+          }
+        })
+        .catch((error) => {
+          if (isDisposed) {
+            return;
+          }
+          if (error?.type === "cors") {
+            showBarbofusCanvasError(
+              "Impossible d'afficher l'aperçu Barbofus à cause d'une restriction CORS."
+            );
+          } else {
+            console.warn("Barbofus preview extraction failed", error);
+          }
+          image.dataset[statusKey] = "error";
+        });
+    });
+
+    return () => {
+      isDisposed = true;
+      disposers.forEach((dispose) => {
+        try {
+          dispose();
+        } catch (err) {
+          console.error(err);
+        }
+      });
+    };
+  }, [proposals]);
+
+  useEffect(() => {
     if (!proposalCount) {
       if (activeProposal !== 0) {
         setActiveProposal(0);
@@ -3333,6 +3682,12 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                         const previewFailed = Boolean(previewErrors?.[proposal.id]);
                         const hasBarbofusPreview = proposal.barbofusPreview && !previewFailed;
                         const previewAlt = `Aperçu Barbofus du skin ${proposal.index + 1}`;
+                        const heroAlt = `Aperçu principal de la proposition ${
+                          proposal.index + 1
+                        }`;
+                        const shouldRenderHero = Boolean(
+                          proposal.heroImage || proposal.barbofusLink
+                        );
                         return (
                           <article key={proposal.id} className="skin-card">
                             <h3 className="sr-only">{`Proposition ${proposal.index + 1}`}</h3>
@@ -3342,6 +3697,25 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                 style={{ backgroundImage: canvasBackground }}
                               >
                                 <div className="skin-card__glow" aria-hidden="true" />
+                                {shouldRenderHero ? (
+                                  <img
+                                    src={proposal.heroImage ?? TRANSPARENT_PIXEL}
+                                    alt={heroAlt}
+                                    loading="lazy"
+                                    className="skin-card__hero"
+                                    data-barbofus-link={
+                                      proposal.barbofusLink || undefined
+                                    }
+                                    data-barbofus-status={
+                                      proposal.barbofusLink ? "idle" : undefined
+                                    }
+                                    style={
+                                      proposal.heroImage
+                                        ? undefined
+                                        : { display: "none" }
+                                    }
+                                  />
+                                ) : null}
                                 {hasBarbofusPreview ? (
                                   <img
                                     src={proposal.barbofusPreview}
@@ -3350,18 +3724,11 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                     className="skin-card__preview"
                                     onError={() => handlePreviewFallback(proposal.id)}
                                   />
-                                ) : proposal.heroImage ? (
-                                  <img
-                                    src={proposal.heroImage}
-                                    alt={`Aperçu principal de la proposition ${proposal.index + 1}`}
-                                    loading="lazy"
-                                    className="skin-card__hero"
-                                  />
-                                ) : (
+                                ) : !shouldRenderHero ? (
                                   <div className="skin-card__placeholder" aria-hidden="true">
                                     Aperçu indisponible
                                   </div>
-                                )}
+                                ) : null}
                                 <ul className="skin-card__equipment" role="list">
                                   {proposal.items.map((item) => (
                                     <li key={`${proposal.id}-${item.id}`} className="skin-card__equipment-slot">

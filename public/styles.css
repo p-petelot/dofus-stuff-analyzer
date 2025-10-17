@@ -1820,3 +1820,26 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+.canvas-error-banner {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translate(-50%, -16px);
+  background: rgba(248, 113, 113, 0.95);
+  color: #fff;
+  padding: 12px 18px;
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.28);
+  z-index: 1200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.28s ease, transform 0.28s ease;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.canvas-error-banner.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
