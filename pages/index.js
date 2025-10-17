@@ -570,6 +570,7 @@ const ITEM_TYPE_LABELS = {
 };
 
 const BARBOFUS_BASE_URL = "https://barbofus.com/skinator";
+const BARBOFUS_RENDER_PROXY = "/api/skin-preview";
 const BARBOFUS_FACE_ID_BY_CLASS = Object.freeze({
   1: { male: 1, female: 9 },
   2: { male: 17, female: 25 },
@@ -878,11 +879,12 @@ function buildBarbofusConfiguration(
       return { link: null, preview: null };
     }
     const link = `${BARBOFUS_BASE_URL}?s=${encoded}`;
-    const preview = `${BARBOFUS_BASE_URL}/render?s=${encoded}`;
-    return { link, preview };
+    const previewProxy = `${BARBOFUS_RENDER_PROXY}?s=${encodeURIComponent(encoded)}`;
+    const previewSources = previewProxy ? [previewProxy] : [];
+    return { link, preview: previewProxy, previewProxy, previewSources };
   } catch (err) {
     console.error(err);
-    return { link: null, preview: null };
+    return { link: null, preview: null, previewProxy: null, previewSources: [] };
   }
 }
 
@@ -2050,6 +2052,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   const [selectedColor, setSelectedColor] = useState("#8B5CF6");
   const [activeProposal, setActiveProposal] = useState(0);
   const [previewErrors, setPreviewErrors] = useState({});
+  const [downloadingPreviewId, setDownloadingPreviewId] = useState(null);
   const [useCustomSkinTone, setUseCustomSkinTone] = useState(false);
   const [showDetailedMatches, setShowDetailedMatches] = useState(false);
   const [breeds, setBreeds] = useState(() =>
@@ -2414,7 +2417,11 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       });
 
       const paletteSample = palette.slice(0, MAX_ITEM_PALETTE_COLORS);
-      const { link: barbofusLink, preview: barbofusPreview } = buildBarbofusConfiguration(
+      const {
+        link: barbofusLink,
+        preview: barbofusPreview,
+        previewSources,
+      } = buildBarbofusConfiguration(
         items,
         paletteSample,
         fallbackColorValues,
@@ -2427,6 +2434,10 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         }
       );
 
+      const normalizedPreviewSources = Array.isArray(previewSources)
+        ? previewSources.filter((value) => typeof value === "string" && value.length > 0)
+        : [];
+
       combos.push({
         id: `proposal-${index}`,
         index,
@@ -2434,7 +2445,8 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         palette: paletteSample,
         heroImage: items.find((item) => item.imageUrl)?.imageUrl ?? null,
         barbofusLink,
-        barbofusPreview,
+        barbofusPreview: normalizedPreviewSources[0] ?? barbofusPreview ?? null,
+        barbofusPreviewSources: normalizedPreviewSources,
         className: activeBreed?.name ?? null,
         genderLabel: activeGenderLabel,
         classIcon: activeBreed?.icon ?? null,
@@ -2490,6 +2502,10 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     }
   }, [activeProposal, proposalCount]);
 
+  useEffect(() => {
+    setPreviewErrors({});
+  }, [proposals]);
+
   const handleNextProposal = useCallback(() => {
     if (!proposalCount) {
       return;
@@ -2519,11 +2535,65 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       return;
     }
     setPreviewErrors((previous) => {
-      if (previous?.[id]) {
-        return previous;
-      }
-      return { ...previous, [id]: true };
+      const nextIndex = (previous?.[id] ?? 0) + 1;
+      return { ...previous, [id]: nextIndex };
     });
+  }, []);
+
+  const handleDownloadPreview = useCallback(async (proposal) => {
+    if (!proposal) {
+      return;
+    }
+
+    const sources = Array.isArray(proposal.barbofusPreviewSources)
+      ? proposal.barbofusPreviewSources
+      : proposal.barbofusPreview
+        ? [proposal.barbofusPreview]
+        : [];
+
+    if (!sources.length) {
+      return;
+    }
+
+    const source = sources[0];
+
+    try {
+      setDownloadingPreviewId(proposal.id);
+      const response = await fetch(source);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const contentType = response.headers.get("content-type") ?? "image/webp";
+      const extension = contentType.includes("png")
+        ? "png"
+        : contentType.includes("jpeg") || contentType.includes("jpg")
+        ? "jpg"
+        : contentType.includes("gif")
+        ? "gif"
+        : contentType.includes("bmp")
+        ? "bmp"
+        : "webp";
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+
+      const fallbackName = `skin-${proposal.index + 1}`;
+      const baseName = slugify(proposal.className ?? fallbackName) || fallbackName;
+      const filename = `${baseName}.${extension}`;
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Unable to download Barbofus preview:", error);
+    } finally {
+      setDownloadingPreviewId(null);
+    }
   }, []);
 
   const toggleDetailedMatches = useCallback(() => {
@@ -3330,8 +3400,15 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                       {proposals.map((proposal) => {
                         const primaryColor = proposal.palette[0] ?? "#1f2937";
                         const canvasBackground = buildGradientFromHex(primaryColor);
-                        const previewFailed = Boolean(previewErrors?.[proposal.id]);
-                        const hasBarbofusPreview = proposal.barbofusPreview && !previewFailed;
+                        const previewSources = Array.isArray(proposal.barbofusPreviewSources)
+                          ? proposal.barbofusPreviewSources
+                          : proposal.barbofusPreview
+                          ? [proposal.barbofusPreview]
+                          : [];
+                        const previewIndex = previewErrors?.[proposal.id] ?? 0;
+                        const previewFailed = previewIndex >= previewSources.length;
+                        const previewSrc = !previewFailed ? previewSources[previewIndex] ?? null : null;
+                        const hasBarbofusPreview = Boolean(previewSrc);
                         const previewAlt = `Aperçu Barbofus du skin ${proposal.index + 1}`;
                         return (
                           <article key={proposal.id} className="skin-card">
@@ -3344,7 +3421,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                 <div className="skin-card__glow" aria-hidden="true" />
                                 {hasBarbofusPreview ? (
                                   <img
-                                    src={proposal.barbofusPreview}
+                                    src={previewSrc}
                                     alt={previewAlt}
                                     loading="lazy"
                                     className="skin-card__preview"
@@ -3417,6 +3494,19 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                   ))}
                                 </ul>
                                 <div className="skin-card__actions">
+                                  {proposal.barbofusPreviewSources?.length ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDownloadPreview(proposal)}
+                                      className="skin-card__cta"
+                                      disabled={downloadingPreviewId === proposal.id}
+                                      aria-busy={downloadingPreviewId === proposal.id}
+                                    >
+                                      {downloadingPreviewId === proposal.id
+                                        ? "Téléchargement…"
+                                        : "Télécharger l'image"}
+                                    </button>
+                                  ) : null}
                                   {proposal.barbofusLink ? (
                                     <a
                                       href={proposal.barbofusLink}
