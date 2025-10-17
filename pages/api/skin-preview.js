@@ -66,13 +66,13 @@ function extractCanvasPreviewUrl(html, baseUrl) {
   }
 
   const patterns = [
-    CANVAS_OBJECT_DATA_PATTERN,
-    CANVAS_DATA_ATTRIBUTE_PATTERN,
-    CANVAS_JSON_OBJECT_PATTERN,
-    CANVAS_JSON_STRING_PATTERN,
+    { pattern: CANVAS_OBJECT_DATA_PATTERN, source: "object:data" },
+    { pattern: CANVAS_DATA_ATTRIBUTE_PATTERN, source: "canvas:attr" },
+    { pattern: CANVAS_JSON_OBJECT_PATTERN, source: "json:object" },
+    { pattern: CANVAS_JSON_STRING_PATTERN, source: "json:string" },
   ];
 
-  for (const pattern of patterns) {
+  for (const { pattern, source } of patterns) {
     const match = html.match(pattern);
     if (!match) {
       continue;
@@ -81,7 +81,12 @@ function extractCanvasPreviewUrl(html, baseUrl) {
     const raw = match[2] ?? match[1] ?? null;
     const decoded = decodePotentialUrl(raw, baseUrl);
     if (decoded) {
-      return decoded;
+      console.log("[skin-preview] matched canvas preview", {
+        source,
+        raw,
+        decoded,
+      });
+      return { url: decoded, source };
     }
   }
 
@@ -90,7 +95,11 @@ function extractCanvasPreviewUrl(html, baseUrl) {
     const raw = contextMatch[1];
     const decoded = decodePotentialUrl(raw, baseUrl);
     if (decoded) {
-      return decoded;
+      console.log("[skin-preview] matched canvas context url", {
+        raw,
+        decoded,
+      });
+      return { url: decoded, source: "context" };
     }
   }
 
@@ -134,20 +143,35 @@ export default async function handler(req, res) {
     }
 
     const html = await pageResponse.text();
-    const previewUrl =
-      extractCanvasPreviewUrl(html, target) ??
-      (() => {
-        const ogImage =
-          extractMetaContent(html, "property", "og:image") ??
-          extractMetaContent(html, "name", "twitter:image") ??
-          null;
-        return ogImage ? decodePotentialUrl(ogImage, target) : null;
-      })();
+    const canvasPreview = extractCanvasPreviewUrl(html, target);
+
+    let previewUrl = canvasPreview?.url ?? null;
+    let previewSource = canvasPreview?.source ?? null;
 
     if (!previewUrl) {
+      const ogImage =
+        extractMetaContent(html, "property", "og:image") ??
+        extractMetaContent(html, "name", "twitter:image") ??
+        null;
+
+      if (ogImage) {
+        previewUrl = decodePotentialUrl(ogImage, target);
+        previewSource = previewUrl ? "meta" : null;
+      }
+    }
+
+    if (!previewUrl) {
+      console.warn("[skin-preview] preview image not found", {
+        config: config.slice(0, 64),
+      });
       res.status(404).json({ error: "Preview image not found" });
       return;
     }
+
+    console.log("[skin-preview] resolved preview url", {
+      previewUrl,
+      previewSource,
+    });
 
     const imageResponse = await fetch(previewUrl, {
       headers: {
@@ -165,6 +189,13 @@ export default async function handler(req, res) {
     const buffer = Buffer.from(arrayBuffer);
 
     const contentType = imageResponse.headers.get("content-type") ?? "image/webp";
+    console.log("[skin-preview] streaming preview response", {
+      previewUrl,
+      previewSource,
+      contentType,
+      contentLength: buffer.length,
+    });
+
     res.setHeader("Content-Type", contentType);
 
     const cacheControl = imageResponse.headers.get("cache-control");
