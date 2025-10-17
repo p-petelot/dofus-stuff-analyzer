@@ -16,6 +16,7 @@ describe("extractCanvasPreviewCandidates", () => {
       {
         url: "https://barbofus.com/assets/preview/canvas.png",
         source: "canvas:attr",
+        attribute: "data-preview-url",
       },
     ]);
   });
@@ -33,6 +34,7 @@ describe("extractCanvasPreviewCandidates", () => {
       {
         url: "https://barbofus.com/assets/preview/canvas-style.png",
         source: "canvas:style",
+        attribute: "style",
       },
     ]);
   });

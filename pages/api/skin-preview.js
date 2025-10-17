@@ -71,7 +71,7 @@ const CANVAS_GENERIC_ASSIGNMENT_PATTERN =
 const CANVAS_CONTEXT_URL_PATTERN =
   /canvas0[^<>{}\[\]]*?(https?:\\\/\\\/[^"'\s<>]+|https?:\/\/[^"'\s<>]+)/gi;
 const CANVAS_DIRECT_PATTERNS = [
-  { pattern: CANVAS_OBJECT_DATA_PATTERN, source: "object:data" },
+  { pattern: CANVAS_OBJECT_DATA_PATTERN, source: "object:data", attribute: "data" },
   { pattern: CANVAS_IMAGE_TAG_PATTERN, source: "img:attr" },
   { pattern: CANVAS_DATA_ATTRIBUTE_PATTERN, source: "canvas:attr" },
   { pattern: CANVAS_JSON_OBJECT_PATTERN, source: "json:object" },
@@ -125,7 +125,11 @@ function collectCanvasAttributeMatches(html, baseUrl, results) {
               attribute: name,
               decoded,
             });
-            results.push({ url: decoded, source: "canvas:style" });
+            results.push({
+              url: decoded,
+              source: "canvas:style",
+              attribute: rawName,
+            });
           } else if (decoded) {
             console.log("[skin-preview] discarded canvas attribute", {
               source: "canvas:style",
@@ -151,7 +155,11 @@ function collectCanvasAttributeMatches(html, baseUrl, results) {
           attribute: name,
           decoded,
         });
-        results.push({ url: decoded, source: "canvas:attr" });
+        results.push({
+          url: decoded,
+          source: "canvas:attr",
+          attribute: rawName,
+        });
       } else if (decoded) {
         console.log("[skin-preview] discarded canvas attribute", {
           source: "canvas:attr",
@@ -208,7 +216,14 @@ function isLikelyCanvasPreviewUrl(url, baseUrl) {
   }
 }
 
-function collectCanvasMatches(pattern, html, baseUrl, source, results) {
+function collectCanvasMatches(
+  pattern,
+  html,
+  baseUrl,
+  source,
+  results,
+  attribute = null
+) {
   if (!html) {
     return;
   }
@@ -227,8 +242,13 @@ function collectCanvasMatches(pattern, html, baseUrl, source, results) {
         source,
         raw,
         decoded,
+        attribute,
       });
-      results.push({ url: decoded, source });
+      const entry = { url: decoded, source };
+      if (attribute) {
+        entry.attribute = attribute;
+      }
+      results.push(entry);
       continue;
     }
 
@@ -237,6 +257,7 @@ function collectCanvasMatches(pattern, html, baseUrl, source, results) {
         source,
         raw,
         decoded,
+        attribute,
       });
     }
   }
@@ -251,8 +272,8 @@ function extractCanvasPreviewCandidates(html, baseUrl) {
 
   const results = [];
 
-  for (const { pattern, source } of CANVAS_DIRECT_PATTERNS) {
-    collectCanvasMatches(pattern, html, baseUrl, source, results);
+  for (const { pattern, source, attribute } of CANVAS_DIRECT_PATTERNS) {
+    collectCanvasMatches(pattern, html, baseUrl, source, results, attribute);
   }
 
   collectCanvasAttributeMatches(html, baseUrl, results);
@@ -335,20 +356,33 @@ function extractCanvasPreviewCandidates(html, baseUrl) {
     results
   );
 
-  const unique = [];
-  const seen = new Set();
+  const merged = new Map();
+
   for (const entry of results) {
     if (!entry?.url) {
       continue;
     }
-    if (seen.has(entry.url)) {
+
+    const existing = merged.get(entry.url);
+    if (!existing) {
+      merged.set(entry.url, { ...entry });
       continue;
     }
-    seen.add(entry.url);
-    unique.push(entry);
+
+    const updated = { ...existing };
+
+    if (!updated.source && entry.source) {
+      updated.source = entry.source;
+    }
+
+    if (!updated.attribute && entry.attribute) {
+      updated.attribute = entry.attribute;
+    }
+
+    merged.set(entry.url, updated);
   }
 
-  return unique;
+  return Array.from(merged.values());
 }
 
 export default async function handler(req, res) {
@@ -518,4 +552,4 @@ export default async function handler(req, res) {
   }
 }
 
-export { extractCanvasPreviewCandidates };
+export { extractCanvasPreviewCandidates, decodePotentialUrl, extractMetaContent };
