@@ -1,3 +1,6 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+
 import {
   decodePotentialUrl,
   extractCanvasPreviewCandidates,
@@ -8,6 +11,17 @@ const HEADLESS_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const PUPPETEER_VIEWPORT = { width: 1440, height: 900 };
 const RENDER_IDLE_WAIT_MS = 600;
+const HEADLESS_LAUNCH_ARGS = [
+  "--no-sandbox",
+  "--disable-setuid-sandbox",
+  "--disable-dev-shm-usage",
+];
+const DEFAULT_PUPPETEER_CACHE_DIR = path.join(process.cwd(), ".cache", "puppeteer");
+const MISSING_EXECUTABLE_PATTERNS = [
+  /Could not find Chrome/i,
+  /No executable path is set/i,
+  /Failed to launch the browser process! spawn .* ENOENT/i,
+];
 
 const IMAGE_TAG_PATTERN = /<img[^>]*>/gi;
 const ATTRIBUTE_PATTERN = /([a-zA-Z_:][-\.\w:]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
@@ -25,6 +39,200 @@ const IMAGE_ATTRIBUTE_KEYWORDS = [
 const STYLE_URL_PATTERN = /url\((['"]?)([^"')]+)\1\)/gi;
 const SRCSET_DELIMITER = /\s+/;
 const TEST_PAGE_PATH = "/image-inspector";
+
+let resolvedExecutablePath = null;
+let installingChromium = null;
+
+async function pathExists(candidate) {
+  if (!candidate || typeof candidate !== "string") {
+    return false;
+  }
+
+  try {
+    await fs.access(candidate);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveExistingExecutable(puppeteer) {
+  if (resolvedExecutablePath) {
+    return resolvedExecutablePath;
+  }
+
+  const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  if (await pathExists(envPath)) {
+    resolvedExecutablePath = envPath;
+    return resolvedExecutablePath;
+  }
+
+  try {
+    if (typeof puppeteer?.executablePath === "function") {
+      const candidatePath = puppeteer.executablePath();
+      if (await pathExists(candidatePath)) {
+        resolvedExecutablePath = candidatePath;
+        return resolvedExecutablePath;
+      }
+    }
+  } catch (error) {
+    console.warn("[site-images] Failed to resolve puppeteer executable path", {
+      error: error?.message ?? String(error),
+    });
+  }
+
+  return null;
+}
+
+function isMissingExecutableError(error) {
+  if (!error) {
+    return false;
+  }
+
+  const message = error.message ?? String(error);
+  return MISSING_EXECUTABLE_PATTERNS.some((pattern) => pattern.test(message));
+}
+
+async function runBundledChromiumInstaller() {
+  try {
+    const { createRequire } = await import("node:module");
+    const { spawn } = await import("node:child_process");
+    const require = createRequire(import.meta.url);
+
+    const candidateResolvers = [
+      () => require.resolve("puppeteer/lib/cjs/puppeteer/node/install.js"),
+      () => require.resolve("puppeteer/install.js"),
+    ];
+
+    let installerPath = null;
+    for (const resolver of candidateResolvers) {
+      try {
+        installerPath = resolver();
+        break;
+      } catch {
+        // try next location
+      }
+    }
+
+    if (!installerPath) {
+      throw new Error("Chrome installer introuvable dans le package puppeteer");
+    }
+
+    await fs.mkdir(DEFAULT_PUPPETEER_CACHE_DIR, { recursive: true }).catch(() => {});
+
+    await new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [installerPath], {
+        env: {
+          ...process.env,
+          PUPPETEER_CACHE_DIR: process.env.PUPPETEER_CACHE_DIR ?? DEFAULT_PUPPETEER_CACHE_DIR,
+        },
+        stdio: "ignore",
+      });
+
+      child.once("error", reject);
+      child.once("close", (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`Le processus d'installation Chromium a échoué (code ${code})`));
+        }
+      });
+    });
+  } catch (error) {
+    throw error instanceof Error ? error : new Error(String(error));
+  }
+}
+
+async function ensureChromiumInstalled(puppeteer) {
+  const existingPath = await resolveExistingExecutable(puppeteer);
+  if (existingPath) {
+    return existingPath;
+  }
+
+  if (!installingChromium) {
+    installingChromium = (async () => {
+      try {
+        await runBundledChromiumInstaller();
+      } catch (installError) {
+        throw installError;
+      }
+
+      const downloadedPath = await resolveExistingExecutable(puppeteer);
+      if (downloadedPath) {
+        return downloadedPath;
+      }
+
+      throw new Error(
+        "Chromium n'a pas pu être installé automatiquement (exécutable introuvable après l'installation)."
+      );
+    })();
+  }
+
+  try {
+    const executable = await installingChromium;
+    resolvedExecutablePath = executable ?? resolvedExecutablePath;
+    return executable;
+  } finally {
+    installingChromium = null;
+  }
+}
+
+function buildLaunchOptions(executablePath) {
+  const options = {
+    headless: "new",
+    args: HEADLESS_LAUNCH_ARGS,
+  };
+
+  if (executablePath) {
+    options.executablePath = executablePath;
+  }
+
+  return options;
+}
+
+async function captureRenderedContent(page, url) {
+  await page.setUserAgent(HEADLESS_USER_AGENT);
+  await page.setViewport(PUPPETEER_VIEWPORT);
+
+  await page.goto(url, { waitUntil: "networkidle0", timeout: 45000 });
+
+  await page.evaluate(
+    () =>
+      new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  );
+
+  await page.waitForTimeout(RENDER_IDLE_WAIT_MS);
+
+  const html = await page.content();
+  const canvasSnapshots = await page.evaluate(() => {
+    const entries = [];
+    const canvases = Array.from(document.querySelectorAll("canvas"));
+
+    for (const canvas of canvases) {
+      let dataUrl = null;
+      let error = null;
+
+      try {
+        dataUrl = canvas.toDataURL("image/png");
+      } catch (captureError) {
+        error = captureError instanceof Error ? captureError.message : String(captureError);
+      }
+
+      entries.push({
+        id: canvas.id ?? null,
+        className: canvas.className ?? null,
+        width: Number.isFinite(canvas.width) ? canvas.width : null,
+        height: Number.isFinite(canvas.height) ? canvas.height : null,
+        dataUrl,
+        error,
+      });
+    }
+
+    return entries;
+  });
+
+  return { html, canvasSnapshots };
+}
 
 async function renderPageDom(url) {
   let puppeteer;
@@ -46,54 +254,13 @@ async function renderPageDom(url) {
   let browser = null;
   let page = null;
 
+  let executablePath = await resolveExistingExecutable(puppeteer);
+
   try {
-    browser = await puppeteer.launch({
-      headless: "new",
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+    browser = await puppeteer.launch(buildLaunchOptions(executablePath));
 
     page = await browser.newPage();
-    await page.setUserAgent(HEADLESS_USER_AGENT);
-    await page.setViewport(PUPPETEER_VIEWPORT);
-
-    await page.goto(url, { waitUntil: "networkidle0", timeout: 45000 });
-
-    await page.evaluate(
-      () =>
-        new Promise((resolve) =>
-          requestAnimationFrame(() => requestAnimationFrame(resolve))
-        )
-    );
-
-    await page.waitForTimeout(RENDER_IDLE_WAIT_MS);
-
-    const html = await page.content();
-    const canvasSnapshots = await page.evaluate(() => {
-      const entries = [];
-      const canvases = Array.from(document.querySelectorAll("canvas"));
-
-      for (const canvas of canvases) {
-        let dataUrl = null;
-        let error = null;
-
-        try {
-          dataUrl = canvas.toDataURL("image/png");
-        } catch (captureError) {
-          error = captureError instanceof Error ? captureError.message : String(captureError);
-        }
-
-        entries.push({
-          id: canvas.id ?? null,
-          className: canvas.className ?? null,
-          width: Number.isFinite(canvas.width) ? canvas.width : null,
-          height: Number.isFinite(canvas.height) ? canvas.height : null,
-          dataUrl,
-          error,
-        });
-      }
-
-      return entries;
-    });
+    const { html, canvasSnapshots } = await captureRenderedContent(page, url);
 
     return {
       html,
@@ -102,6 +269,51 @@ async function renderPageDom(url) {
       error: null,
     };
   } catch (error) {
+    if (!browser && isMissingExecutableError(error)) {
+      console.warn("[site-images] Chrome executable missing, attempting automatic install", {
+        url,
+        error: error?.message ?? String(error),
+      });
+
+      try {
+        const ensuredPath = await ensureChromiumInstalled(puppeteer);
+        executablePath = ensuredPath ?? executablePath;
+
+        if (!executablePath) {
+          throw new Error(
+            "Chrome n'a pas pu être localisé même après la tentative d'installation automatique."
+          );
+        }
+
+        browser = await puppeteer.launch(buildLaunchOptions(executablePath));
+        page = await browser.newPage();
+        const { html, canvasSnapshots } = await captureRenderedContent(page, url);
+
+        return {
+          html,
+          canvasSnapshots,
+          renderer: "puppeteer",
+          error: null,
+        };
+      } catch (installError) {
+        console.warn("[site-images] Automatic Chrome install failed", {
+          url,
+          error: installError?.message ?? String(installError),
+        });
+
+        return {
+          html: null,
+          canvasSnapshots: [],
+          renderer: "puppeteer",
+          error: `${
+            installError?.message ??
+            error?.message ??
+            "Chrome introuvable et installation automatique impossible."
+          } (installez-le manuellement via \`npx puppeteer browsers install chrome\`)`,
+        };
+      }
+    }
+
     console.warn("[site-images] headless render failed", {
       url,
       error: error?.message ?? String(error),
