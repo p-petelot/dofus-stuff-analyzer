@@ -14,6 +14,21 @@ const DEFAULT_DOFUS_QUERY_PARAMS = {
   lang: "fr",
 };
 
+const FAMILIER_FILTERS = Object.freeze([
+  { key: "pet", label: "Familiers", typeIds: [18, 249] },
+  { key: "mount", label: "Montures", typeIds: [121, 250] },
+  { key: "dragodinde", label: "Dragodindes", typeIds: [97] },
+  { key: "muldo", label: "Muldos", typeIds: [196] },
+  { key: "volkorne", label: "Volkornes", typeIds: [207] },
+]);
+
+const FAMILIER_TYPE_ID_TO_FILTER_KEY = new Map();
+FAMILIER_FILTERS.forEach((filter) => {
+  filter.typeIds.forEach((typeId) => {
+    FAMILIER_TYPE_ID_TO_FILTER_KEY.set(typeId, filter.key);
+  });
+});
+
 const ITEM_TYPE_CONFIG = {
   coiffe: {
     requests: [
@@ -28,15 +43,11 @@ const ITEM_TYPE_CONFIG = {
     ],
   },
   familier: {
-    requests: [
-      { typeIds: [18], skip: 0, limit: 1200 },
-      { typeIds: [249], skip: 0, limit: 1200 },
-      { typeIds: [97], skip: 0, limit: 1200 },
-      { typeIds: [196], skip: 0, limit: 1200 },
-      { typeIds: [207], skip: 0, limit: 1200 },
-      { typeIds: [121], skip: 0, limit: 1200 },
-      { typeIds: [250], skip: 0, limit: 1200 },
-    ],
+    requests: FAMILIER_FILTERS.map((filter) => ({
+      typeIds: filter.typeIds,
+      skip: 0,
+      limit: 1200,
+    })),
   },
   epauliere: {
     requests: [{ typeIds: [299], skip: 0, limit: 1200 }],
@@ -499,23 +510,28 @@ function buildEncyclopediaUrl(item, fallbackId) {
   return `https://dofusdb.fr/fr/database/object/${ankamaId}`;
 }
 
-function normalizeDofusItem(item, type) {
-  const name = normalizeTextContent(item?.name) || normalizeTextContent(item?.title);
+function normalizeDofusItem(rawItem, type) {
+  const name = normalizeTextContent(rawItem?.name) || normalizeTextContent(rawItem?.title);
   if (!name) {
     return null;
   }
 
-  const slugSource = normalizeTextContent(item?.slug) || name;
+  const slugSource = normalizeTextContent(rawItem?.slug) || name;
   const fallbackSlug = slugify(slugSource) || slugify(name) || name;
-  const rawIdentifier = item?.ankamaId ?? item?.id ?? item?._id ?? fallbackSlug;
+  const rawIdentifier = rawItem?.ankamaId ?? rawItem?.id ?? rawItem?._id ?? fallbackSlug;
   const identifierString = rawIdentifier != null ? String(rawIdentifier) : fallbackSlug;
   const numericIdentifier = Number(rawIdentifier);
   const ankamaId = Number.isFinite(numericIdentifier) ? numericIdentifier : null;
-  const encyclopediaUrl = buildEncyclopediaUrl(item, rawIdentifier ?? fallbackSlug) ??
+  const encyclopediaUrl = buildEncyclopediaUrl(rawItem, rawIdentifier ?? fallbackSlug) ??
     "https://www.dofus.com/fr/mmorpg/encyclopedie";
-  const imageUrl = resolveItemImageUrl(item);
-  const palette = extractPaletteFromItemData(item);
+  const imageUrl = resolveItemImageUrl(rawItem);
+  const palette = extractPaletteFromItemData(rawItem);
   const paletteSource = palette.length ? "api" : "unknown";
+  const rawTypeId = Number.isFinite(Number(rawItem?.typeId)) ? Number(rawItem.typeId) : null;
+  const familierCategory =
+    type === "familier" && rawTypeId != null
+      ? FAMILIER_TYPE_ID_TO_FILTER_KEY.get(rawTypeId) ?? null
+      : null;
 
   return {
     id: `${type}-${identifierString}`,
@@ -526,6 +542,8 @@ function normalizeDofusItem(item, type) {
     imageUrl,
     paletteSource,
     ankamaId,
+    typeId: rawTypeId,
+    familierCategory,
     signature: null,
     shape: null,
     tones: null,
@@ -579,7 +597,7 @@ const CURATED_COLOR_SWATCHES = ["#8B5CF6", "#F97316", "#10B981", "#38BDF8", "#F4
 const ITEM_TYPE_LABELS = {
   coiffe: "Coiffe",
   cape: "Cape",
-  familier: "Familier",
+  familier: "Familiers & montures",
   bouclier: "Bouclier",
   epauliere: "Épaulières",
   costume: "Costume",
@@ -2061,6 +2079,12 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   const [itemsCatalog, setItemsCatalog] = useState({});
   const [itemsLoading, setItemsLoading] = useState(false);
   const [itemsError, setItemsError] = useState(null);
+  const [familierFilters, setFamilierFilters] = useState(() =>
+    FAMILIER_FILTERS.reduce((accumulator, filter) => {
+      accumulator[filter.key] = true;
+      return accumulator;
+    }, {})
+  );
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [inputMode, setInputMode] = useState("image");
   const [selectedColor, setSelectedColor] = useState("#8B5CF6");
@@ -2098,7 +2122,28 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     [itemsCatalog]
   );
 
+  const activeFamilierFilterCount = useMemo(
+    () =>
+      FAMILIER_FILTERS.reduce(
+        (total, filter) => (familierFilters[filter.key] ? total + 1 : total),
+        0
+      ),
+    [familierFilters]
+  );
+  const areAllFamilierFiltersDisabled = activeFamilierFilterCount === 0;
+
   const colorsCount = colors.length;
+
+  const handleFamilierFilterToggle = useCallback((key) => {
+    if (!FAMILIER_FILTERS.some((filter) => filter.key === key)) {
+      return;
+    }
+
+    setFamilierFilters((previous) => ({
+      ...previous,
+      [key]: !previous[key],
+    }));
+  }, []);
 
   const activeBreed = useMemo(() => {
     if (!Array.isArray(breeds) || breeds.length === 0) {
@@ -2355,7 +2400,37 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     }
 
     return ITEM_TYPES.reduce((accumulator, type) => {
-      const catalogItems = itemsCatalog[type] ?? [];
+      let catalogItems = itemsCatalog[type] ?? [];
+
+      if (type === "familier") {
+        const activeFilters = FAMILIER_FILTERS.filter((filter) => familierFilters[filter.key]);
+        if (!activeFilters.length) {
+          accumulator[type] = [];
+          return accumulator;
+        }
+
+        const allowedKeys = new Set(activeFilters.map((filter) => filter.key));
+        const allowedTypeIds = new Set(
+          activeFilters.flatMap((filter) => filter.typeIds)
+        );
+
+        catalogItems = catalogItems.filter((item) => {
+          if (!item) {
+            return false;
+          }
+
+          if (item.familierCategory && allowedKeys.has(item.familierCategory)) {
+            return true;
+          }
+
+          if (Number.isFinite(item.typeId)) {
+            return allowedTypeIds.has(item.typeId);
+          }
+
+          return allowedKeys.has("pet");
+        });
+      }
+
       if (!catalogItems.length) {
         accumulator[type] = [];
         return accumulator;
@@ -2382,7 +2457,16 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       accumulator[type] = ranked.slice(0, MAX_RECOMMENDATIONS).map(({ item }) => item);
       return accumulator;
     }, {});
-  }, [colors, imageSignature, imageShape, imageTones, imageHash, imageEdges, itemsCatalog]);
+  }, [
+    colors,
+    imageSignature,
+    imageShape,
+    imageTones,
+    imageHash,
+    imageEdges,
+    itemsCatalog,
+    familierFilters,
+  ]);
 
   const proposals = useMemo(() => {
     if (!recommendations) {
@@ -3583,6 +3667,54 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                   );
                 })}
               </div>
+            </div>
+            <div
+              className="identity-card__section"
+              role="group"
+              aria-label="Catégories de compagnons proposées"
+            >
+              <span className="identity-card__section-title">Familiers & montures proposés</span>
+              <div
+                className="companion-toggle"
+                role="group"
+                aria-label="Filtrer les compagnons suggérés"
+              >
+                {FAMILIER_FILTERS.map((filter) => {
+                  const isActive = Boolean(familierFilters[filter.key]);
+                  return (
+                    <button
+                      key={filter.key}
+                      type="button"
+                      className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
+                      onClick={() => handleFamilierFilterToggle(filter.key)}
+                      aria-pressed={isActive}
+                      title={`${isActive ? "Masquer" : "Afficher"} ${filter.label.toLowerCase()}`}
+                    >
+                      <span className="companion-toggle__indicator" aria-hidden="true">
+                        {isActive ? (
+                          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                              d="M5 10.5 8.2 13.7 15 6.5"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        ) : (
+                          <span className="companion-toggle__dot" />
+                        )}
+                      </span>
+                      <span className="companion-toggle__label">{filter.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {areAllFamilierFiltersDisabled ? (
+                <p className="companion-toggle__empty" role="status">
+                  Active au moins une catégorie pour afficher des suggestions de compagnons.
+                </p>
+              ) : null}
             </div>
           </div>
         </section>
