@@ -3977,7 +3977,6 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                   </aside>
                 </div>
               ) : null}
-              </div>
             </>
           )}
         </section>
