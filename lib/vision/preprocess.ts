@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { DEFAULT_IMAGE_SIZE, ROI, SLOTS, VIS_THRESH } from "../config/suggestions";
-import type { BoundingBox, FourSlot, ImageDataLike, Mask } from "../types";
+import type { BoundingBox, ImageDataLike, Mask, SlotKey } from "../types";
 
 /**
  * Decode a Buffer or base64 encoded string into raw bytes.
@@ -76,7 +76,7 @@ export async function normalizeInput(image: Buffer | string): Promise<{ img512: 
 /**
  * Convert the configured ROI expressed in relative coordinates into pixels.
  */
-function toBoundingBox(slot: FourSlot, width: number, height: number): BoundingBox {
+function toBoundingBox(slot: SlotKey, width: number, height: number): BoundingBox {
   const roi = ROI[slot];
   return {
     x: roi.x * width,
@@ -137,12 +137,12 @@ function estimateEdgeDensity(img: ImageDataLike, box: BoundingBox): number {
 /**
  * Locate all four slots with fixed ROIs and determine their visibility flags.
  */
-export async function locateFourSlots(
+export async function locateSlots(
   img512: ImageDataLike,
   mask: Mask,
-): Promise<{ boxes: Record<FourSlot, BoundingBox>; visibility: Record<FourSlot, "ok" | "low"> }> {
-  const boxes = {} as Record<FourSlot, BoundingBox>;
-  const visibility = {} as Record<FourSlot, "ok" | "low">;
+): Promise<{ boxes: Record<SlotKey, BoundingBox>; visibility: Record<SlotKey, "ok" | "low"> }> {
+  const boxes = {} as Record<SlotKey, BoundingBox>;
+  const visibility = {} as Record<SlotKey, "ok" | "low">;
   for (const slot of SLOTS) {
     const box = toBoundingBox(slot, img512.width, img512.height);
     boxes[slot] = box;

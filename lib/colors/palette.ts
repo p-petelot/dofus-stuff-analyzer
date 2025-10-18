@@ -1,5 +1,13 @@
 import { ROI, SLOTS } from "../config/suggestions";
-import type { BoundingBox, DofusPalette, FourSlot, ImageDataLike, Lab, Mask, Palette } from "../types";
+import type {
+  BoundingBox,
+  DofusPalette,
+  ImageDataLike,
+  Lab,
+  Mask,
+  Palette,
+  SlotKey,
+} from "../types";
 
 const DOFUS_HEX = [
   "#F5D142",
@@ -137,10 +145,10 @@ function bboxFilter(box: BoundingBox, width: number, height: number, x: number, 
 /** Extract LAB palettes for each ROI slot individually. */
 export function extractPaletteLABBySlot(
   img512: ImageDataLike,
-  boxes: Record<FourSlot, BoundingBox>,
+  boxes: Record<SlotKey, BoundingBox>,
   mask: Mask,
-): Record<FourSlot, Palette> {
-  const result = {} as Record<FourSlot, Palette>;
+): Record<SlotKey, Palette> {
+  const result = {} as Record<SlotKey, Palette>;
   for (const slot of SLOTS) {
     const box = boxes[slot] ?? {
       x: ROI[slot].x * img512.width,
@@ -180,14 +188,14 @@ function paletteToDofus(palette: Palette): DofusPalette {
 /** Snap a global palette to the nearest colours of the curated Dofus palette. */
 export function snapToDofusPalette(palette: Palette): DofusPalette;
 /** Snap per-slot palettes to the curated Dofus palette. */
-export function snapToDofusPalette(palette: Record<FourSlot, Palette>): Record<FourSlot, DofusPalette>;
+export function snapToDofusPalette(palette: Record<SlotKey, Palette>): Record<SlotKey, DofusPalette>;
 export function snapToDofusPalette(
-  palette: Palette | Record<FourSlot, Palette>,
-): DofusPalette | Record<FourSlot, DofusPalette> {
+  palette: Palette | Record<SlotKey, Palette>,
+): DofusPalette | Record<SlotKey, DofusPalette> {
   if ("primary" in palette) {
     return paletteToDofus(palette);
   }
-  const result = {} as Record<FourSlot, DofusPalette>;
+  const result = {} as Record<SlotKey, DofusPalette>;
   for (const slot of SLOTS) {
     result[slot] = paletteToDofus(palette[slot]);
   }

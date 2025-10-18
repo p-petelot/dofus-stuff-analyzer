@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import type { Candidate, FourSlot } from "../types";
+import type { Candidate, SlotKey } from "../types";
 
 const LOG_PATH = path.join(process.cwd(), ".cache", "suggestions-log.jsonl");
 
@@ -13,7 +13,7 @@ function ensureDir(): void {
 
 export function logSuggestion(
   inputHash: string,
-  slot: FourSlot,
+  slot: SlotKey,
   topCandidates: Candidate[],
   chosen?: Candidate,
 ): void {

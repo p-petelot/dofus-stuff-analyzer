@@ -756,6 +756,88 @@ a {
   gap: 10px;
 }
 
+.companion-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.companion-toggle__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(5, 8, 22, 0.6);
+  color: rgba(226, 232, 240, 0.82);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease,
+    color 0.2s ease, transform 0.2s ease;
+}
+
+.companion-toggle__chip:hover {
+  border-color: rgba(148, 163, 184, 0.45);
+  transform: translateY(-1px);
+}
+
+.companion-toggle__chip:focus-visible {
+  outline: 2px solid rgba(248, 250, 252, 0.8);
+  outline-offset: 3px;
+}
+
+.companion-toggle__chip.is-active {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.9), rgba(56, 189, 248, 0.82));
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 16px 28px -24px rgba(59, 130, 246, 0.95);
+}
+
+.companion-toggle__indicator {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.65);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(226, 232, 240, 0.9);
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.companion-toggle__chip.is-active .companion-toggle__indicator {
+  background: rgba(15, 23, 42, 0.2);
+  border-color: rgba(15, 23, 42, 0.2);
+  color: #ffffff;
+}
+
+.companion-toggle__indicator svg {
+  width: 12px;
+  height: 12px;
+}
+
+.companion-toggle__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.7);
+}
+
+.companion-toggle__label {
+  font-weight: 600;
+}
+
+.companion-toggle__empty {
+  margin: 6px 0 0;
+  font-size: 0.74rem;
+  color: rgba(148, 163, 184, 0.82);
+}
+
 .identity-card__chip {
   display: flex;
   align-items: center;
@@ -1591,6 +1673,7 @@ a {
   padding: 0;
   list-style: none;
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 7px;
 }
 
@@ -2141,6 +2224,15 @@ a {
     width: 32px;
     height: 32px;
   }
+
+  .companion-toggle {
+    gap: 6px;
+  }
+
+  .companion-toggle__chip {
+    flex: 1 1 calc(50% - 6px);
+    justify-content: center;
+  }
 }
 
 @media (max-width: 520px) {
@@ -2170,6 +2262,12 @@ a {
   .skin-card__equipment {
     position: static;
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 420px) {
+  .companion-toggle__chip {
+    flex: 1 1 100%;
   }
 }
 

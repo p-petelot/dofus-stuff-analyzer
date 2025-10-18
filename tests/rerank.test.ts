@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { applySetBonus, finalizeSlot, nmsSilhouette } from "../lib/items/rerank";
-import type { Candidate, DofusPalette, FourSlot } from "../lib/types";
+import type { Candidate, DofusPalette, SlotKey } from "../lib/types";
 
-const basePalette: Record<FourSlot, DofusPalette> = {
+const basePalette: Record<SlotKey, DofusPalette> = {
   coiffe: { primary: "#F5D142", secondary: "#57B8FF", tertiary: "#A1D25A" },
   cape: { primary: "#F5D142", secondary: "#57B8FF", tertiary: "#A1D25A" },
   bouclier: { primary: "#F5D142", secondary: "#57B8FF", tertiary: "#A1D25A" },
   familier: { primary: "#F5D142", secondary: "#57B8FF", tertiary: "#A1D25A" },
+  epauliere: { primary: "#F5D142", secondary: "#57B8FF", tertiary: "#A1D25A" },
+  costume: { primary: "#F5D142", secondary: "#57B8FF", tertiary: "#A1D25A" },
+  ailes: { primary: "#F5D142", secondary: "#57B8FF", tertiary: "#A1D25A" },
 };
 
 const makeCandidate = (overrides: Partial<Candidate>): Candidate => ({
@@ -37,7 +40,15 @@ describe("applySetBonus", () => {
     const coiffe = makeCandidate({ itemId: 10, setId: 5, score: 0.8, mode: "item", verified: true });
     const cape = makeCandidate({ itemId: 20, setId: 5, score: 0.75, mode: "color", verified: false });
     const result = applySetBonus(
-      { coiffe: [coiffe], cape: [cape], bouclier: [], familier: [] },
+      {
+        coiffe: [coiffe],
+        cape: [cape],
+        bouclier: [],
+        familier: [],
+        epauliere: [],
+        costume: [],
+        ailes: [],
+      },
       basePalette,
     );
     expect(result.coiffe[0].score).toBeGreaterThan(0.8);

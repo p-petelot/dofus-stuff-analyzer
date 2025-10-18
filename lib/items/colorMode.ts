@@ -3,7 +3,7 @@ import { deltaE2000 } from "../colors/palette";
 import { clipEmbedding, edgeSSIM } from "../vision/features";
 import { queryIndex } from "./indexStore";
 import { renderCandidateTemplate } from "./templateImage";
-import type { Candidate, DofusPalette, FourSlot, ImageDataLike, Lab } from "../types";
+import type { Candidate, DofusPalette, ImageDataLike, Lab, SlotKey } from "../types";
 
 function hexToLab(hex: string): Lab {
   const cleaned = hex.replace("#", "");
@@ -63,7 +63,7 @@ function limitCandidates<T>(candidates: T[]): T[] {
 }
 
 export async function colorModeSuggest(
-  slot: FourSlot,
+  slot: SlotKey,
   patch: ImageDataLike,
   slotPalette: DofusPalette,
   kPool: number = K.colorPick,
