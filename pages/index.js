@@ -2239,11 +2239,13 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   const progressHandles = useRef({ frame: null, timeout: null, value: 0 });
   const breedsRequestRef = useRef(null);
 
-  const handleLanguageChange = useCallback(
-    (event) => {
-      const value = event.target.value;
+  const handleLanguageSelect = useCallback(
+    (nextLanguage) => {
+      if (!nextLanguage || nextLanguage === languageRef.current) {
+        return;
+      }
       skipRouterLanguageEffectRef.current = true;
-      setLanguage(value);
+      setLanguage(nextLanguage);
     },
     [setLanguage]
   );
@@ -3467,10 +3469,17 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     return luminance > 155 ? "rgba(15, 23, 42, 0.9)" : "#f8fafc";
   }, []);
 
+  const tagline = useMemo(() => {
+    const raw = t("brand.tagline");
+    return typeof raw === "string" ? raw.trim() : "";
+  }, [t]);
+
+  const pageTitle = tagline ? `${BRAND_NAME} · ${tagline}` : BRAND_NAME;
+
   return (
     <>
       <Head>
-        <title>{`${BRAND_NAME} · ${t("brand.tagline")}`}</title>
+        <title>{pageTitle}</title>
         <meta name="description" content={t("meta.description")} />
       </Head>
       <main className="page">
@@ -3504,28 +3513,33 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
             </div>
           ) : null}
         </div>
-        <div className="language-switcher">
-          <label className="language-switcher__label" htmlFor="language-select">
-            {t("language.selectorLabel")}
-          </label>
-          <select
-            id="language-select"
-            className="language-switcher__select"
-            value={language}
-            onChange={handleLanguageChange}
-            aria-label={t("language.selectorAria")}
-          >
-            {languageOptions.map((option) => (
-              <option key={option.code} value={option.code}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
         <header className="hero">
           <h1>{BRAND_NAME}</h1>
-          <p className="hero__tagline">{t("brand.tagline")}</p>
+          {tagline ? <p className="hero__tagline">{tagline}</p> : null}
         </header>
+        <div className="language-switcher" role="group" aria-label={t("language.selectorAria")}>
+          {languageOptions.map((option) => {
+            const isActive = option.code === language;
+            return (
+              <button
+                key={option.code}
+                type="button"
+                className={`language-switcher__option${isActive ? " is-active" : ""}`}
+                onClick={() => handleLanguageSelect(option.code)}
+                aria-pressed={isActive}
+                aria-label={option.accessibleLabel}
+                title={option.accessibleLabel}
+              >
+                <span className="language-switcher__flag" aria-hidden="true">
+                  <img src={option.flag} alt="" loading="lazy" />
+                </span>
+                <span className="language-switcher__code" aria-hidden="true">
+                  {option.shortLabel ?? option.code.toUpperCase()}
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
         <section className="workspace">
           <div className="reference">

@@ -1,11 +1,41 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 export const SUPPORTED_LANGUAGES = {
-  fr: { label: "Français", locales: ["fr", "fr-FR", "fr-CA"] },
-  en: { label: "English", locales: ["en", "en-US", "en-GB", "en-CA", "en-AU"] },
-  es: { label: "Español", locales: ["es", "es-ES", "es-MX", "es-AR"] },
-  de: { label: "Deutsch", locales: ["de", "de-DE", "de-AT", "de-CH"] },
-  pt: { label: "Português", locales: ["pt", "pt-PT", "pt-BR"] },
+  fr: {
+    label: "Français",
+    shortLabel: "FR",
+    country: "France",
+    flag: "https://flagcdn.com/fr.svg",
+    locales: ["fr", "fr-FR", "fr-CA"],
+  },
+  en: {
+    label: "English",
+    shortLabel: "EN",
+    country: "United Kingdom",
+    flag: "https://flagcdn.com/gb.svg",
+    locales: ["en", "en-US", "en-GB", "en-CA", "en-AU"],
+  },
+  es: {
+    label: "Español",
+    shortLabel: "ES",
+    country: "España",
+    flag: "https://flagcdn.com/es.svg",
+    locales: ["es", "es-ES", "es-MX", "es-AR"],
+  },
+  pt: {
+    label: "Português",
+    shortLabel: "PT",
+    country: "Portugal",
+    flag: "https://flagcdn.com/pt.svg",
+    locales: ["pt", "pt-PT", "pt-BR"],
+  },
+  de: {
+    label: "Deutsch",
+    shortLabel: "DE",
+    country: "Deutschland",
+    flag: "https://flagcdn.com/de.svg",
+    locales: ["de", "de-DE", "de-AT", "de-CH"],
+  },
 };
 
 export const DEFAULT_LANGUAGE = "fr";
@@ -30,7 +60,7 @@ const LANGUAGE_VARIANT_KEYS = {
 
 const TRANSLATIONS = {
   fr: {
-    "brand.tagline": "Studio de skins Dofus",
+    "brand.tagline": "",
     "meta.description":
       "KrosPalette extrait les couleurs dominantes de tes images pour composer des skins Dofus harmonieux.",
     "progress.analyzing": "Analyse de l'image en cours",
@@ -738,7 +768,13 @@ const STORAGE_KEY = "krospalette:language";
 
 const LanguageContext = createContext({
   language: DEFAULT_LANGUAGE,
-  languages: Object.entries(SUPPORTED_LANGUAGES).map(([code, info]) => ({ code, label: info.label })),
+  languages: Object.entries(SUPPORTED_LANGUAGES).map(([code, info]) => ({
+    code,
+    label: info.label,
+    flag: info.flag,
+    shortLabel: info.shortLabel ?? code.toUpperCase(),
+    accessibleLabel: info.country ? `${info.label} · ${info.country}` : info.label,
+  })),
   setLanguage: () => {},
   t: (key, params, fallback) => translateInternal(DEFAULT_LANGUAGE, key, params, fallback),
 });
@@ -792,6 +828,9 @@ export function LanguageProvider({ children, initialLanguage }) {
     const languages = Object.entries(SUPPORTED_LANGUAGES).map(([code, info]) => ({
       code,
       label: info.label,
+      flag: info.flag,
+      shortLabel: info.shortLabel ?? code.toUpperCase(),
+      accessibleLabel: info.country ? `${info.label} · ${info.country}` : info.label,
     }));
 
     const setLanguageSafe = (next) => {
