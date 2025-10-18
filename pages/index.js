@@ -3908,7 +3908,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                     ) : null}
                     <div className="suggestions__grid">
                       {ITEM_TYPES.map((type) => {
-                        const items = recommendations?.[type] ?? [];
+                        const items = (recommendations?.[type] ?? []).slice(0, 3);
                         return (
                           <section key={type} className="suggestions__group">
                             <header className="suggestions__group-header">
