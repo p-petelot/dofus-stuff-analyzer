@@ -2120,6 +2120,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   const routerLang = router?.query?.lang;
   const { language, languages: languageOptions, setLanguage, t } = useLanguage();
   const languageRef = useRef(language);
+  const skipRouterLanguageEffectRef = useRef(false);
   const languagePriority = useMemo(() => getLanguagePriority(language), [language]);
   useEffect(() => {
     setActiveLocalizationPriority(language);
@@ -2135,6 +2136,17 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     }
     const raw = Array.isArray(routerLang) ? routerLang[0] : routerLang;
     const normalized = normalizeLanguage(raw);
+
+    if (skipRouterLanguageEffectRef.current) {
+      const isMatchingSelection = normalized
+        ? normalized === languageRef.current
+        : languageRef.current === DEFAULT_LANGUAGE;
+      if (!isMatchingSelection) {
+        return;
+      }
+      skipRouterLanguageEffectRef.current = false;
+    }
+
     if (normalized && normalized !== languageRef.current) {
       setLanguage(normalized);
     }
@@ -2230,6 +2242,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   const handleLanguageChange = useCallback(
     (event) => {
       const value = event.target.value;
+      skipRouterLanguageEffectRef.current = true;
       setLanguage(value);
     },
     [setLanguage]
