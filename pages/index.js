@@ -3515,7 +3515,6 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         </div>
         <header className="hero">
           <h1>{BRAND_NAME}</h1>
-          {tagline ? <p className="hero__tagline">{tagline}</p> : null}
         </header>
         <div className="language-switcher" role="group" aria-label={t("language.selectorAria")}>
           {languageOptions.map((option) => {
