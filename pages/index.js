@@ -2119,9 +2119,14 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   const router = useRouter();
   const routerLang = router?.query?.lang;
   const { language, languages: languageOptions, setLanguage, t } = useLanguage();
+  const languageRef = useRef(language);
   const languagePriority = useMemo(() => getLanguagePriority(language), [language]);
   useEffect(() => {
     setActiveLocalizationPriority(language);
+  }, [language]);
+
+  useEffect(() => {
+    languageRef.current = language;
   }, [language]);
 
   useEffect(() => {
@@ -2130,11 +2135,12 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     }
     const raw = Array.isArray(routerLang) ? routerLang[0] : routerLang;
     const normalized = normalizeLanguage(raw);
-    if (normalized && normalized !== language) {
+    if (normalized && normalized !== languageRef.current) {
       setLanguage(normalized);
     }
-  }, [language, router?.isReady, routerLang, setLanguage]);
+  }, [router?.isReady, routerLang, setLanguage]);
 
+  const isSyncingLanguageRef = useRef(false);
   useEffect(() => {
     if (!router?.isReady) {
       return;
@@ -2143,7 +2149,13 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     const raw = Array.isArray(routerLang) ? routerLang[0] : routerLang;
     const normalized = normalizeLanguage(raw);
     const isDefault = language === DEFAULT_LANGUAGE;
-    if ((isDefault && !normalized) || normalized === language) {
+    const isSynced = (isDefault && !normalized) || normalized === language;
+    if (isSynced) {
+      isSyncingLanguageRef.current = false;
+      return;
+    }
+
+    if (isSyncingLanguageRef.current) {
       return;
     }
 
@@ -2154,7 +2166,12 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       nextQuery.lang = language;
     }
 
-    router.replace({ pathname: router.pathname, query: nextQuery }, undefined, { shallow: true });
+    isSyncingLanguageRef.current = true;
+    router
+      .replace({ pathname: router.pathname, query: nextQuery }, undefined, { shallow: true })
+      .finally(() => {
+        isSyncingLanguageRef.current = false;
+      });
   }, [language, router, routerLang]);
 
   const [imageSrc, setImageSrc] = useState(null);
@@ -3474,25 +3491,25 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
             </div>
           ) : null}
         </div>
+        <div className="language-switcher">
+          <label className="language-switcher__label" htmlFor="language-select">
+            {t("language.selectorLabel")}
+          </label>
+          <select
+            id="language-select"
+            className="language-switcher__select"
+            value={language}
+            onChange={handleLanguageChange}
+            aria-label={t("language.selectorAria")}
+          >
+            {languageOptions.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
         <header className="hero">
-          <div className="hero__top">
-            <label className="language-switcher__label" htmlFor="language-select">
-              {t("language.selectorLabel")}
-            </label>
-            <select
-              id="language-select"
-              className="language-switcher__select"
-              value={language}
-              onChange={handleLanguageChange}
-              aria-label={t("language.selectorAria")}
-            >
-              {languageOptions.map((option) => (
-                <option key={option.code} value={option.code}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
           <h1>{BRAND_NAME}</h1>
           <p className="hero__tagline">{t("brand.tagline")}</p>
         </header>
