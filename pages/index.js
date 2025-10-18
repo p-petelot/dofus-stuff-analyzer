@@ -570,7 +570,15 @@ const ITEM_TYPE_LABELS = {
 };
 
 const BARBOFUS_BASE_URL = "https://barbofus.com/skinator";
-const BARBOFUS_RENDER_PROXY = "/api/skin-preview";
+const BARBOFUS_EQUIPMENT_SLOTS = ["6", "7", "8", "9", "10", "11", "12", "13"];
+const BARBOFUS_SLOT_BY_TYPE = {
+  coiffe: "6",
+  cape: "7",
+  familier: "8",
+  bouclier: "9",
+};
+
+const LOOK_PREVIEW_SIZE = 512;
 const BARBOFUS_FACE_ID_BY_CLASS = Object.freeze({
   1: { male: 1, female: 9 },
   2: { male: 17, female: 25 },
@@ -627,13 +635,6 @@ const BARBOFUS_DEFAULT_BREED = Object.freeze({
     colors: EMPTY_BREED_COLORS,
   },
 });
-const BARBOFUS_EQUIPMENT_SLOTS = ["6", "7", "8", "9", "10", "11", "12", "13"];
-const BARBOFUS_SLOT_BY_TYPE = {
-  coiffe: "6",
-  cape: "7",
-  familier: "8",
-  bouclier: "9",
-};
 
 const LZ_KEY_STR_URI_SAFE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-$";
 
@@ -746,7 +747,6 @@ function compressToEncodedURIComponent(input) {
   }
   return _compress(input, 6, getUriSafeCharFromInt);
 }
-
 function hexToNumeric(hex) {
   const normalized = normalizeColorToHex(hex);
   if (!normalized) {
@@ -756,14 +756,14 @@ function hexToNumeric(hex) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
-function buildBarbofusConfiguration(
+function buildBarbofusLink(
   items,
   paletteHexes,
   fallbackColorValues = [],
   options = {}
 ) {
   if (!Array.isArray(items) || items.length === 0) {
-    return { link: null, preview: null };
+    return null;
   }
 
   const {
@@ -777,7 +777,7 @@ function buildBarbofusConfiguration(
   const paletteValues = Array.isArray(paletteHexes)
     ? paletteHexes
         .map((hex) => hexToNumeric(hex))
-        .filter((value) => value !== null)
+        .filter((value) => Number.isFinite(value))
     : [];
 
   const defaultColorValues = Array.isArray(classDefaults)
@@ -822,7 +822,7 @@ function buildBarbofusConfiguration(
   }
 
   if (useCustomSkinTone && !defaultColorValues.length && !overlayValues.length) {
-    return { link: null, preview: null };
+    return null;
   }
 
   const resolvedColors = initialColors.filter((value) => Number.isFinite(value));
@@ -835,7 +835,7 @@ function buildBarbofusConfiguration(
   }
 
   if (!resolvedColors.length) {
-    return { link: null, preview: null };
+    return null;
   }
 
   const equipment = BARBOFUS_EQUIPMENT_SLOTS.reduce((accumulator, slot) => {
@@ -858,7 +858,7 @@ function buildBarbofusConfiguration(
   });
 
   if (!hasEquipment) {
-    return { link: null, preview: null };
+    return null;
   }
 
   const payload = {
@@ -876,15 +876,12 @@ function buildBarbofusConfiguration(
   try {
     const encoded = compressToEncodedURIComponent(JSON.stringify(payload));
     if (!encoded) {
-      return { link: null, preview: null };
+      return null;
     }
-    const link = `${BARBOFUS_BASE_URL}?s=${encoded}`;
-    const previewProxy = `${BARBOFUS_RENDER_PROXY}?s=${encodeURIComponent(encoded)}`;
-    const previewSources = previewProxy ? [previewProxy] : [];
-    return { link, preview: previewProxy, previewProxy, previewSources };
+    return `${BARBOFUS_BASE_URL}?s=${encoded}`;
   } catch (err) {
     console.error(err);
-    return { link: null, preview: null, previewProxy: null, previewSources: [] };
+    return null;
   }
 }
 
@@ -2051,7 +2048,8 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   const [inputMode, setInputMode] = useState("image");
   const [selectedColor, setSelectedColor] = useState("#8B5CF6");
   const [activeProposal, setActiveProposal] = useState(0);
-  const [previewErrors, setPreviewErrors] = useState({});
+  const [lookPreviews, setLookPreviews] = useState({});
+  const lookPreviewsRef = useRef({});
   const [downloadingPreviewId, setDownloadingPreviewId] = useState(null);
   const [useCustomSkinTone, setUseCustomSkinTone] = useState(false);
   const [showDetailedMatches, setShowDetailedMatches] = useState(false);
@@ -2101,16 +2099,16 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     return selectedGender === "male" ? activeBreed.male ?? fallback : activeBreed.female ?? fallback;
   }, [activeBreed, selectedGender]);
 
-  const activeClassDefaults = activeGenderConfig?.colors?.numeric ?? [];
   const activeClassId = typeof activeBreed?.id === "number" ? activeBreed.id : BARBOFUS_DEFAULTS.classId;
+  const activeGenderValue = BARBOFUS_GENDER_VALUES[selectedGender] ?? BARBOFUS_DEFAULTS.gender;
+  const activeGenderLabel = selectedGender === "male" ? "Homme" : "Femme";
+  const activeClassDefaults = activeGenderConfig?.colors?.numeric ?? [];
   const fallbackFaceId = Number.isFinite(activeGenderConfig?.faceId)
     ? activeGenderConfig.faceId
     : Number.isFinite(activeGenderConfig?.lookId)
     ? activeGenderConfig.lookId
     : BARBOFUS_DEFAULTS.faceId;
   const activeClassFaceId = getBarbofusFaceId(activeClassId, selectedGender, fallbackFaceId);
-  const activeGenderValue = BARBOFUS_GENDER_VALUES[selectedGender] ?? BARBOFUS_DEFAULTS.gender;
-  const activeGenderLabel = selectedGender === "male" ? "Homme" : "Femme";
 
   const fallbackColorValues = useMemo(() => {
     if (!colors.length) {
@@ -2119,14 +2117,14 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     const seen = new Set();
     const values = [];
     colors.forEach((entry) => {
-      const numeric = hexToNumeric(entry?.hex);
-      if (numeric === null || seen.has(numeric)) {
-        return;
+      const candidate = typeof entry === "string" ? entry : entry?.hex;
+      const numeric = hexToNumeric(candidate);
+      if (numeric !== null && !seen.has(numeric)) {
+        seen.add(numeric);
+        values.push(numeric);
       }
-      seen.add(numeric);
-      values.push(numeric);
     });
-    return values.slice(0, MAX_ITEM_PALETTE_COLORS);
+    return values;
   }, [colors]);
 
   const loadBreeds = useCallback(async () => {
@@ -2417,26 +2415,83 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       });
 
       const paletteSample = palette.slice(0, MAX_ITEM_PALETTE_COLORS);
-      const {
-        link: barbofusLink,
-        preview: barbofusPreview,
-        previewSources,
-      } = buildBarbofusConfiguration(
-        items,
-        paletteSample,
-        fallbackColorValues,
-        {
-          useCustomSkinTone,
-          classId: activeClassId,
-          gender: activeGenderValue,
-          faceId: activeClassFaceId,
-          classDefaults: activeClassDefaults,
-        }
-      );
+      const lookItemIds = Array.from(
+        new Set(
+          items
+            .map((item) => (Number.isFinite(item.ankamaId) ? Math.trunc(item.ankamaId) : null))
+            .filter((value) => Number.isFinite(value))
+        )
+      ).sort((a, b) => a - b);
 
-      const normalizedPreviewSources = Array.isArray(previewSources)
-        ? previewSources.filter((value) => typeof value === "string" && value.length > 0)
-        : [];
+      const lookGenderCode =
+        activeGenderValue === BARBOFUS_GENDER_VALUES.female ? "f" : "m";
+      const barbofusLink = buildBarbofusLink(items, paletteSample, fallbackColorValues, {
+        useCustomSkinTone,
+        classId: activeClassId,
+        gender: activeGenderValue,
+        faceId: activeClassFaceId,
+        classDefaults: activeClassDefaults,
+      });
+
+      const lookColors = (() => {
+        const values = [];
+        const seenColors = new Set();
+
+        const register = (value) => {
+          if (!Number.isFinite(value)) {
+            return;
+          }
+          const normalized = Math.trunc(value);
+          if (seenColors.has(normalized)) {
+            return;
+          }
+          seenColors.add(normalized);
+          values.push(normalized);
+        };
+
+        if (!useCustomSkinTone && Array.isArray(activeClassDefaults) && activeClassDefaults.length) {
+          const defaultSkin = activeClassDefaults.find((entry) => Number.isFinite(entry));
+          if (defaultSkin !== undefined) {
+            register(defaultSkin);
+          }
+        }
+
+        paletteSample.forEach((hex) => {
+          const numeric = hexToNumeric(hex);
+          if (numeric !== null) {
+            register(numeric);
+          }
+        });
+
+        fallbackColorValues.forEach(register);
+
+        if (!useCustomSkinTone && Array.isArray(activeClassDefaults) && activeClassDefaults.length) {
+          activeClassDefaults.forEach((value, index) => {
+            if (index === 0) {
+              return;
+            }
+            register(value);
+          });
+        }
+
+        return values.slice(0, MAX_ITEM_PALETTE_COLORS);
+      })();
+
+      const keyParts = [];
+      if (Number.isFinite(activeClassId)) {
+        keyParts.push(activeClassId);
+      }
+      const lookFaceId = Number.isFinite(activeClassFaceId) ? activeClassFaceId : null;
+      if (lookFaceId) {
+        keyParts.push(`head${lookFaceId}`);
+      }
+      keyParts.push(lookGenderCode);
+      keyParts.push(...lookItemIds);
+      lookColors.forEach((value) => {
+        keyParts.push(`c${value}`);
+      });
+
+      const lookKey = keyParts.length ? keyParts.join("-") : null;
 
       combos.push({
         id: `proposal-${index}`,
@@ -2445,12 +2500,16 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         palette: paletteSample,
         heroImage: items.find((item) => item.imageUrl)?.imageUrl ?? null,
         barbofusLink,
-        barbofusPreview: normalizedPreviewSources[0] ?? barbofusPreview ?? null,
-        barbofusPreviewSources: normalizedPreviewSources,
         className: activeBreed?.name ?? null,
+        classId: Number.isFinite(activeClassId) ? activeClassId : null,
         genderLabel: activeGenderLabel,
         classIcon: activeBreed?.icon ?? null,
         subtitle: sharedSubtitle,
+        lookGender: lookGenderCode,
+        lookFaceId,
+        lookItemIds,
+        lookColors,
+        lookKey,
       });
     }
 
@@ -2473,21 +2532,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     : 0;
   const activeProposalDetails = proposalCount ? proposals[safeActiveProposalIndex] : null;
   const activeProposalSubtitle = activeProposalDetails?.subtitle ?? "";
-
-  useEffect(() => {
-    if (!proposals.length) {
-      setPreviewErrors({});
-      return;
-    }
-
-    setPreviewErrors((previous) => {
-      const activeIds = new Set(proposals.map((proposal) => proposal.id));
-      const next = Object.fromEntries(
-        Object.entries(previous).filter(([key]) => activeIds.has(key))
-      );
-      return Object.keys(next).length === Object.keys(previous).length ? previous : next;
-    });
-  }, [proposals]);
+  const activeProposalClassIcon = activeProposalDetails?.classIcon ?? null;
 
   useEffect(() => {
     if (!proposalCount) {
@@ -2503,7 +2548,177 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   }, [activeProposal, proposalCount]);
 
   useEffect(() => {
-    setPreviewErrors({});
+    lookPreviewsRef.current = lookPreviews;
+  }, [lookPreviews]);
+
+  useEffect(() => {
+    if (!proposals.length) {
+      setLookPreviews({});
+      lookPreviewsRef.current = {};
+      return;
+    }
+
+    const activeIds = new Set(proposals.map((proposal) => proposal.id));
+    setLookPreviews((previous = {}) => {
+      const entries = Object.entries(previous).filter(([key]) => activeIds.has(key));
+      if (entries.length === Object.keys(previous).length) {
+        lookPreviewsRef.current = previous;
+        return previous;
+      }
+      const next = Object.fromEntries(entries);
+      lookPreviewsRef.current = next;
+      return next;
+    });
+
+    const abortController = new AbortController();
+    let cancelled = false;
+
+    const loadPreview = async (proposal) => {
+      if (
+        !proposal ||
+        !Array.isArray(proposal.lookItemIds) ||
+        proposal.lookItemIds.length === 0 ||
+        !Number.isFinite(proposal.classId) ||
+        !Number.isFinite(proposal.lookFaceId)
+      ) {
+        return;
+      }
+
+      const existing = lookPreviewsRef.current?.[proposal.id];
+      if (
+        existing &&
+        existing.lookKey === proposal.lookKey &&
+        (existing.status === "loaded" || existing.status === "loading")
+      ) {
+        return;
+      }
+
+      setLookPreviews((previous = {}) => {
+        const entry = previous[proposal.id];
+        if (
+          entry &&
+          entry.lookKey === proposal.lookKey &&
+          (entry.status === "loaded" || entry.status === "loading")
+        ) {
+          return previous;
+        }
+
+        const next = {
+          ...previous,
+          [proposal.id]: {
+            lookKey: proposal.lookKey,
+            status: "loading",
+            dataUrl: entry?.dataUrl ?? null,
+            rendererUrl: entry?.rendererUrl ?? null,
+            base64: entry?.base64 ?? null,
+            contentType: entry?.contentType ?? null,
+            byteLength: entry?.byteLength ?? null,
+            error: null,
+          },
+        };
+        lookPreviewsRef.current = next;
+        return next;
+      });
+
+      try {
+        const params = new URLSearchParams();
+        params.set("breedId", String(proposal.classId));
+        params.set("gender", proposal.lookGender ?? "m");
+        params.set("lang", "fr");
+        params.set("size", String(LOOK_PREVIEW_SIZE));
+        if (Number.isFinite(proposal.lookFaceId)) {
+          params.set("faceId", String(Math.trunc(proposal.lookFaceId)));
+        }
+        proposal.lookItemIds.forEach((id) => {
+          params.append("itemIds[]", String(id));
+        });
+        if (Array.isArray(proposal.lookColors) && proposal.lookColors.length) {
+          proposal.lookColors.slice(0, MAX_ITEM_PALETTE_COLORS).forEach((value) => {
+            if (Number.isFinite(value)) {
+              params.append("colors[]", String(Math.trunc(value)));
+            }
+          });
+        }
+
+        const response = await fetch(`/api/look-preview?${params.toString()}`, {
+          signal: abortController.signal,
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          const message = payload?.error ?? `HTTP ${response.status}`;
+          throw new Error(message);
+        }
+
+        const payload = await response.json();
+        if (cancelled) {
+          return;
+        }
+
+        const contentType = payload?.contentType ?? "image/png";
+        const base64 = payload?.base64 ?? null;
+        const rendererUrl = payload?.rendererUrl ?? null;
+        const byteLength =
+          typeof payload?.byteLength === "number" && Number.isFinite(payload.byteLength)
+            ? payload.byteLength
+            : null;
+        const dataUrl =
+          payload?.dataUrl ??
+          (base64 ? `data:${contentType};base64,${base64}` : rendererUrl ?? null);
+
+        setLookPreviews((previous = {}) => {
+          if (cancelled) {
+            return previous;
+          }
+
+          const next = {
+            ...previous,
+            [proposal.id]: {
+              lookKey: proposal.lookKey,
+              status: dataUrl ? "loaded" : "error",
+              dataUrl,
+              rendererUrl,
+              base64,
+              contentType,
+              byteLength,
+              error: dataUrl ? null : payload?.error ?? "Prévisualisation indisponible",
+            },
+          };
+          lookPreviewsRef.current = next;
+          return next;
+        });
+      } catch (error) {
+        if (cancelled || error?.name === "AbortError") {
+          return;
+        }
+
+        setLookPreviews((previous = {}) => {
+          const next = {
+            ...previous,
+            [proposal.id]: {
+              lookKey: proposal.lookKey,
+              status: "error",
+              dataUrl: null,
+              rendererUrl: null,
+              base64: null,
+              contentType: null,
+              byteLength: null,
+              error: error?.message ?? "Prévisualisation indisponible",
+            },
+          };
+          lookPreviewsRef.current = next;
+          return next;
+        });
+      }
+    };
+
+    proposals.forEach((proposal) => {
+      void loadPreview(proposal);
+    });
+
+    return () => {
+      cancelled = true;
+      abortController.abort();
+    };
   }, [proposals]);
 
   const handleNextProposal = useCallback(() => {
@@ -2530,13 +2745,31 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     [proposalCount]
   );
 
-  const handlePreviewFallback = useCallback((id) => {
+  const handleLookPreviewError = useCallback((id) => {
     if (!id) {
       return;
     }
-    setPreviewErrors((previous) => {
-      const nextIndex = (previous?.[id] ?? 0) + 1;
-      return { ...previous, [id]: nextIndex };
+
+    setLookPreviews((previous = {}) => {
+      const entry = previous[id];
+      if (!entry || entry.status === "error") {
+        return previous;
+      }
+
+      const nextEntry = {
+        ...entry,
+        status: "error",
+        dataUrl: null,
+        rendererUrl: null,
+        base64: null,
+        contentType: null,
+        byteLength: null,
+        error: entry?.error ?? "Impossible de charger l'aperçu Dofus",
+      };
+
+      const next = { ...previous, [id]: nextEntry };
+      lookPreviewsRef.current = next;
+      return next;
     });
   }, []);
 
@@ -2545,56 +2778,65 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       return;
     }
 
-    const sources = Array.isArray(proposal.barbofusPreviewSources)
-      ? proposal.barbofusPreviewSources
-      : proposal.barbofusPreview
-        ? [proposal.barbofusPreview]
-        : [];
+    const lookPreview = lookPreviews?.[proposal.id];
+    const hasLookPreview =
+      lookPreview?.status === "loaded" &&
+      typeof lookPreview?.dataUrl === "string" &&
+      lookPreview.dataUrl.length > 0;
 
-    if (!sources.length) {
+    if (!hasLookPreview) {
       return;
     }
 
-    const source = sources[0];
+    const resolveExtension = (type) => {
+      if (!type || typeof type !== "string") {
+        return "png";
+      }
+      const normalized = type.toLowerCase();
+      if (normalized.includes("png")) return "png";
+      if (normalized.includes("jpeg") || normalized.includes("jpg")) return "jpg";
+      if (normalized.includes("gif")) return "gif";
+      if (normalized.includes("bmp")) return "bmp";
+      if (normalized.includes("webp")) return "webp";
+      return "png";
+    };
 
     try {
       setDownloadingPreviewId(proposal.id);
-      const response = await fetch(source);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const contentType = response.headers.get("content-type") ?? "image/webp";
-      const extension = contentType.includes("png")
-        ? "png"
-        : contentType.includes("jpeg") || contentType.includes("jpg")
-        ? "jpg"
-        : contentType.includes("gif")
-        ? "gif"
-        : contentType.includes("bmp")
-        ? "bmp"
-        : "webp";
-
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
 
       const fallbackName = `skin-${proposal.index + 1}`;
       const baseName = slugify(proposal.className ?? fallbackName) || fallbackName;
-      const filename = `${baseName}.${extension}`;
 
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      if (hasLookPreview) {
+        const response = await fetch(lookPreview.dataUrl);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const responseType = response.headers.get("content-type");
+        const contentType = lookPreview.contentType ?? responseType ?? "image/png";
+        const blob = await response.blob();
+        const extension = resolveExtension(contentType);
+        const url = URL.createObjectURL(blob);
+        const filename = `${baseName}.${extension}`;
+
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        return;
+      }
+
     } catch (error) {
-      console.error("Unable to download Barbofus preview:", error);
+      console.error("Unable to download preview:", error);
+      setError("Impossible de télécharger l'aperçu.");
     } finally {
       setDownloadingPreviewId(null);
     }
-  }, []);
+  }, [lookPreviews]);
 
   const toggleDetailedMatches = useCallback(() => {
     setShowDetailedMatches((previous) => !previous);
@@ -3005,17 +3247,20 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         <div className={`toast-tray${toast ? " toast-tray--visible" : ""}`} aria-live="polite">
           {toast ? (
             <div className="toast">
-              <span className="toast__icon" aria-hidden="true">✓</span>
-              {toast.swatch ? (
-                <span
-                  className="toast__swatch"
-                  style={{ backgroundImage: buildGradientFromHex(toast.swatch) }}
-                  aria-hidden="true"
-                />
-              ) : null}
-              <div className="toast__body">
-                <span className="toast__title">{toast.label}</span>
-                <span className="toast__value">{toast.value}</span>
+              <span className="toast__glow" aria-hidden="true" />
+              <div className="toast__content">
+                <span className="toast__icon" aria-hidden="true">✓</span>
+                <div className="toast__body">
+                  <span className="toast__title">{toast.label}</span>
+                  <span className="toast__value">{toast.value}</span>
+                </div>
+                {toast.swatch ? (
+                  <span
+                    className="toast__swatch"
+                    style={{ backgroundImage: buildGradientFromHex(toast.swatch) }}
+                    aria-hidden="true"
+                  />
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -3326,11 +3571,18 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         </section>
 
         <section className="suggestions">
-          <div className="suggestions__header">
-            <div className="suggestions__intro">
-              <h2>Correspondances Dofus</h2>
+          {itemsLoading || (itemsError && !showDetailedMatches) ? (
+            <div className="suggestions__header">
+              {itemsLoading ? (
+                <span className="suggestions__inline-status">Mise à jour…</span>
+              ) : null}
+              {itemsError && !showDetailedMatches ? (
+                <span className="suggestions__inline-status suggestions__inline-status--error">
+                  {itemsError}
+                </span>
+              ) : null}
             </div>
-          </div>
+          ) : null}
           {colors.length === 0 ? (
             <div className="suggestions__empty">
               <p>Lance une analyse pour découvrir des correspondances Dofus adaptées.</p>
@@ -3348,329 +3600,412 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
           ) : (
             <>
               {proposals.length ? (
-                <div className="skin-carousel" aria-live="polite">
-                  <div className="skin-carousel__controls">
-                    <button
-                      type="button"
-                      className="skin-carousel__nav"
-                      onClick={handlePrevProposal}
-                      disabled={proposalCount <= 1}
-                      aria-label="Skin précédent"
-                    >
-                      <img
-                        src="/icons/arrow-left.svg"
-                        alt=""
-                        className="skin-carousel__nav-icon"
-                        aria-hidden="true"
-                      />
-                    </button>
-                    <div className="skin-carousel__legend" role="presentation">
-                      <span className="skin-carousel__count">
-                        Skin {safeActiveProposalIndex + 1} / {proposalCount}
-                      </span>
-                      {activeProposalSubtitle ? (
-                        <>
-                          <span className="skin-carousel__separator" aria-hidden="true">
-                            •
-                          </span>
-                          <span className="skin-carousel__subtitle">{activeProposalSubtitle}</span>
-                        </>
-                      ) : null}
-                    </div>
-                    <button
-                      type="button"
-                      className="skin-carousel__nav"
-                      onClick={handleNextProposal}
-                      disabled={proposalCount <= 1}
-                      aria-label="Skin suivant"
-                    >
-                      <img
-                        src="/icons/arrow-right.svg"
-                        alt=""
-                        className="skin-carousel__nav-icon"
-                        aria-hidden="true"
-                      />
-                    </button>
-                  </div>
-                  <div className="skin-carousel__viewport">
-                    <div
-                      className="skin-carousel__track"
-                      style={{ transform: `translateX(-${safeActiveProposalIndex * 100}%)` }}
-                    >
-                      {proposals.map((proposal) => {
-                        const primaryColor = proposal.palette[0] ?? "#1f2937";
-                        const canvasBackground = buildGradientFromHex(primaryColor);
-                        const previewSources = Array.isArray(proposal.barbofusPreviewSources)
-                          ? proposal.barbofusPreviewSources
-                          : proposal.barbofusPreview
-                          ? [proposal.barbofusPreview]
-                          : [];
-                        const previewIndex = previewErrors?.[proposal.id] ?? 0;
-                        const previewFailed = previewIndex >= previewSources.length;
-                        const previewSrc = !previewFailed ? previewSources[previewIndex] ?? null : null;
-                        const hasBarbofusPreview = Boolean(previewSrc);
-                        const previewAlt = `Aperçu Barbofus du skin ${proposal.index + 1}`;
-                        return (
-                          <article key={proposal.id} className="skin-card">
-                            <h3 className="sr-only">{`Proposition ${proposal.index + 1}`}</h3>
-                            <div className="skin-card__body">
-                              <div
-                                className="skin-card__canvas"
-                                style={{ backgroundImage: canvasBackground }}
-                              >
-                                <div className="skin-card__glow" aria-hidden="true" />
-                                {hasBarbofusPreview ? (
-                                  <img
-                                    src={previewSrc}
-                                    alt={previewAlt}
-                                    loading="lazy"
-                                    className="skin-card__preview"
-                                    onError={() => handlePreviewFallback(proposal.id)}
-                                  />
-                                ) : proposal.heroImage ? (
-                                  <img
-                                    src={proposal.heroImage}
-                                    alt={`Aperçu principal de la proposition ${proposal.index + 1}`}
-                                    loading="lazy"
-                                    className="skin-card__hero"
-                                  />
-                                ) : (
-                                  <div className="skin-card__placeholder" aria-hidden="true">
-                                    Aperçu indisponible
-                                  </div>
-                                )}
-                                <ul className="skin-card__equipment" role="list">
-                                  {proposal.items.map((item) => (
-                                    <li key={`${proposal.id}-${item.id}`} className="skin-card__equipment-slot">
-                                      {item.imageUrl ? (
+                <div
+                  className={`suggestions__layout${showDetailedMatches ? " has-panel-open" : ""}`}
+                >
+                  <div className="suggestions__main" aria-live="polite">
+                    <div className="skin-carousel__shell">
+                      <div className="skin-carousel">
+                        <div className="skin-carousel__controls">
+                          <button
+                            type="button"
+                            className="skin-carousel__nav"
+                            onClick={handlePrevProposal}
+                            disabled={proposalCount <= 1}
+                            aria-label="Skin précédent"
+                          >
+                            <img
+                              src="/icons/arrow-left.svg"
+                              alt=""
+                              className="skin-carousel__nav-icon"
+                              aria-hidden="true"
+                            />
+                          </button>
+                          {(activeProposalSubtitle || proposalCount > 0) ? (
+                            <div className="skin-carousel__legend" role="presentation">
+                              {activeProposalSubtitle ? (
+                                <span className="skin-carousel__subtitle">
+                                  {activeProposalClassIcon ? (
+                                    <span className="skin-carousel__class-icon" aria-hidden="true">
+                                      <img src={activeProposalClassIcon} alt="" loading="lazy" />
+                                    </span>
+                                  ) : null}
+                                  <span>{activeProposalSubtitle}</span>
+                                </span>
+                              ) : null}
+                              {activeProposalSubtitle && proposalCount > 0 ? (
+                                <span className="skin-carousel__divider" aria-hidden="true" />
+                              ) : null}
+                              {proposalCount > 0 ? (
+                                <span className="skin-carousel__count">
+                                  Skin {safeActiveProposalIndex + 1} / {proposalCount}
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="skin-carousel__nav"
+                            onClick={handleNextProposal}
+                            disabled={proposalCount <= 1}
+                            aria-label="Skin suivant"
+                          >
+                            <img
+                              src="/icons/arrow-right.svg"
+                              alt=""
+                              className="skin-carousel__nav-icon"
+                              aria-hidden="true"
+                            />
+                          </button>
+                        </div>
+                        <div className="skin-carousel__viewport">
+                          <div
+                            className="skin-carousel__track"
+                            style={{ transform: `translateX(-${safeActiveProposalIndex * 100}%)` }}
+                          >
+                            {proposals.map((proposal) => {
+                            const primaryColor = proposal.palette[0] ?? "#1f2937";
+                            const canvasBackground = buildGradientFromHex(primaryColor);
+                            const lookPreview = lookPreviews?.[proposal.id];
+                            const lookLoaded =
+                              lookPreview?.status === "loaded" &&
+                              typeof lookPreview?.dataUrl === "string" &&
+                              lookPreview.dataUrl.length > 0;
+                            const lookLoading = lookPreview?.status === "loading";
+                            const lookError =
+                              lookPreview?.status === "error" && lookPreview?.error
+                                ? lookPreview.error
+                                : lookPreview?.status === "error"
+                                ? "Prévisualisation Dofus indisponible"
+                                : null;
+                            const previewSrc = lookLoaded ? lookPreview.dataUrl : null;
+                            const heroSrc = !lookLoaded ? proposal.heroImage ?? null : null;
+                            const previewAlt = `Aperçu généré pour le skin ${proposal.index + 1}`;
+                            return (
+                              <article key={proposal.id} className="skin-card">
+                                <h3 className="sr-only">{`Proposition ${proposal.index + 1}`}</h3>
+                                <div className="skin-card__body">
+                                  <div
+                                    className="skin-card__canvas"
+                                    style={{ backgroundImage: canvasBackground }}
+                                  >
+                                    <div className="skin-card__render">
+                                      {lookLoading ? (
+                                        <div className="skin-card__loader" role="status" aria-live="polite">
+                                          <span className="skin-card__loader-spinner" aria-hidden="true" />
+                                          <span className="sr-only">Chargement du rendu Dofus…</span>
+                                        </div>
+                                      ) : null}
+                                      {lookError && !lookLoading && !lookLoaded ? (
+                                        <div className="skin-card__status skin-card__status--error">
+                                          {lookError}
+                                        </div>
+                                      ) : null}
+                                      <div className="skin-card__glow" aria-hidden="true" />
+                                      {previewSrc ? (
                                         <img
-                                          src={item.imageUrl}
-                                          alt={`Illustration de ${item.name}`}
+                                          src={previewSrc}
+                                          alt={previewAlt}
                                           loading="lazy"
+                                          className="skin-card__preview"
+                                          onError={() => handleLookPreviewError(proposal.id)}
+                                        />
+                                      ) : heroSrc ? (
+                                        <img
+                                          src={heroSrc}
+                                          alt={`Aperçu principal de la proposition ${proposal.index + 1}`}
+                                          loading="lazy"
+                                          className="skin-card__hero"
                                         />
                                       ) : (
-                                        <span>{ITEM_TYPE_LABELS[item.slotType] ?? item.slotType}</span>
+                                        <div className="skin-card__placeholder" aria-hidden="true">
+                                          Aperçu indisponible
+                                        </div>
                                       )}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                              <div className="skin-card__details">
-                                <ul className="skin-card__swatches" role="list">
-                                  {proposal.palette.length ? (
-                                    proposal.palette.map((hex) => (
-                                      <li key={`${proposal.id}-${hex}`} className="skin-card__swatch">
+                                    </div>
+                                    <ul className="skin-card__equipment" role="list">
+                                      {proposal.items.map((item) => {
+                                        const slotLabel = ITEM_TYPE_LABELS[item.slotType] ?? item.slotType;
+                                        const itemName = item.name ?? slotLabel;
+                                        const altText = item.name
+                                          ? `Illustration de ${item.name}`
+                                          : `Illustration de ${slotLabel}`;
+
+                                        return (
+                                          <li key={`${proposal.id}-${item.id}`} className="skin-card__equipment-slot">
+                                            <div className="skin-card__equipment-trigger" tabIndex={0}>
+                                              {item.imageUrl ? (
+                                                <img
+                                                  src={item.imageUrl}
+                                                  alt={altText}
+                                                  loading="lazy"
+                                                  className="skin-card__equipment-icon"
+                                                />
+                                              ) : (
+                                                <span className="skin-card__equipment-fallback">{slotLabel}</span>
+                                              )}
+                                              <div className="skin-card__tooltip" role="tooltip">
+                                                {item.imageUrl ? (
+                                                  <span className="skin-card__tooltip-thumb" aria-hidden="true">
+                                                    <img src={item.imageUrl} alt="" loading="lazy" />
+                                                  </span>
+                                                ) : null}
+                                                <div className="skin-card__tooltip-body">
+                                                  <span className="skin-card__tooltip-title">{itemName}</span>
+                                                  <span className="skin-card__tooltip-subtitle">{slotLabel}</span>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                  </div>
+                                  <div className="skin-card__details">
+                                    <ul className="skin-card__swatches" role="list">
+                                      {proposal.palette.length ? (
+                                        proposal.palette.map((hex) => (
+                                          <li key={`${proposal.id}-${hex}`} className="skin-card__swatch">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleCopy(hex, { swatch: hex })}
+                                              style={{ backgroundImage: buildGradientFromHex(hex) }}
+                                              className="skin-card__swatch-button"
+                                            >
+                                              <span>{hex}</span>
+                                            </button>
+                                          </li>
+                                        ))
+                                      ) : (
+                                        <li className="skin-card__swatch skin-card__swatch--empty">
+                                          Palette indisponible
+                                        </li>
+                                      )}
+                                    </ul>
+                                    <ul className="skin-card__list" role="list">
+                                      {proposal.items.map((item) => {
+                                        const slotLabel = ITEM_TYPE_LABELS[item.slotType] ?? item.slotType;
+                                        const itemName = item.name ?? slotLabel;
+                                        return (
+                                          <li key={`${proposal.id}-${item.id}-entry`} className="skin-card__list-item">
+                                            <span className="skin-card__list-type">{slotLabel}</span>
+                                            <a
+                                              href={item.url}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="skin-card__list-link"
+                                            >
+                                              {item.imageUrl ? (
+                                                <span className="skin-card__list-thumb" aria-hidden="true">
+                                                  <img src={item.imageUrl} alt="" loading="lazy" />
+                                                </span>
+                                              ) : null}
+                                              <span className="skin-card__list-text">{itemName}</span>
+                                            </a>
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                    <div className="skin-card__actions">
+                                      {lookLoaded ? (
                                         <button
                                           type="button"
-                                          onClick={() => handleCopy(hex, { swatch: hex })}
-                                          style={{ backgroundImage: buildGradientFromHex(hex) }}
-                                          className="skin-card__swatch-button"
+                                          onClick={() => handleDownloadPreview(proposal)}
+                                          className="skin-card__cta"
+                                          disabled={downloadingPreviewId === proposal.id}
+                                          aria-busy={downloadingPreviewId === proposal.id}
                                         >
-                                          <span>{hex}</span>
+                                          {downloadingPreviewId === proposal.id
+                                            ? "Téléchargement…"
+                                            : "Télécharger l'image"}
                                         </button>
-                                      </li>
-                                    ))
-                                  ) : (
-                                    <li className="skin-card__swatch skin-card__swatch--empty">
-                                      Palette indisponible
-                                    </li>
-                                  )}
-                                </ul>
-                                <ul className="skin-card__list" role="list">
-                                  {proposal.items.map((item) => (
-                                    <li key={`${proposal.id}-${item.id}-entry`} className="skin-card__list-item">
-                                      <span className="skin-card__list-type">
-                                        {ITEM_TYPE_LABELS[item.slotType] ?? item.slotType}
-                                      </span>
-                                      <a
-                                        href={item.url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="skin-card__list-link"
-                                      >
-                                        {item.name}
-                                      </a>
-                                    </li>
-                                  ))}
-                                </ul>
-                                <div className="skin-card__actions">
-                                  {proposal.barbofusPreviewSources?.length ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDownloadPreview(proposal)}
-                                      className="skin-card__cta"
-                                      disabled={downloadingPreviewId === proposal.id}
-                                      aria-busy={downloadingPreviewId === proposal.id}
-                                    >
-                                      {downloadingPreviewId === proposal.id
-                                        ? "Téléchargement…"
-                                        : "Télécharger l'image"}
-                                    </button>
-                                  ) : null}
-                                  {proposal.barbofusLink ? (
-                                    <a
-                                      href={proposal.barbofusLink}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="skin-card__cta"
-                                    >
-                                      Tester sur Barbofus
-                                      <span aria-hidden="true" className="skin-card__cta-icon">
-                                        ↗
-                                      </span>
-                                    </a>
-                                  ) : (
-                                    <span className="skin-card__cta skin-card__cta--disabled">
-                                      Lien Barbofus indisponible
-                                    </span>
-                                  )}
+                                      ) : lookLoading ? (
+                                        <span className="skin-card__cta skin-card__cta--disabled">
+                                          Rendu en cours…
+                                        </span>
+                                      ) : (
+                                        <span className="skin-card__cta skin-card__cta--disabled">
+                                          Rendu indisponible
+                                        </span>
+                                      )}
+                                      {proposal.barbofusLink ? (
+                                        <a
+                                          href={proposal.barbofusLink}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="skin-card__cta"
+                                        >
+                                          Tester sur Barbofus
+                                          <span aria-hidden="true" className="skin-card__cta-icon">
+                                            ↗
+                                          </span>
+                                        </a>
+                                      ) : (
+                                        <span className="skin-card__cta skin-card__cta--disabled">
+                                          Lien Barbofus indisponible
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
-                            </div>
-                          </article>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="skin-carousel__dots" role="tablist" aria-label="Choisir une proposition">
+                        {proposals.map((proposal, index) => (
+                          <button
+                            key={`${proposal.id}-dot`}
+                            type="button"
+                            className={`skin-carousel__dot${index === safeActiveProposalIndex ? " is-active" : ""}`}
+                            onClick={() => handleSelectProposal(index)}
+                            aria-label={`Afficher le skin ${index + 1}`}
+                            aria-pressed={index === safeActiveProposalIndex}
+                          />
+                        ))}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className={`suggestions__panel-toggle skin-carousel__panel-toggle${showDetailedMatches ? " is-open" : ""}`}
+                        onClick={toggleDetailedMatches}
+                        aria-expanded={showDetailedMatches}
+                        aria-label={
+                          showDetailedMatches
+                            ? "Masquer les correspondances détaillées"
+                            : "Afficher les correspondances détaillées"
+                        }
+                      >
+                        <span className="skin-carousel__panel-toggle-icon" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+                  <aside
+                    className={`suggestions__panel${showDetailedMatches ? " is-open" : ""}`}
+                    aria-hidden={!showDetailedMatches}
+                  >
+                    <div className="suggestions__panel-header">
+                      <h3>Correspondances détaillées</h3>
+                      <button
+                        type="button"
+                        className="suggestions__panel-close"
+                        onClick={toggleDetailedMatches}
+                        aria-label="Fermer les correspondances détaillées"
+                      >
+                        <span aria-hidden="true">×</span>
+                      </button>
+                    </div>
+                    {itemsError ? (
+                      <p className="suggestions__status suggestions__status--error suggestions__status--inline">
+                        {itemsError}
+                      </p>
+                    ) : null}
+                    {itemsLoading ? (
+                      <p className="suggestions__status suggestions__status--loading suggestions__status--inline">
+                        Mise à jour des suggestions…
+                      </p>
+                    ) : null}
+                    <div className="suggestions__grid">
+                      {ITEM_TYPES.map((type) => {
+                        const items = (recommendations?.[type] ?? []).slice(0, 3);
+                        return (
+                          <section key={type} className="suggestions__group">
+                            <header className="suggestions__group-header">
+                              <span className="suggestions__group-type">{ITEM_TYPE_LABELS[type] ?? type}</span>
+                              {items.length > 0 ? (
+                                <span className="suggestions__group-badge">Meilleur match</span>
+                              ) : null}
+                            </header>
+                            {items.length === 0 ? (
+                              <p className="suggestions__group-empty">Aucune correspondance probante pour cette teinte.</p>
+                            ) : (
+                              <ul className="suggestions__deck">
+                                {items.map((item) => {
+                                  const hasPalette = item.palette.length > 0;
+                                  const paletteFromImage = item.paletteSource === "image" && hasPalette;
+                                  const notes = [];
+                                  if (!hasPalette) {
+                                    notes.push("Palette non détectée sur l'illustration.");
+                                  } else if (!paletteFromImage) {
+                                    notes.push("Palette estimée à partir des données DofusDB.");
+                                  }
+                                  if (!item.imageUrl) {
+                                    notes.push("Illustration manquante sur DofusDB.");
+                                  }
+
+                                  return (
+                                    <li key={item.id} className="suggestions__card">
+                                      <div className="suggestions__thumb">
+                                        {item.imageUrl ? (
+                                          <img
+                                            src={item.imageUrl}
+                                            alt={`Illustration de ${item.name}`}
+                                            loading="lazy"
+                                          />
+                                        ) : (
+                                          <div className="suggestions__thumb-placeholder" aria-hidden="true">
+                                            Aperçu indisponible
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="suggestions__card-body">
+                                        <a
+                                          href={item.url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="suggestions__title"
+                                        >
+                                          {item.name}
+                                        </a>
+                                        <div
+                                          className={`suggestions__swatches${hasPalette ? "" : " suggestions__swatches--empty"}`}
+                                          aria-hidden={hasPalette}
+                                        >
+                                          {hasPalette ? (
+                                            item.palette.map((hex) => (
+                                              <span
+                                                key={hex}
+                                                className="suggestions__swatch"
+                                                style={{ backgroundColor: hex }}
+                                              />
+                                            ))
+                                          ) : (
+                                            <span className="suggestions__swatch-note">Palette indisponible</span>
+                                          )}
+                                        </div>
+                                        {notes.length ? (
+                                          <div className="suggestions__notes">
+                                            {notes.map((note, index) => (
+                                              <span key={`${item.id}-note-${index}`} className="suggestions__note">
+                                                {note}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+                          </section>
                         );
                       })}
                     </div>
-                  </div>
-                  <div className="skin-carousel__dots" role="tablist" aria-label="Choisir une proposition">
-                    {proposals.map((proposal, index) => (
-                      <button
-                        key={`${proposal.id}-dot`}
-                        type="button"
-                        className={`skin-carousel__dot${index === safeActiveProposalIndex ? " is-active" : ""}`}
-                        onClick={() => handleSelectProposal(index)}
-                        aria-label={`Afficher le skin ${index + 1}`}
-                        aria-pressed={index === safeActiveProposalIndex}
-                      />
-                    ))}
-                  </div>
+                  </aside>
+                  {showDetailedMatches ? (
+                    <button
+                      type="button"
+                      className="suggestions__panel-backdrop"
+                      onClick={toggleDetailedMatches}
+                      aria-label="Fermer les correspondances détaillées"
+                    >
+                      <span className="sr-only">Fermer les correspondances détaillées</span>
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
-              <div className="suggestions__details-toggle">
-                <button
-                  type="button"
-                  className={`suggestions__toggle${showDetailedMatches ? " is-open" : ""}`}
-                  onClick={toggleDetailedMatches}
-                  aria-expanded={showDetailedMatches}
-                >
-                  <span>
-                    {showDetailedMatches
-                      ? "Masquer les correspondances détaillées"
-                      : "Afficher les correspondances détaillées"}
-                  </span>
-                  <span className="suggestions__toggle-icon" aria-hidden="true" />
-                </button>
-                {itemsLoading ? (
-                  <span className="suggestions__inline-status">Mise à jour…</span>
-                ) : null}
-                {itemsError && !showDetailedMatches ? (
-                  <span className="suggestions__inline-status suggestions__inline-status--error">
-                    {itemsError}
-                  </span>
-                ) : null}
-              </div>
-              <div
-                className={`suggestions__details${showDetailedMatches ? " is-visible" : ""}`}
-                hidden={!showDetailedMatches}
-              >
-                {itemsError ? (
-                  <p className="suggestions__status suggestions__status--error suggestions__status--inline">
-                    {itemsError}
-                  </p>
-                ) : null}
-                {itemsLoading ? (
-                  <p className="suggestions__status suggestions__status--loading suggestions__status--inline">
-                    Mise à jour des suggestions…
-                  </p>
-                ) : null}
-                <div className="suggestions__grid">
-                  {ITEM_TYPES.map((type) => {
-                    const items = recommendations?.[type] ?? [];
-                    return (
-                      <section key={type} className="suggestions__group">
-                        <header className="suggestions__group-header">
-                          <span className="suggestions__group-type">{ITEM_TYPE_LABELS[type] ?? type}</span>
-                          {items.length > 0 ? (
-                            <span className="suggestions__group-badge">Meilleur match</span>
-                          ) : null}
-                        </header>
-                        {items.length === 0 ? (
-                          <p className="suggestions__group-empty">Aucune correspondance probante pour cette teinte.</p>
-                        ) : (
-                          <ul className="suggestions__deck">
-                            {items.map((item) => {
-                              const hasPalette = item.palette.length > 0;
-                              const paletteFromImage = item.paletteSource === "image" && hasPalette;
-                              const notes = [];
-                              if (!hasPalette) {
-                                notes.push("Palette non détectée sur l'illustration.");
-                              } else if (!paletteFromImage) {
-                                notes.push("Palette estimée à partir des données DofusDB.");
-                              }
-                              if (!item.imageUrl) {
-                                notes.push("Illustration manquante sur DofusDB.");
-                              }
-
-                              return (
-                                <li key={item.id} className="suggestions__card">
-                                  <div className="suggestions__thumb">
-                                    {item.imageUrl ? (
-                                      <img
-                                        src={item.imageUrl}
-                                        alt={`Illustration de ${item.name}`}
-                                        loading="lazy"
-                                      />
-                                    ) : (
-                                      <div className="suggestions__thumb-placeholder" aria-hidden="true">
-                                        Aperçu indisponible
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="suggestions__card-body">
-                                    <a
-                                      href={item.url}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="suggestions__title"
-                                    >
-                                      {item.name}
-                                    </a>
-                                    <div
-                                      className={`suggestions__swatches${hasPalette ? "" : " suggestions__swatches--empty"}`}
-                                      aria-hidden={hasPalette}
-                                    >
-                                      {hasPalette ? (
-                                        item.palette.map((hex) => (
-                                          <span
-                                            key={hex}
-                                            className="suggestions__swatch"
-                                            style={{ backgroundColor: hex }}
-                                          />
-                                        ))
-                                      ) : (
-                                        <span className="suggestions__swatch-note">Palette indisponible</span>
-                                      )}
-                                    </div>
-                                    {notes.length ? (
-                                      <div className="suggestions__notes">
-                                        {notes.map((note, index) => (
-                                          <span key={`${item.id}-note-${index}`} className="suggestions__note">
-                                            {note}
-                                          </span>
-                                        ))}
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        )}
-                      </section>
-                    );
-                  })}
-                </div>
-              </div>
             </>
           )}
         </section>
