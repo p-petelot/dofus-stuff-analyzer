@@ -1,25 +1,58 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
+import { useRouter } from "next/router";
+import {
+  DEFAULT_LANGUAGE,
+  getLanguagePriority,
+  normalizeLanguage,
+  translate,
+  useLanguage,
+} from "../lib/i18n";
 
 const ITEM_TYPES = ["coiffe", "cape", "bouclier", "familier", "epauliere", "costume", "ailes"];
 const DOFUS_API_HOST = "https://api.dofusdb.fr";
 const DOFUS_API_BASE_URL = `${DOFUS_API_HOST}/items`;
-const DOFUS_BREEDS_API_URL = `${DOFUS_API_HOST}/breeds?$skip=0&$limit=20&lang=fr`;
 const DEFAULT_LIMIT = 1200;
-const DEFAULT_DOFUS_QUERY_PARAMS = {
-  "typeId[$ne]": "203",
-  "$sort": "-id",
-  "level[$gte]": "0",
-  "level[$lte]": "200",
-  lang: "fr",
-};
+
+let activeLocalizationPriority = getLanguagePriority();
+
+function setActiveLocalizationPriority(language) {
+  activeLocalizationPriority = getLanguagePriority(language);
+}
+
+function getActiveLocalizationPriority() {
+  if (!Array.isArray(activeLocalizationPriority) || activeLocalizationPriority.length === 0) {
+    activeLocalizationPriority = getLanguagePriority();
+  }
+  return activeLocalizationPriority;
+}
+
+function getDefaultDofusQueryParams(language = DEFAULT_LANGUAGE) {
+  const normalized = language ?? DEFAULT_LANGUAGE;
+  return {
+    "typeId[$ne]": "203",
+    "$sort": "-id",
+    "level[$gte]": "0",
+    "level[$lte]": "200",
+    lang: normalized,
+  };
+}
+
+function buildBreedsUrl(language = DEFAULT_LANGUAGE) {
+  const normalized = language ?? DEFAULT_LANGUAGE;
+  const params = new URLSearchParams();
+  params.set("$skip", "0");
+  params.set("$limit", "20");
+  params.set("lang", normalized);
+  return `${DOFUS_API_HOST}/breeds?${params.toString()}`;
+}
 
 const FAMILIER_FILTERS = Object.freeze([
-  { key: "pet", label: "Familiers", typeIds: [18, 249] },
-  { key: "mount", label: "Montures", typeIds: [121, 250] },
-  { key: "dragodinde", label: "Dragodindes", typeIds: [97] },
-  { key: "muldo", label: "Muldos", typeIds: [196] },
-  { key: "volkorne", label: "Volkornes", typeIds: [207] },
+  { key: "pet", labelKey: "companions.filters.pet", typeIds: [18, 249] },
+  { key: "mount", labelKey: "companions.filters.mount", typeIds: [121, 250] },
+  { key: "dragodinde", labelKey: "companions.filters.dragodinde", typeIds: [97] },
+  { key: "muldo", labelKey: "companions.filters.muldo", typeIds: [196] },
+  { key: "volkorne", labelKey: "companions.filters.volkorne", typeIds: [207] },
 ]);
 
 const FAMILIER_TYPE_ID_TO_FILTER_KEY = new Map();
@@ -102,32 +135,34 @@ function normalizeWhitespace(value) {
   return value.replace(/\s+/g, " ").trim();
 }
 
-function pickLocalizedValue(value) {
+function pickLocalizedValue(value, languagePriority = getActiveLocalizationPriority()) {
   if (!value) return "";
   if (typeof value === "string") {
     return value;
   }
   if (Array.isArray(value)) {
-    return value.map((entry) => pickLocalizedValue(entry)).filter(Boolean).join(" ");
+    return value.map((entry) => pickLocalizedValue(entry, languagePriority)).filter(Boolean).join(" ");
   }
   if (typeof value === "object") {
-    const priorityKeys = ["fr", "fr_fr", "frFr", "en", "en_us", "enUs"];
+    const priorityKeys = Array.isArray(languagePriority) && languagePriority.length
+      ? languagePriority
+      : getActiveLocalizationPriority();
     for (const key of priorityKeys) {
       if (value[key]) {
-        const candidate = pickLocalizedValue(value[key]);
+        const candidate = pickLocalizedValue(value[key], languagePriority);
         if (candidate) {
           return candidate;
         }
       }
     }
     const first = Object.values(value)[0];
-    return pickLocalizedValue(first);
+    return pickLocalizedValue(first, languagePriority);
   }
   return "";
 }
 
-function normalizeTextContent(value) {
-  const extracted = pickLocalizedValue(value);
+function normalizeTextContent(value, languagePriority = getActiveLocalizationPriority()) {
+  const extracted = pickLocalizedValue(value, languagePriority);
   if (!extracted) {
     return "";
   }
@@ -336,17 +371,20 @@ function getBarbofusFaceId(classId, genderKey, fallback) {
   return Number.isFinite(fallback) ? fallback : null;
 }
 
-function normalizeBreedEntry(entry) {
+function normalizeBreedEntry(entry, options = {}) {
   if (!entry || typeof entry !== "object") {
     return null;
   }
+
+  const { language = DEFAULT_LANGUAGE, languagePriority = getActiveLocalizationPriority() } = options;
 
   const id = Number(entry.id);
   if (!Number.isFinite(id)) {
     return null;
   }
 
-  const name = normalizeTextContent(entry.shortName) || `Classe ${id}`;
+  const fallbackName = translator(language, "identity.class.fallback", { id }, `Classe ${id}`);
+  const name = normalizeTextContent(entry.shortName, languagePriority) || fallbackName;
   const slug = slugify(name) || `breed-${id}`;
   const icon = ensureAbsoluteUrl(entry.img);
   const maleLookId = extractLookIdFromLookString(entry.maleLook) ?? extractLookIdFromUrl(entry?.heads?.male);
@@ -400,14 +438,14 @@ function extractBreedEntries(entries) {
   return [];
 }
 
-function normalizeBreedsDataset(entries) {
+function normalizeBreedsDataset(entries, options = {}) {
   const dataset = extractBreedEntries(entries);
   if (!dataset.length) {
     return [];
   }
 
   return dataset
-    .map((entry) => normalizeBreedEntry(entry))
+    .map((entry) => normalizeBreedEntry(entry, options))
     .filter(Boolean)
     .sort((a, b) => {
       const aIndex = Number.isFinite(a.sortIndex) ? a.sortIndex : a.id;
@@ -463,7 +501,7 @@ function resolveItemImageUrl(item) {
   return null;
 }
 
-function buildDofusApiUrls(type) {
+function buildDofusApiUrls(type, language = DEFAULT_LANGUAGE) {
   const config = ITEM_TYPE_CONFIG[type];
   if (!config) {
     throw new Error(`Type d'objet inconnu: ${type}`);
@@ -473,7 +511,7 @@ function buildDofusApiUrls(type) {
 
   return sources.map((source) => {
     const params = new URLSearchParams();
-    Object.entries(DEFAULT_DOFUS_QUERY_PARAMS).forEach(([key, value]) => {
+    Object.entries(getDefaultDofusQueryParams(language)).forEach(([key, value]) => {
       params.set(key, value);
     });
 
@@ -502,28 +540,39 @@ function buildDofusApiUrls(type) {
   });
 }
 
-function buildEncyclopediaUrl(item, fallbackId) {
+function buildEncyclopediaUrl(item, fallbackId, language = DEFAULT_LANGUAGE) {
   const ankamaId = item?.ankamaId ?? item?.id ?? item?._id ?? fallbackId;
   if (!ankamaId) {
     return null;
   }
-  return `https://dofusdb.fr/fr/database/object/${ankamaId}`;
+  const normalized = typeof language === "string" && language.trim().length ? language.trim() : DEFAULT_LANGUAGE;
+  return `https://dofusdb.fr/${normalized}/database/object/${ankamaId}`;
 }
 
-function normalizeDofusItem(rawItem, type) {
-  const name = normalizeTextContent(rawItem?.name) || normalizeTextContent(rawItem?.title);
+function normalizeDofusItem(rawItem, type, options = {}) {
+  const {
+    language = DEFAULT_LANGUAGE,
+    languagePriority = getActiveLocalizationPriority(),
+    translator = translate,
+  } = options;
+
+  const name =
+    normalizeTextContent(rawItem?.name, languagePriority) ||
+    normalizeTextContent(rawItem?.title, languagePriority);
   if (!name) {
     return null;
   }
 
-  const slugSource = normalizeTextContent(rawItem?.slug) || name;
+  const slugSource = normalizeTextContent(rawItem?.slug, languagePriority) || name;
   const fallbackSlug = slugify(slugSource) || slugify(name) || name;
   const rawIdentifier = rawItem?.ankamaId ?? rawItem?.id ?? rawItem?._id ?? fallbackSlug;
   const identifierString = rawIdentifier != null ? String(rawIdentifier) : fallbackSlug;
   const numericIdentifier = Number(rawIdentifier);
   const ankamaId = Number.isFinite(numericIdentifier) ? numericIdentifier : null;
-  const encyclopediaUrl = buildEncyclopediaUrl(rawItem, rawIdentifier ?? fallbackSlug) ??
-    "https://www.dofus.com/fr/mmorpg/encyclopedie";
+  const normalizedLang = typeof language === "string" && language.trim().length ? language.trim() : DEFAULT_LANGUAGE;
+  const encyclopediaUrl =
+    buildEncyclopediaUrl(rawItem, rawIdentifier ?? fallbackSlug, normalizedLang) ??
+    `https://www.dofus.com/${normalizedLang}/mmorpg/encyclopedie`;
   const imageUrl = resolveItemImageUrl(rawItem);
   const palette = extractPaletteFromItemData(rawItem);
   const paletteSource = palette.length ? "api" : "unknown";
@@ -594,14 +643,14 @@ const EDGE_CONFIDENCE_WEIGHT = 0.12;
 const EDGE_STRONG_THRESHOLD = 0.1;
 const CURATED_COLOR_SWATCHES = ["#8B5CF6", "#F97316", "#10B981", "#38BDF8", "#F43F5E", "#FACC15"];
 
-const ITEM_TYPE_LABELS = {
-  coiffe: "Coiffe",
-  cape: "Cape",
-  familier: "Familiers & montures",
-  bouclier: "Bouclier",
-  epauliere: "Épaulières",
-  costume: "Costume",
-  ailes: "Ailes",
+const ITEM_TYPE_LABEL_KEYS = {
+  coiffe: "itemTypes.coiffe",
+  cape: "itemTypes.cape",
+  familier: "itemTypes.familier",
+  bouclier: "itemTypes.bouclier",
+  epauliere: "itemTypes.epauliere",
+  costume: "itemTypes.costume",
+  ailes: "itemTypes.ailes",
 };
 
 const BARBOFUS_BASE_URL = "https://barbofus.com/skinator";
@@ -2063,6 +2112,47 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
 }
 
 export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
+  const router = useRouter();
+  const routerLang = router?.query?.lang;
+  const { language, languages: languageOptions, setLanguage, t } = useLanguage();
+  const languagePriority = useMemo(() => getLanguagePriority(language), [language]);
+  useEffect(() => {
+    setActiveLocalizationPriority(language);
+  }, [language]);
+
+  useEffect(() => {
+    if (!router?.isReady) {
+      return;
+    }
+    const raw = Array.isArray(routerLang) ? routerLang[0] : routerLang;
+    const normalized = normalizeLanguage(raw);
+    if (normalized && normalized !== language) {
+      setLanguage(normalized);
+    }
+  }, [language, router?.isReady, routerLang, setLanguage]);
+
+  useEffect(() => {
+    if (!router?.isReady) {
+      return;
+    }
+
+    const raw = Array.isArray(routerLang) ? routerLang[0] : routerLang;
+    const normalized = normalizeLanguage(raw);
+    const isDefault = language === DEFAULT_LANGUAGE;
+    if ((isDefault && !normalized) || normalized === language) {
+      return;
+    }
+
+    const nextQuery = { ...router.query };
+    if (isDefault) {
+      delete nextQuery.lang;
+    } else {
+      nextQuery.lang = language;
+    }
+
+    router.replace({ pathname: router.pathname, query: nextQuery }, undefined, { shallow: true });
+  }, [language, router, routerLang]);
+
   const [imageSrc, setImageSrc] = useState(null);
   const [colors, setColors] = useState([]);
   const [imageSignature, setImageSignature] = useState(null);
@@ -2116,6 +2206,14 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   const progressHandles = useRef({ frame: null, timeout: null, value: 0 });
   const breedsRequestRef = useRef(null);
 
+  const handleLanguageChange = useCallback(
+    (event) => {
+      const value = event.target.value;
+      setLanguage(value);
+    },
+    [setLanguage]
+  );
+
   const isImageMode = inputMode === "image";
 
   const hasCatalogData = useMemo(
@@ -2164,7 +2262,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
 
   const activeClassId = typeof activeBreed?.id === "number" ? activeBreed.id : BARBOFUS_DEFAULTS.classId;
   const activeGenderValue = BARBOFUS_GENDER_VALUES[selectedGender] ?? BARBOFUS_DEFAULTS.gender;
-  const activeGenderLabel = selectedGender === "male" ? "Homme" : "Femme";
+  const activeGenderLabel = selectedGender === "male" ? t("identity.gender.male") : t("identity.gender.female");
   const activeClassDefaults = activeGenderConfig?.colors?.numeric ?? [];
   const fallbackFaceId = Number.isFinite(activeGenderConfig?.faceId)
     ? activeGenderConfig.faceId
@@ -2221,7 +2319,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         fetchOptions.signal = controller.signal;
       }
 
-      const response = await fetch(DOFUS_BREEDS_API_URL, fetchOptions);
+      const response = await fetch(buildBreedsUrl(language), fetchOptions);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -2233,7 +2331,10 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         return;
       }
 
-      const normalized = normalizeBreedsDataset(payload);
+      const normalized = normalizeBreedsDataset(payload, {
+        language,
+        languagePriority,
+      });
       const dataset = normalized.length ? normalized : [BARBOFUS_DEFAULT_BREED];
 
       setBreeds(dataset);
@@ -2250,7 +2351,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         return;
       }
       console.error(err);
-      setBreedsError("Impossible de récupérer les classes Dofus.");
+      setBreedsError(t("errors.breeds"));
       setBreeds([BARBOFUS_DEFAULT_BREED]);
       setSelectedBreedId(BARBOFUS_DEFAULT_BREED.id);
     } finally {
@@ -2262,7 +2363,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         setBreedsLoading(false);
       }
     }
-  }, []);
+  }, [language, languagePriority, t]);
 
   const handleRetryBreeds = useCallback(() => {
     loadBreeds();
@@ -2651,7 +2752,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
 
   useEffect(() => {
     lookPreviewsRef.current = lookPreviews;
-  }, [lookPreviews]);
+  }, [lookPreviews, t]);
 
   useEffect(() => {
     if (!proposals.length) {
@@ -2726,7 +2827,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         const params = new URLSearchParams();
         params.set("breedId", String(proposal.classId));
         params.set("gender", proposal.lookGender ?? "m");
-        params.set("lang", "fr");
+        params.set("lang", language);
         params.set("size", String(LOOK_PREVIEW_SIZE));
         if (Number.isFinite(proposal.lookFaceId)) {
           params.set("faceId", String(Math.trunc(proposal.lookFaceId)));
@@ -2782,7 +2883,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
               base64,
               contentType,
               byteLength,
-              error: dataUrl ? null : payload?.error ?? "Prévisualisation indisponible",
+            error: dataUrl ? null : payload?.error ?? t("errors.previewUnavailable"),
             },
           };
           lookPreviewsRef.current = next;
@@ -2804,7 +2905,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
               base64: null,
               contentType: null,
               byteLength: null,
-              error: error?.message ?? "Prévisualisation indisponible",
+            error: error?.message ?? t("errors.previewUnavailable"),
             },
           };
           lookPreviewsRef.current = next;
@@ -2821,7 +2922,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       cancelled = true;
       abortController.abort();
     };
-  }, [proposals]);
+  }, [language, proposals]);
 
   const handleNextProposal = useCallback(() => {
     if (!proposalCount) {
@@ -2866,14 +2967,14 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         base64: null,
         contentType: null,
         byteLength: null,
-        error: entry?.error ?? "Impossible de charger l'aperçu Dofus",
+        error: entry?.error ?? t("errors.previewUnavailableDetailed"),
       };
 
       const next = { ...previous, [id]: nextEntry };
       lookPreviewsRef.current = next;
       return next;
     });
-  }, []);
+  }, [t]);
 
   const handleDownloadPreview = useCallback(async (proposal) => {
     if (!proposal) {
@@ -2934,7 +3035,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
 
     } catch (error) {
       console.error("Unable to download preview:", error);
-      setError("Impossible de télécharger l'aperçu.");
+      setError(t("errors.previewDownload"));
     } finally {
       setDownloadingPreviewId(null);
     }
@@ -2959,7 +3060,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         const entries = await Promise.all(
           ITEM_TYPES.map(async (type) => {
             try {
-              const urls = buildDofusApiUrls(type);
+              const urls = buildDofusApiUrls(type, language);
               const aggregatedItems = [];
 
               for (const url of urls) {
@@ -3001,7 +3102,12 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
               }
 
               const normalizedItems = aggregatedItems
-                .map((rawItem) => normalizeDofusItem(rawItem, type))
+                .map((rawItem) =>
+                  normalizeDofusItem(rawItem, type, {
+                    language,
+                    languagePriority,
+                  })
+                )
                 .filter((item) => item !== null);
 
               const deduplicatedItems = Array.from(
@@ -3037,8 +3143,8 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         if (errors.length) {
           const message =
             errors.length === ITEM_TYPES.length
-              ? "Impossible de récupérer les objets Dofus pour le moment."
-              : "Certaines catégories d'objets n'ont pas pu être chargées.";
+              ? t("errors.itemsUnavailable")
+              : t("errors.itemsPartial");
           setItemsError(message);
         }
       } catch (err) {
@@ -3048,7 +3154,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
 
         console.error(err);
         setItemsCatalog({});
-        setItemsError("Impossible de récupérer les objets Dofus pour le moment.");
+        setItemsError(t("errors.itemsUnavailable"));
       } finally {
         if (!isCancelled) {
           setItemsLoading(false);
@@ -3062,7 +3168,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       isCancelled = true;
       controllers.forEach((controller) => controller.abort());
     };
-  }, []);
+  }, [language, languagePriority, t]);
 
   const handleDataUrl = useCallback((dataUrl) => {
     if (!dataUrl) return;
@@ -3094,11 +3200,11 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         setImageHash(typeof hash === "string" && hash.length ? hash : null);
         setImageEdges(Array.isArray(edges) && edges.length ? edges : null);
         if (!palette || palette.length === 0) {
-          setError("Aucune couleur dominante détectée.");
+          setError(t("errors.noColors"));
         }
       } catch (err) {
         console.error(err);
-        setError("Impossible d'extraire les couleurs de cette image.");
+        setError(t("errors.paletteExtraction"));
         setColors([]);
         setImageSignature(null);
         setImageShape(null);
@@ -3110,7 +3216,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       }
     };
     image.onerror = () => {
-      setError("L'image semble corrompue ou illisible.");
+      setError(t("errors.corruptedImage"));
       setIsProcessing(false);
       setColors([]);
       setImageSignature(null);
@@ -3120,12 +3226,12 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       setImageEdges(null);
     };
     image.src = dataUrl;
-  }, []);
+  }, [t]);
 
   const handleFile = useCallback(
     (file) => {
       if (!file || !file.type.startsWith("image/")) {
-        setError("Merci de choisir un fichier image.");
+        setError(t("errors.fileType"));
         setImageSignature(null);
         setImageShape(null);
         setImageTones(null);
@@ -3142,7 +3248,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         }
       };
       reader.onerror = () => {
-        setError("Lecture du fichier impossible.");
+        setError(t("errors.fileRead"));
       };
       reader.readAsDataURL(file);
     },
@@ -3290,20 +3396,20 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       }
       setError(null);
       setCopiedCode(value);
-      setToast({ id: Date.now(), label: "Couleur copiée", value, swatch });
+      setToast({ id: Date.now(), label: t("toast.colorCopied"), value, swatch });
     } catch (err) {
       console.error(err);
       try {
         fallbackCopy(value);
         setError(null);
         setCopiedCode(value);
-        setToast({ id: Date.now(), label: "Couleur copiée", value, swatch });
+        setToast({ id: Date.now(), label: t("toast.colorCopied"), value, swatch });
       } catch (fallbackErr) {
         console.error(fallbackErr);
-        setError("Impossible de copier dans le presse-papiers.");
+        setError(t("errors.clipboard"));
       }
     }
-  }, []);
+  }, [t]);
 
   const formatThumbStyle = {
     transform:
@@ -3317,10 +3423,10 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     ? Math.max(safeProgress / 100, 0.05)
     : safeProgress / 100;
   const progressLabel = isProcessing
-    ? "Analyse de l'image en cours"
+    ? t("progress.analyzing")
     : safeProgress >= 100
-    ? "Analyse terminée"
-    : "Analyse prête";
+    ? t("progress.completed")
+    : t("progress.ready");
 
   const getTextColor = useCallback((color) => {
     const luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
@@ -3330,11 +3436,8 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   return (
     <>
       <Head>
-        <title>{`${BRAND_NAME} · Studio de skins Dofus`}</title>
-        <meta
-          name="description"
-          content="KrosPalette extrait les couleurs dominantes de tes images pour composer des skins Dofus harmonieux."
-        />
+        <title>{`${BRAND_NAME} · ${t("brand.tagline")}`}</title>
+        <meta name="description" content={t("meta.description")} />
       </Head>
       <main className="page">
         {showProgressBar ? (
@@ -3368,16 +3471,35 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
           ) : null}
         </div>
         <header className="hero">
+          <div className="hero__top">
+            <label className="language-switcher__label" htmlFor="language-select">
+              {t("language.selectorLabel")}
+            </label>
+            <select
+              id="language-select"
+              className="language-switcher__select"
+              value={language}
+              onChange={handleLanguageChange}
+              aria-label={t("language.selectorAria")}
+            >
+              {languageOptions.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <h1>{BRAND_NAME}</h1>
+          <p className="hero__tagline">{t("brand.tagline")}</p>
         </header>
 
         <section className="workspace">
           <div className="reference">
             <div className="reference__header">
               <div className="reference__title">
-                <h2>Référence créative</h2>
+                <h2>{t("workspace.referenceTitle")}</h2>
               </div>
-              <div className="input-switch" role="radiogroup" aria-label="Mode d'analyse">
+              <div className="input-switch" role="radiogroup" aria-label={t("aria.analysisMode")}>
                 <span
                   className="input-switch__thumb"
                   style={{ transform: inputMode === "image" ? "translateX(0%)" : "translateX(100%)" }}
@@ -3390,7 +3512,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                   role="radio"
                   aria-checked={isImageMode}
                 >
-                  Image
+                  {t("workspace.mode.image")}
                 </button>
                 <button
                   type="button"
@@ -3399,7 +3521,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                   role="radio"
                   aria-checked={!isImageMode}
                 >
-                  Couleur
+                  {t("workspace.mode.color")}
                 </button>
               </div>
             </div>
@@ -3420,13 +3542,17 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                 }}
               >
                 {imageSrc ? (
-                  <img src={imageSrc} alt="Aperçu de la référence importée" className="dropzone__preview" />
+                  <img
+                    src={imageSrc}
+                    alt={t("workspace.dropzone.previewAlt")}
+                    className="dropzone__preview"
+                  />
                 ) : (
                   <div className="dropzone__placeholder">
-                    <strong>Glisse ton visuel ici</strong>
-                    <span>… ou colle-le directement depuis ton presse-papiers</span>
-                    <em>Formats acceptés : PNG, JPG, WebP, GIF statique</em>
-                    <span className="dropzone__hint">Clique pour ouvrir l&apos;explorateur de fichiers</span>
+                    <strong>{t("workspace.dropzone.primary")}</strong>
+                    <span>{t("workspace.dropzone.secondary")}</span>
+                    <em>{t("workspace.dropzone.formats")}</em>
+                    <span className="dropzone__hint">{t("workspace.dropzone.hint")}</span>
                   </div>
                 )}
                 <input
@@ -3447,7 +3573,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                 </div>
                 <div className="color-picker__controls">
                   <label className="color-picker__label sr-only" htmlFor="seed-color">
-                    Sélectionne ta teinte de départ
+                    {t("workspace.colorPicker.label")}
                   </label>
                   <div className="color-picker__inputs">
                     <input
@@ -3458,10 +3584,10 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                       onChange={handleColorInput}
                     />
                     <button type="button" className="color-picker__random" onClick={handleRandomizeColor}>
-                      Nuance aléatoire
+                      {t("workspace.colorPicker.random")}
                     </button>
                   </div>
-                  <div className="color-picker__swatch-tray" role="list" aria-label="Suggestions de couleurs">
+                  <div className="color-picker__swatch-tray" role="list" aria-label={t("aria.colorSuggestions")}>
                     {CURATED_COLOR_SWATCHES.map((hex) => {
                       const isActive = selectedColor === hex.toUpperCase();
                       return (
@@ -3473,7 +3599,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                           onClick={() => handleSeedClick(hex)}
                           aria-pressed={isActive}
                         >
-                          <span className="sr-only">Utiliser la couleur {hex}</span>
+                          <span className="sr-only">{t("workspace.colorPicker.sr", { hex })}</span>
                         </button>
                       );
                     })}
@@ -3486,11 +3612,11 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
           <div className="palette">
             <div className="palette__header">
               <div className="palette__title">
-                <h2>Palette extraite</h2>
+                <h2>{t("palette.title")}</h2>
               </div>
               <div className="palette__actions">
-                {isProcessing ? <span className="badge badge--pulse">Analyse en cours…</span> : null}
-                <div className="format-switch" role="radiogroup" aria-label="Format des codes couleur">
+                {isProcessing ? <span className="badge badge--pulse">{t("palette.badge.analyzing")}</span> : null}
+                <div className="format-switch" role="radiogroup" aria-label={t("palette.format.label")}>
                   <span className="format-switch__thumb" style={formatThumbStyle} aria-hidden="true" />
                   <button
                     type="button"
@@ -3499,7 +3625,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                     role="radio"
                     aria-checked={codeFormat === "hex"}
                   >
-                    Hexa
+                    {t("palette.format.hex")}
                   </button>
                   <button
                     type="button"
@@ -3508,17 +3634,17 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                     role="radio"
                     aria-checked={codeFormat === "rgb"}
                   >
-                    RGB
+                    {t("palette.format.rgb")}
                   </button>
                 </div>
               </div>
             </div>
             {colors.length > 0 ? (
-              <div className="palette__skin-control" role="group" aria-label="Gestion de la teinte de peau">
+              <div className="palette__skin-control" role="group" aria-label={t("palette.skin.groupLabel")}>
                 <div className="palette__skin-meta">
-                  <span className="palette__skin-label">Teinte de peau</span>
+                  <span className="palette__skin-label">{t("palette.skin.label")}</span>
                 </div>
-                <div className="palette__skin-options" role="radiogroup" aria-label="Choix de la teinte de peau">
+                <div className="palette__skin-options" role="radiogroup" aria-label={t("palette.skin.choicesLabel")}>
                   <button
                     type="button"
                     className={`palette__skin-option${!useCustomSkinTone ? " is-active" : ""}`}
@@ -3526,7 +3652,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                     role="radio"
                     aria-checked={!useCustomSkinTone}
                   >
-                    Peau par défaut
+                    {t("palette.skin.default")}
                   </button>
                   <button
                     type="button"
@@ -3535,7 +3661,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                     role="radio"
                     aria-checked={useCustomSkinTone}
                   >
-                    Peau personnalisée
+                    {t("palette.skin.custom")}
                   </button>
                 </div>
               </div>
@@ -3564,17 +3690,14 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
               </ul>
             ) : (
               <div className="palette__empty">
-                <p>
-                  Glisse un visuel ou sélectionne une couleur d&apos;ambiance : KrosPalette s&apos;occupe de générer
-                  automatiquement une palette harmonieuse.
-                </p>
+                <p>{t("palette.empty")}</p>
               </div>
             )}
           </div>
-          <div className="identity-card" role="group" aria-label="Configuration du personnage Dofus">
-            <div className="identity-card__section" role="group" aria-label="Sélection du sexe">
-              <span className="identity-card__section-title">Choix de la classe et du sexe</span>
-              <div className="identity-card__gender" role="radiogroup" aria-label="Sexe du personnage">
+          <div className="identity-card" role="group" aria-label={t("aria.identityCard")}>
+            <div className="identity-card__section" role="group" aria-label={t("aria.genderSection")}>
+              <span className="identity-card__section-title">{t("identity.gender.sectionTitle")}</span>
+              <div className="identity-card__gender" role="radiogroup" aria-label={t("aria.genderGroup")}>
                 <button
                   type="button"
                   className={`identity-card__gender-option${selectedGender === "male" ? " is-active" : ""}`}
@@ -3593,7 +3716,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                       />
                     </svg>
                   </span>
-                  <span className="identity-card__gender-text">Homme</span>
+                  <span className="identity-card__gender-text">{t("identity.gender.male")}</span>
                 </button>
                 <button
                   type="button"
@@ -3613,11 +3736,11 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                       />
                     </svg>
                   </span>
-                  <span className="identity-card__gender-text">Femme</span>
+                  <span className="identity-card__gender-text">{t("identity.gender.female")}</span>
                 </button>
               </div>
             </div>
-            <div className="identity-card__section" role="group" aria-label="Sélection de la classe">
+            <div className="identity-card__section" role="group" aria-label={t("aria.classSection")}>
               {breedsError ? (
                 <div className="identity-card__status identity-card__status--error" role="alert">
                   <span>{breedsError}</span>
@@ -3627,22 +3750,23 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                     onClick={handleRetryBreeds}
                     disabled={breedsLoading}
                   >
-                    Réessayer
+                    {t("actions.retry")}
                   </button>
                 </div>
               ) : null}
               {breedsLoading ? (
                 <div className="identity-card__status" role="status" aria-live="polite">
-                  Chargement des classes…
+                  {t("identity.class.loading")}
                 </div>
               ) : null}
-              <div className="identity-card__grid" role="radiogroup" aria-label="Classe du personnage">
+              <div className="identity-card__grid" role="radiogroup" aria-label={t("aria.classGroup")}>
                 {breeds.map((breed) => {
                   if (!Number.isFinite(breed.id)) {
                     return null;
                   }
                   const isActive = breed.id === selectedBreedId;
                   const fallbackLetter = breed.name?.charAt(0)?.toUpperCase() ?? "?";
+                  const breedLabel = breed.name ?? t("identity.class.fallback", { id: breed.id });
 
                   return (
                     <button
@@ -3652,8 +3776,8 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                       onClick={() => setSelectedBreedId(breed.id)}
                       role="radio"
                       aria-checked={isActive}
-                      aria-label={`Choisir ${breed.name}`}
-                      title={breed.name}
+                      aria-label={t("identity.class.choose", { name: breedLabel })}
+                      title={breedLabel}
                     >
                       <span className="identity-card__chip-icon">
                         {breed.icon ? (
@@ -3672,16 +3796,20 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
             <div
               className="identity-card__section"
               role="group"
-              aria-label="Catégories de compagnons proposées"
+              aria-label={t("aria.companionSection")}
             >
-              <span className="identity-card__section-title">Familiers & montures proposés</span>
+              <span className="identity-card__section-title">{t("identity.companion.sectionTitle")}</span>
               <div
                 className="companion-toggle"
                 role="group"
-                aria-label="Filtrer les compagnons suggérés"
+                aria-label={t("aria.companionFilter")}
               >
                 {FAMILIER_FILTERS.map((filter) => {
                   const isActive = Boolean(familierFilters[filter.key]);
+                  const label = t(filter.labelKey);
+                  const title = isActive
+                    ? t("companions.toggle.hide", { label: label.toLowerCase() })
+                    : t("companions.toggle.show", { label: label.toLowerCase() });
                   return (
                     <button
                       key={filter.key}
@@ -3689,7 +3817,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                       className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
                       onClick={() => handleFamilierFilterToggle(filter.key)}
                       aria-pressed={isActive}
-                      title={`${isActive ? "Masquer" : "Afficher"} ${filter.label.toLowerCase()}`}
+                      title={title}
                     >
                       <span className="companion-toggle__indicator" aria-hidden="true">
                         {isActive ? (
@@ -3706,15 +3834,13 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                           <span className="companion-toggle__dot" />
                         )}
                       </span>
-                      <span className="companion-toggle__label">{filter.label}</span>
+                      <span className="companion-toggle__label">{label}</span>
                     </button>
                   );
                 })}
               </div>
               {areAllFamilierFiltersDisabled ? (
-                <p className="companion-toggle__empty" role="status">
-                  Active au moins une catégorie pour afficher des suggestions de compagnons.
-                </p>
+                <p className="companion-toggle__empty" role="status">{t("identity.companion.empty")}</p>
               ) : null}
             </div>
           </div>
@@ -3724,7 +3850,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
           {itemsLoading || (itemsError && !showDetailedMatches) ? (
             <div className="suggestions__header">
               {itemsLoading ? (
-                <span className="suggestions__inline-status">Mise à jour…</span>
+                <span className="suggestions__inline-status">{t("suggestions.header.updating")}</span>
               ) : null}
               {itemsError && !showDetailedMatches ? (
                 <span className="suggestions__inline-status suggestions__inline-status--error">
@@ -3735,17 +3861,17 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
           ) : null}
           {colors.length === 0 ? (
             <div className="suggestions__empty">
-              <p>Lance une analyse pour découvrir des correspondances Dofus adaptées.</p>
+              <p>{t("suggestions.empty.start")}</p>
             </div>
           ) : !hasCatalogData && itemsLoading ? (
             <div className="suggestions__status suggestions__status--loading">
-              Chargement des objets Dofus…
+              {t("suggestions.loading.items")}
             </div>
           ) : !hasCatalogData && itemsError ? (
             <div className="suggestions__status suggestions__status--error">{itemsError}</div>
           ) : !hasCatalogData ? (
             <div className="suggestions__status suggestions__status--empty">
-              <p>Aucun objet n&apos;a pu être récupéré pour le moment.</p>
+              <p>{t("suggestions.empty.catalog")}</p>
             </div>
           ) : (
             <>
@@ -3762,7 +3888,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                             className="skin-carousel__nav"
                             onClick={handlePrevProposal}
                             disabled={proposalCount <= 1}
-                            aria-label="Skin précédent"
+                            aria-label={t("aria.carouselPrevious")}
                           >
                             <img
                               src="/icons/arrow-left.svg"
@@ -3788,7 +3914,10 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                               ) : null}
                               {proposalCount > 0 ? (
                                 <span className="skin-carousel__count">
-                                  Skin {safeActiveProposalIndex + 1} / {proposalCount}
+                                  {t("suggestions.carousel.skinCount", {
+                                    current: safeActiveProposalIndex + 1,
+                                    total: proposalCount,
+                                  })}
                                 </span>
                               ) : null}
                             </div>
@@ -3798,7 +3927,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                             className="skin-carousel__nav"
                             onClick={handleNextProposal}
                             disabled={proposalCount <= 1}
-                            aria-label="Skin suivant"
+                            aria-label={t("aria.carouselNext")}
                           >
                             <img
                               src="/icons/arrow-right.svg"
@@ -3814,26 +3943,26 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                             style={{ transform: `translateX(-${safeActiveProposalIndex * 100}%)` }}
                           >
                             {proposals.map((proposal) => {
-                            const primaryColor = proposal.palette[0] ?? "#1f2937";
-                            const canvasBackground = buildGradientFromHex(primaryColor);
-                            const lookPreview = lookPreviews?.[proposal.id];
-                            const lookLoaded =
+                              const primaryColor = proposal.palette[0] ?? "#1f2937";
+                              const canvasBackground = buildGradientFromHex(primaryColor);
+                              const lookPreview = lookPreviews?.[proposal.id];
+                              const lookLoaded =
                               lookPreview?.status === "loaded" &&
                               typeof lookPreview?.dataUrl === "string" &&
                               lookPreview.dataUrl.length > 0;
                             const lookLoading = lookPreview?.status === "loading";
-                            const lookError =
-                              lookPreview?.status === "error" && lookPreview?.error
-                                ? lookPreview.error
-                                : lookPreview?.status === "error"
-                                ? "Prévisualisation Dofus indisponible"
+                              const lookError =
+                                lookPreview?.status === "error" && lookPreview?.error
+                                  ? lookPreview.error
+                                  : lookPreview?.status === "error"
+                                ? t("errors.previewUnavailableDetailed")
                                 : null;
-                            const previewSrc = lookLoaded ? lookPreview.dataUrl : null;
-                            const heroSrc = !lookLoaded ? proposal.heroImage ?? null : null;
-                            const previewAlt = `Aperçu généré pour le skin ${proposal.index + 1}`;
-                            return (
-                              <article key={proposal.id} className="skin-card">
-                                <h3 className="sr-only">{`Proposition ${proposal.index + 1}`}</h3>
+                              const previewSrc = lookLoaded ? lookPreview.dataUrl : null;
+                              const heroSrc = !lookLoaded ? proposal.heroImage ?? null : null;
+                              const previewAlt = t("suggestions.render.alt", { index: proposal.index + 1 });
+                              return (
+                                <article key={proposal.id} className="skin-card">
+                                <h3 className="sr-only">{t("suggestions.carousel.proposalTitle", { index: proposal.index + 1 })}</h3>
                                 <div className="skin-card__body">
                                   <div
                                     className="skin-card__canvas"
@@ -3841,10 +3970,10 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                   >
                                     <div className="skin-card__render">
                                       {lookLoading ? (
-                                        <div className="skin-card__loader" role="status" aria-live="polite">
-                                          <span className="skin-card__loader-spinner" aria-hidden="true" />
-                                          <span className="sr-only">Chargement du rendu Dofus…</span>
-                                        </div>
+                                            <div className="skin-card__loader" role="status" aria-live="polite">
+                                              <span className="skin-card__loader-spinner" aria-hidden="true" />
+                                              <span className="sr-only">{t("suggestions.render.loading")}</span>
+                                            </div>
                                       ) : null}
                                       {lookError && !lookLoading && !lookLoaded ? (
                                         <div className="skin-card__status skin-card__status--error">
@@ -3875,11 +4004,12 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                     </div>
                                     <ul className="skin-card__equipment" role="list">
                                       {proposal.items.map((item) => {
-                                        const slotLabel = ITEM_TYPE_LABELS[item.slotType] ?? item.slotType;
+                                        const slotLabelKey = ITEM_TYPE_LABEL_KEYS[item.slotType];
+                                        const slotLabel = slotLabelKey ? t(slotLabelKey) : item.slotType;
                                         const itemName = item.name ?? slotLabel;
-                                        const altText = item.name
-                                          ? `Illustration de ${item.name}`
-                                          : `Illustration de ${slotLabel}`;
+                                        const altText = t("suggestions.render.itemAlt", {
+                                          name: item.name ?? slotLabel,
+                                        });
 
                                         return (
                                           <li key={`${proposal.id}-${item.id}`} className="skin-card__equipment-slot">
@@ -3934,7 +4064,8 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                     </ul>
                                     <ul className="skin-card__list" role="list">
                                       {proposal.items.map((item) => {
-                                        const slotLabel = ITEM_TYPE_LABELS[item.slotType] ?? item.slotType;
+                                        const slotLabelKey = ITEM_TYPE_LABEL_KEYS[item.slotType];
+                                        const slotLabel = slotLabelKey ? t(slotLabelKey) : item.slotType;
                                         const itemName = item.name ?? slotLabel;
                                         return (
                                           <li key={`${proposal.id}-${item.id}-entry`} className="skin-card__list-item">
@@ -3966,16 +4097,16 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                           aria-busy={downloadingPreviewId === proposal.id}
                                         >
                                           {downloadingPreviewId === proposal.id
-                                            ? "Téléchargement…"
-                                            : "Télécharger l'image"}
+                                            ? t("suggestions.render.downloading")
+                                            : t("suggestions.render.download")}
                                         </button>
                                       ) : lookLoading ? (
                                         <span className="skin-card__cta skin-card__cta--disabled">
-                                          Rendu en cours…
+                                          {t("suggestions.render.loading")}
                                         </span>
                                       ) : (
                                         <span className="skin-card__cta skin-card__cta--disabled">
-                                          Rendu indisponible
+                                          {t("suggestions.render.unavailable")}
                                         </span>
                                       )}
                                       {proposal.barbofusLink ? (
@@ -3985,14 +4116,14 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                           rel="noreferrer"
                                           className="skin-card__cta"
                                         >
-                                          Tester sur Barbofus
+                                          {t("suggestions.render.link")}
                                           <span aria-hidden="true" className="skin-card__cta-icon">
                                             ↗
                                           </span>
                                         </a>
                                       ) : (
                                         <span className="skin-card__cta skin-card__cta--disabled">
-                                          Lien Barbofus indisponible
+                                          {t("suggestions.render.linkUnavailable")}
                                         </span>
                                       )}
                                     </div>
@@ -4003,45 +4134,43 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                           })}
                         </div>
                       </div>
-                      <div className="skin-carousel__dots" role="tablist" aria-label="Choisir une proposition">
+                      <div className="skin-carousel__dots" role="tablist" aria-label={t("aria.carouselDots")}>
                         {proposals.map((proposal, index) => (
                           <button
                             key={`${proposal.id}-dot`}
                             type="button"
                             className={`skin-carousel__dot${index === safeActiveProposalIndex ? " is-active" : ""}`}
                             onClick={() => handleSelectProposal(index)}
-                            aria-label={`Afficher le skin ${index + 1}`}
+                            aria-label={t("aria.carouselDotSelect", { index: index + 1 })}
                             aria-pressed={index === safeActiveProposalIndex}
                           />
                         ))}
-                        </div>
+                      </div>
                       </div>
                       <button
                         type="button"
-                        className={`suggestions__panel-toggle skin-carousel__panel-toggle${showDetailedMatches ? " is-open" : ""}`}
-                        onClick={toggleDetailedMatches}
-                        aria-expanded={showDetailedMatches}
-                        aria-label={
-                          showDetailedMatches
-                            ? "Masquer les correspondances détaillées"
-                            : "Afficher les correspondances détaillées"
-                        }
-                      >
-                        <span className="skin-carousel__panel-toggle-icon" aria-hidden="true" />
-                      </button>
-                    </div>
-                  </div>
+                    className={`suggestions__panel-toggle skin-carousel__panel-toggle${showDetailedMatches ? " is-open" : ""}`}
+                    onClick={toggleDetailedMatches}
+                    aria-expanded={showDetailedMatches}
+                    aria-label={
+                      showDetailedMatches ? t("aria.panelToggleClose") : t("aria.panelToggleOpen")
+                    }
+                  >
+                    <span className="skin-carousel__panel-toggle-icon" aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
                   <aside
                     className={`suggestions__panel${showDetailedMatches ? " is-open" : ""}`}
                     aria-hidden={!showDetailedMatches}
                   >
-                    <div className="suggestions__panel-header">
-                      <h3>Correspondances détaillées</h3>
+                  <div className="suggestions__panel-header">
+                      <h3>{t("suggestions.panel.title")}</h3>
                       <button
                         type="button"
                         className="suggestions__panel-close"
                         onClick={toggleDetailedMatches}
-                        aria-label="Fermer les correspondances détaillées"
+                        aria-label={t("aria.panelClose")}
                       >
                         <span aria-hidden="true">×</span>
                       </button>
@@ -4053,7 +4182,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                     ) : null}
                     {itemsLoading ? (
                       <p className="suggestions__status suggestions__status--loading suggestions__status--inline">
-                        Mise à jour des suggestions…
+                        {t("suggestions.panel.updating")}
                       </p>
                     ) : null}
                     <div className="suggestions__grid">
@@ -4062,13 +4191,15 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                         return (
                           <section key={type} className="suggestions__group">
                             <header className="suggestions__group-header">
-                              <span className="suggestions__group-type">{ITEM_TYPE_LABELS[type] ?? type}</span>
+                              <span className="suggestions__group-type">
+                                {ITEM_TYPE_LABEL_KEYS[type] ? t(ITEM_TYPE_LABEL_KEYS[type]) : type}
+                              </span>
                               {items.length > 0 ? (
-                                <span className="suggestions__group-badge">Meilleur match</span>
+                                <span className="suggestions__group-badge">{t("suggestions.panel.bestMatch")}</span>
                               ) : null}
                             </header>
                             {items.length === 0 ? (
-                              <p className="suggestions__group-empty">Aucune correspondance probante pour cette teinte.</p>
+                              <p className="suggestions__group-empty">{t("suggestions.panel.empty")}</p>
                             ) : (
                               <ul className="suggestions__deck">
                                 {items.map((item) => {
@@ -4076,12 +4207,12 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                   const paletteFromImage = item.paletteSource === "image" && hasPalette;
                                   const notes = [];
                                   if (!hasPalette) {
-                                    notes.push("Palette non détectée sur l'illustration.");
+                                    notes.push(t("errors.paletteMissing"));
                                   } else if (!paletteFromImage) {
-                                    notes.push("Palette estimée à partir des données DofusDB.");
+                                    notes.push(t("errors.paletteEstimated"));
                                   }
                                   if (!item.imageUrl) {
-                                    notes.push("Illustration manquante sur DofusDB.");
+                                    notes.push(t("errors.imageMissing"));
                                   }
 
                                   return (
@@ -4090,12 +4221,12 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                         {item.imageUrl ? (
                                           <img
                                             src={item.imageUrl}
-                                            alt={`Illustration de ${item.name}`}
+                                            alt={t("suggestions.render.itemAlt", { name: item.name })}
                                             loading="lazy"
                                           />
                                         ) : (
                                           <div className="suggestions__thumb-placeholder" aria-hidden="true">
-                                            Aperçu indisponible
+                                            {t("suggestions.thumb.placeholder")}
                                           </div>
                                         )}
                                       </div>
@@ -4120,8 +4251,8 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                                 style={{ backgroundColor: hex }}
                                               />
                                             ))
-                                          ) : (
-                                            <span className="suggestions__swatch-note">Palette indisponible</span>
+                                        ) : (
+                                            <span className="suggestions__swatch-note">{t("suggestions.palette.unavailable")}</span>
                                           )}
                                         </div>
                                         {notes.length ? (
@@ -4144,16 +4275,16 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                       })}
                     </div>
                   </aside>
-                  {showDetailedMatches ? (
-                    <button
-                      type="button"
-                      className="suggestions__panel-backdrop"
-                      onClick={toggleDetailedMatches}
-                      aria-label="Fermer les correspondances détaillées"
-                    >
-                      <span className="sr-only">Fermer les correspondances détaillées</span>
-                    </button>
-                  ) : null}
+                {showDetailedMatches ? (
+                  <button
+                    type="button"
+                    className="suggestions__panel-backdrop"
+                    onClick={toggleDetailedMatches}
+                    aria-label={t("aria.panelBackdrop")}
+                  >
+                    <span className="sr-only">{t("aria.panelBackdrop")}</span>
+                  </button>
+                ) : null}
                 </div>
               ) : null}
             </>
@@ -4173,7 +4304,7 @@ export async function getStaticProps() {
       };
     }
 
-    const response = await fetch(DOFUS_BREEDS_API_URL, {
+    const response = await fetch(buildBreedsUrl(DEFAULT_LANGUAGE), {
       headers: { Accept: "application/json" },
     });
 
@@ -4182,7 +4313,10 @@ export async function getStaticProps() {
     }
 
     const payload = await response.json();
-    const dataset = normalizeBreedsDataset(payload);
+    const dataset = normalizeBreedsDataset(payload, {
+      language: DEFAULT_LANGUAGE,
+      languagePriority: getLanguagePriority(DEFAULT_LANGUAGE),
+    });
 
     return {
       props: {

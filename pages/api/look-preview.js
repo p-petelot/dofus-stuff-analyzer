@@ -1,8 +1,10 @@
+import { DEFAULT_LANGUAGE, normalizeLanguage } from "../../lib/i18n";
+
 const DOFUS_LOOK_API_URL = "https://api.dofusdb.fr/look";
 const DOFUS_RENDERER_BASE_URL = "https://renderer.dofusdb.fr/kool";
 const SOUFF_RENDERER_ENDPOINT = "https://skin.souff.fr/renderer/";
 const DEFAULT_RENDER_SIZE = 512;
-const DEFAULT_LANG = "fr";
+const DEFAULT_LANG = DEFAULT_LANGUAGE;
 const MAX_RENDER_SIZE = 2048;
 
 function coercePositiveInteger(value, fallback) {
@@ -351,7 +353,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    const resolvedLang = typeof lang === "string" && lang.trim() ? lang.trim() : DEFAULT_LANG;
+    const normalizedLang = normalizeLanguage(lang) ?? DEFAULT_LANG;
     const resolvedSize = coercePositiveInteger(size, DEFAULT_RENDER_SIZE);
 
     const souffPayload = buildSouffLookPayload({
@@ -369,7 +371,7 @@ export default async function handler(req, res) {
       faceId,
       itemIds,
       colors,
-      lang: resolvedLang,
+      lang: normalizedLang,
       size: resolvedSize,
     };
 
@@ -397,7 +399,7 @@ export default async function handler(req, res) {
     const searchParams = new URLSearchParams();
     searchParams.set("breedId", String(numericBreedId));
     searchParams.set("sexe", normalizedGender);
-    searchParams.set("lang", resolvedLang);
+    searchParams.set("lang", normalizedLang);
     itemIds.forEach((id) => {
       searchParams.append("itemIds[]", String(id));
     });

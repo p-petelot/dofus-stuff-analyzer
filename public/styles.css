@@ -168,6 +168,48 @@ a {
   letter-spacing: -0.04em;
 }
 
+.hero__top {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.language-switcher__label {
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.language-switcher__select {
+  appearance: none;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.6);
+  color: var(--text);
+  padding: 6px 22px 6px 12px;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+}
+
+.language-switcher__select:focus {
+  outline: 2px solid rgba(139, 92, 246, 0.65);
+  outline-offset: 2px;
+}
+
+.hero__tagline {
+  margin: 6px 0 0;
+  color: var(--text-soft);
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+}
+
 
 
 
