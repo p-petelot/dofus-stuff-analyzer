@@ -2081,7 +2081,8 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   const [itemsError, setItemsError] = useState(null);
   const [familierFilters, setFamilierFilters] = useState(() =>
     FAMILIER_FILTERS.reduce((accumulator, filter) => {
-      accumulator[filter.key] = true;
+      const isDefaultEnabled = filter.key === "pet" || filter.key === "mount";
+      accumulator[filter.key] = isDefaultEnabled;
       return accumulator;
     }, {})
   );

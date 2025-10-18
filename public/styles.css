@@ -1673,6 +1673,7 @@ a {
   padding: 0;
   list-style: none;
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 7px;
 }
 
@@ -1993,10 +1994,6 @@ a {
     width: 100%;
     border-radius: 0;
   }
-
-  .suggestions__grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 .suggestions__inline-status {
@@ -2043,9 +2040,8 @@ a {
 
 .suggestions__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
-  align-items: stretch;
 }
 
 .suggestions__group {
@@ -2056,7 +2052,6 @@ a {
   border-radius: var(--radius-md);
   border: 1px solid rgba(148, 163, 184, 0.18);
   padding: 8px;
-  height: 100%;
 }
 
 .suggestions__group-header {
@@ -2100,8 +2095,8 @@ a {
   padding: 0;
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .suggestions__card {
@@ -2242,8 +2237,8 @@ a {
 
 @media (max-width: 520px) {
   .suggestions__deck {
-    grid-template-columns: repeat(1, minmax(0, 1fr));
-    gap: 6px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
   }
 
   .suggestions__card {
