@@ -1,4 +1,5 @@
-import type { FourSlot } from "./config/suggestions";
+import type { SlotKey } from "./config/suggestions";
+export type { SlotKey } from "./config/suggestions";
 
 export interface BoundingBox {
   x: number;
@@ -58,7 +59,7 @@ export interface Candidate {
 export interface ItemMeta {
   id: number;
   label: string;
-  slot: FourSlot;
+  slot: SlotKey;
   setId?: number | null;
   tags?: string[];
   palette?: string[];
@@ -69,7 +70,7 @@ export interface ItemMeta {
 
 export interface CandidateRef {
   itemId: number;
-  slot: FourSlot;
+  slot: SlotKey;
   label: string;
   embedding: number[];
   setId?: number | null;
@@ -81,7 +82,7 @@ export interface CandidateRef {
 
 export interface ItemIndex {
   updatedAt: number;
-  items: Record<FourSlot, CandidateRef[]>;
+  items: Record<SlotKey, CandidateRef[]>;
 }
 
 export interface SetRules {
@@ -93,14 +94,14 @@ export interface SetRules {
 export interface SuggestionOutput {
   palette: {
     global: DofusPalette;
-    bySlot: Record<FourSlot, DofusPalette>;
+    bySlot: Record<SlotKey, DofusPalette>;
   };
-  slots: Record<FourSlot, Candidate[]>;
-  confidence: Record<FourSlot, number>;
-  visibility: Record<FourSlot, "ok" | "low">;
+  slots: Record<SlotKey, Candidate[]>;
+  confidence: Record<SlotKey, number>;
+  visibility: Record<SlotKey, "ok" | "low">;
   notes: string[];
   debug?: {
-    roi?: Record<FourSlot, BoundingBox>;
+    roi?: Record<SlotKey, BoundingBox>;
     timingsMs?: Record<string, number>;
     flags?: Record<string, boolean | number | string>;
   };

@@ -1,9 +1,9 @@
 import fs from "fs";
 import path from "path";
 import { DEFAULT_IMAGE_SIZE, SLOTS } from "../config/suggestions";
-import type { CandidateRef, FourSlot, ItemIndex, ItemMeta } from "../types";
+import type { CandidateRef, ItemIndex, ItemMeta, SlotKey } from "../types";
 
-const CACHE_PATH = path.join(process.cwd(), ".cache", "items-index-4slots.json");
+const CACHE_PATH = path.join(process.cwd(), ".cache", "items-index.json");
 
 let indexCache: ItemIndex | null = null;
 
@@ -83,17 +83,13 @@ function saveIndex(index: ItemIndex): void {
   }
 }
 
-export async function buildItemIndex(itemsBySlot: Record<FourSlot, ItemMeta[]>): Promise<ItemIndex> {
-  const items: Record<FourSlot, CandidateRef[]> = {
-    coiffe: [],
-    cape: [],
-    bouclier: [],
-    familier: [],
-  };
-  for (const slot of SLOTS) {
-    const metas = itemsBySlot[slot] ?? [];
-    items[slot] = metas.map(convertItem);
-  }
+export async function buildItemIndex(itemsBySlot: Record<SlotKey, ItemMeta[]>): Promise<ItemIndex> {
+  const items = Object.fromEntries(
+    SLOTS.map((slot) => {
+      const metas = itemsBySlot[slot] ?? [];
+      return [slot, metas.map(convertItem)];
+    }),
+  ) as Record<SlotKey, CandidateRef[]>;
   const index: ItemIndex = { updatedAt: Date.now(), items };
   indexCache = index;
   saveIndex(index);
@@ -109,21 +105,20 @@ function requireIndex(): ItemIndex {
     indexCache = loaded;
     return loaded;
   }
+  const emptyItems = Object.fromEntries(SLOTS.map((slot) => [slot, [] as CandidateRef[]])) as Record<
+    SlotKey,
+    CandidateRef[]
+  >;
   const empty: ItemIndex = {
     updatedAt: Date.now(),
-    items: {
-      coiffe: [],
-      cape: [],
-      bouclier: [],
-      familier: [],
-    },
+    items: emptyItems,
   };
   indexCache = empty;
   return empty;
 }
 
 export async function queryIndex(
-  slot: FourSlot,
+  slot: SlotKey,
   embedding: number[],
   k: number,
 ): Promise<CandidateRef[]> {

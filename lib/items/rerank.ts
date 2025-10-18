@@ -1,6 +1,6 @@
-import { BONUS, SUGGESTION_COUNT } from "../config/suggestions";
+import { BONUS, SLOTS, SUGGESTION_COUNT } from "../config/suggestions";
 import { deltaE2000 } from "../colors/palette";
-import type { Candidate, DofusPalette, FourSlot } from "../types";
+import type { Candidate, DofusPalette, SlotKey } from "../types";
 
 function hexToLab(hex: string) {
   const cleaned = hex.replace("#", "");
@@ -30,15 +30,18 @@ function cloneCandidate(candidate: Candidate): Candidate {
 }
 
 export function nmsSilhouette(candidates: Candidate[]): Candidate[] {
-  const sorted = [...candidates].sort((a, b) => b.score - a.score);
-  const seen = new Set<number>();
   const result: Candidate[] = [];
-  for (const candidate of sorted) {
-    if (seen.has(candidate.itemId)) {
+  const indexByItem = new Map<number, number>();
+  for (const candidate of candidates) {
+    const existingIndex = indexByItem.get(candidate.itemId);
+    if (existingIndex !== undefined) {
+      if (candidate.score > result[existingIndex].score) {
+        result[existingIndex] = candidate;
+      }
       continue;
     }
-    seen.add(candidate.itemId);
     result.push(candidate);
+    indexByItem.set(candidate.itemId, result.length - 1);
     if (result.length >= SUGGESTION_COUNT.max) {
       break;
     }
@@ -47,15 +50,12 @@ export function nmsSilhouette(candidates: Candidate[]): Candidate[] {
 }
 
 export function applySetBonus(
-  slots: Record<FourSlot, Candidate[]>,
-  paletteBySlot: Record<FourSlot, DofusPalette>,
-): Record<FourSlot, Candidate[]> {
-  const result: Record<FourSlot, Candidate[]> = {
-    coiffe: slots.coiffe?.map(cloneCandidate) ?? [],
-    cape: slots.cape?.map(cloneCandidate) ?? [],
-    bouclier: slots.bouclier?.map(cloneCandidate) ?? [],
-    familier: slots.familier?.map(cloneCandidate) ?? [],
-  };
+  slots: Record<SlotKey, Candidate[]>,
+  paletteBySlot: Record<SlotKey, DofusPalette>,
+): Record<SlotKey, Candidate[]> {
+  const result = Object.fromEntries(
+    SLOTS.map((slot) => [slot, slots[slot]?.map(cloneCandidate) ?? []]),
+  ) as Record<SlotKey, Candidate[]>;
   const coiffe = result.coiffe;
   const cape = result.cape;
   if (!coiffe.length || !cape.length) {

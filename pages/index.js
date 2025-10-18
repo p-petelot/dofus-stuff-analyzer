@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
 
-const ITEM_TYPES = ["coiffe", "cape", "bouclier", "familier"];
+const ITEM_TYPES = ["coiffe", "cape", "bouclier", "familier", "epauliere", "costume", "ailes"];
 const DOFUS_API_HOST = "https://api.dofusdb.fr";
 const DOFUS_API_BASE_URL = `${DOFUS_API_HOST}/items`;
 const DOFUS_BREEDS_API_URL = `${DOFUS_API_HOST}/breeds?$skip=0&$limit=20&lang=fr`;
@@ -31,7 +31,18 @@ const ITEM_TYPE_CONFIG = {
     requests: [
       { typeIds: [18], skip: 0, limit: 1200 },
       { typeIds: [249], skip: 0, limit: 1200 },
+      { typeIds: [121], skip: 0, limit: 1200 },
+      { typeIds: [250], skip: 0, limit: 1200 },
     ],
+  },
+  epauliere: {
+    requests: [{ typeIds: [299], skip: 0, limit: 1200 }],
+  },
+  costume: {
+    requests: [{ typeIds: [199], skip: 0, limit: 1200 }],
+  },
+  ailes: {
+    requests: [{ typeIds: [300], skip: 0, limit: 1200 }],
   },
   bouclier: {
     requests: [
@@ -567,6 +578,9 @@ const ITEM_TYPE_LABELS = {
   cape: "Cape",
   familier: "Familier",
   bouclier: "Bouclier",
+  epauliere: "Épaulières",
+  costume: "Costume",
+  ailes: "Ailes",
 };
 
 const BARBOFUS_BASE_URL = "https://barbofus.com/skinator";

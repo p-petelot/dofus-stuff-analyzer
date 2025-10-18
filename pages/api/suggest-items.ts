@@ -16,15 +16,15 @@ import { colorModeSuggest } from "../../lib/items/colorMode";
 import { itemModeSuggest } from "../../lib/items/itemMode";
 import { applySetBonus, finalizeSlot } from "../../lib/items/rerank";
 import { logSuggestion } from "../../lib/telemetry/suggestions";
-import type { Candidate, FourSlot, SuggestionOutput } from "../../lib/types";
-import { crop, locateFourSlots, normalizeInput } from "../../lib/vision/preprocess";
+import type { Candidate, SlotKey, SuggestionOutput } from "../../lib/types";
+import { crop, locateSlots, normalizeInput } from "../../lib/vision/preprocess";
 
 interface SuggestBody {
   image: string;
   preferedClass?: string;
-  hints?: Partial<Record<FourSlot, number[]>>;
+  hints?: Partial<Record<SlotKey, number[]>>;
   excludeSets?: number[];
-  slots?: FourSlot[];
+  slots?: SlotKey[];
   debug?: boolean;
 }
 
@@ -53,7 +53,7 @@ export default async function handler(
 
     const preprocessStart = Date.now();
     const { img512, mask } = await normalizeInput(body.image);
-    const { boxes, visibility } = await locateFourSlots(img512, mask);
+    const { boxes, visibility } = await locateSlots(img512, mask);
     timings.preprocess = Date.now() - preprocessStart;
 
     const paletteGlobalLab = extractPaletteLABGlobal(img512, mask);
@@ -61,12 +61,9 @@ export default async function handler(
     const paletteGlobal = snapToDofusPalette(paletteGlobalLab);
     const paletteBySlot = snapToDofusPalette(paletteBySlotLab);
 
-    const perSlot: Record<FourSlot, { candidates: Candidate[]; confidence: number; notes: string[] }> = {
-      coiffe: { candidates: [], confidence: 0, notes: [] },
-      cape: { candidates: [], confidence: 0, notes: [] },
-      bouclier: { candidates: [], confidence: 0, notes: [] },
-      familier: { candidates: [], confidence: 0, notes: [] },
-    };
+    const perSlot = Object.fromEntries(
+      SLOTS.map((slot) => [slot, { candidates: [], confidence: 0, notes: [] as string[] }]),
+    ) as Record<SlotKey, { candidates: Candidate[]; confidence: number; notes: string[] }>;
 
     for (const slot of SLOTS) {
       const localNotes: string[] = [];
@@ -111,28 +108,13 @@ export default async function handler(
       perSlot[slot] = { candidates, confidence, notes: localNotes };
     }
 
-    const withBonus = applySetBonus(
-      {
-        coiffe: perSlot.coiffe.candidates,
-        cape: perSlot.cape.candidates,
-        bouclier: perSlot.bouclier.candidates,
-        familier: perSlot.familier.candidates,
-      },
-      paletteBySlot,
-    );
+    const slotCandidates = Object.fromEntries(
+      SLOTS.map((slot) => [slot, perSlot[slot].candidates]),
+    ) as Record<SlotKey, Candidate[]>;
+    const withBonus = applySetBonus(slotCandidates, paletteBySlot);
 
-    const slots: Record<FourSlot, Candidate[]> = {
-      coiffe: [],
-      cape: [],
-      bouclier: [],
-      familier: [],
-    };
-    const confidence: Record<FourSlot, number> = {
-      coiffe: 0,
-      cape: 0,
-      bouclier: 0,
-      familier: 0,
-    };
+    const slots = Object.fromEntries(SLOTS.map((slot) => [slot, [] as Candidate[]])) as Record<SlotKey, Candidate[]>;
+    const confidence = Object.fromEntries(SLOTS.map((slot) => [slot, 0])) as Record<SlotKey, number>;
     const notes: string[] = [];
 
     for (const slot of SLOTS) {

@@ -2,7 +2,7 @@ import { ITEM_THRESH, K, SUGGESTION_COUNT, WEIGHTS_ITEM } from "../config/sugges
 import { clipEmbedding, edgeSSIM, orbMatch, poseAlign, silhouetteChamfer } from "../vision/features";
 import { queryIndex } from "./indexStore";
 import { renderCandidateTemplate } from "./templateImage";
-import type { Candidate, FourSlot, ImageDataLike } from "../types";
+import type { Candidate, ImageDataLike, SlotKey } from "../types";
 
 function cosineSimilarity(a: number[], b: number[]): number {
   const length = Math.min(a.length, b.length);
@@ -31,7 +31,7 @@ function limitCandidates<T>(candidates: T[]): T[] {
  * Returns only verified candidates that satisfied all structural thresholds.
  */
 export async function itemModeSuggest(
-  slot: FourSlot,
+  slot: SlotKey,
   patch: ImageDataLike,
   k: number = K.retrieval,
 ): Promise<Candidate[]> {
