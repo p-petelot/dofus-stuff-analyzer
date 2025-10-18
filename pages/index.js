@@ -3570,6 +3570,30 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
           <div className="suggestions__header">
             <div className="suggestions__intro">
               <h2>Correspondances Dofus</h2>
+              {proposalCount > 0 ? (
+                <span className="suggestions__headline-count">
+                  Skin {safeActiveProposalIndex + 1} / {proposalCount}
+                </span>
+              ) : null}
+            </div>
+            <div className="suggestions__actions">
+              <button
+                type="button"
+                className={`suggestions__panel-toggle${showDetailedMatches ? " is-open" : ""}`}
+                onClick={toggleDetailedMatches}
+                aria-expanded={showDetailedMatches}
+              >
+                <span>{showDetailedMatches ? "Masquer" : "Correspondances détaillées"}</span>
+                <span className="suggestions__panel-icon" aria-hidden="true" />
+              </button>
+              {itemsLoading ? (
+                <span className="suggestions__inline-status">Mise à jour…</span>
+              ) : null}
+              {itemsError && !showDetailedMatches ? (
+                <span className="suggestions__inline-status suggestions__inline-status--error">
+                  {itemsError}
+                </span>
+              ) : null}
             </div>
           </div>
           {colors.length === 0 ? (
@@ -3589,354 +3613,370 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
           ) : (
             <>
               {proposals.length ? (
-                <div className="skin-carousel" aria-live="polite">
-                  <div className="skin-carousel__controls">
-                    <button
-                      type="button"
-                      className="skin-carousel__nav"
-                      onClick={handlePrevProposal}
-                      disabled={proposalCount <= 1}
-                      aria-label="Skin précédent"
-                    >
-                      <img
-                        src="/icons/arrow-left.svg"
-                        alt=""
-                        className="skin-carousel__nav-icon"
-                        aria-hidden="true"
-                      />
-                    </button>
-                    <div className="skin-carousel__legend" role="presentation">
-                      <span className="skin-carousel__count">
-                        Skin {safeActiveProposalIndex + 1} / {proposalCount}
-                      </span>
-                      {activeProposalSubtitle ? (
-                        <>
-                          <span className="skin-carousel__separator" aria-hidden="true">
-                            •
-                          </span>
-                          <span className="skin-carousel__subtitle">{activeProposalSubtitle}</span>
-                        </>
-                      ) : null}
-                    </div>
-                    <button
-                      type="button"
-                      className="skin-carousel__nav"
-                      onClick={handleNextProposal}
-                      disabled={proposalCount <= 1}
-                      aria-label="Skin suivant"
-                    >
-                      <img
-                        src="/icons/arrow-right.svg"
-                        alt=""
-                        className="skin-carousel__nav-icon"
-                        aria-hidden="true"
-                      />
-                    </button>
-                  </div>
-                  <div className="skin-carousel__viewport">
-                    <div
-                      className="skin-carousel__track"
-                      style={{ transform: `translateX(-${safeActiveProposalIndex * 100}%)` }}
-                    >
-                      {proposals.map((proposal) => {
-                        const primaryColor = proposal.palette[0] ?? "#1f2937";
-                        const canvasBackground = buildGradientFromHex(primaryColor);
-                        const lookPreview = lookPreviews?.[proposal.id];
-                        const lookLoaded =
-                          lookPreview?.status === "loaded" &&
-                          typeof lookPreview?.dataUrl === "string" &&
-                          lookPreview.dataUrl.length > 0;
-                        const lookLoading = lookPreview?.status === "loading";
-                        const lookError =
-                          lookPreview?.status === "error" && lookPreview?.error
-                            ? lookPreview.error
-                            : lookPreview?.status === "error"
-                            ? "Prévisualisation Dofus indisponible"
-                            : null;
-                        const previewSrc = lookLoaded ? lookPreview.dataUrl : null;
-                        const heroSrc = !lookLoaded ? proposal.heroImage ?? null : null;
-                        const previewAlt = `Aperçu généré pour le skin ${proposal.index + 1}`;
-                        return (
-                          <article key={proposal.id} className="skin-card">
-                            <h3 className="sr-only">{`Proposition ${proposal.index + 1}`}</h3>
-                            <div className="skin-card__body">
-                              <div
-                                className="skin-card__canvas"
-                                style={{ backgroundImage: canvasBackground }}
-                              >
-                                <div className="skin-card__render">
-                                  {lookLoading ? (
-                                    <div className="skin-card__loader" role="status" aria-live="polite">
-                                      <span className="skin-card__loader-spinner" aria-hidden="true" />
-                                      <span className="sr-only">Chargement du rendu Dofus…</span>
-                                    </div>
-                                  ) : null}
-                                  {lookError && !lookLoading && !lookLoaded ? (
-                                    <div className="skin-card__status skin-card__status--error">
-                                      {lookError}
-                                    </div>
-                                  ) : null}
-                                  <div className="skin-card__glow" aria-hidden="true" />
-                                  {previewSrc ? (
-                                    <img
-                                      src={previewSrc}
-                                      alt={previewAlt}
-                                      loading="lazy"
-                                      className="skin-card__preview"
-                                      onError={() => handleLookPreviewError(proposal.id)}
-                                    />
-                                  ) : heroSrc ? (
-                                    <img
-                                      src={heroSrc}
-                                      alt={`Aperçu principal de la proposition ${proposal.index + 1}`}
-                                      loading="lazy"
-                                      className="skin-card__hero"
-                                    />
-                                  ) : (
-                                    <div className="skin-card__placeholder" aria-hidden="true">
-                                      Aperçu indisponible
-                                    </div>
-                                  )}
-                                </div>
-                                <ul className="skin-card__equipment" role="list">
-                                  {proposal.items.map((item) => (
-                                    <li key={`${proposal.id}-${item.id}`} className="skin-card__equipment-slot">
-                                      {item.imageUrl ? (
+                <div
+                  className={`suggestions__layout${showDetailedMatches ? " has-panel-open" : ""}`}
+                >
+                  <div className="suggestions__main" aria-live="polite">
+                    <div className="skin-carousel">
+                      <div className="skin-carousel__controls">
+                        <button
+                          type="button"
+                          className="skin-carousel__nav"
+                          onClick={handlePrevProposal}
+                          disabled={proposalCount <= 1}
+                          aria-label="Skin précédent"
+                        >
+                          <img
+                            src="/icons/arrow-left.svg"
+                            alt=""
+                            className="skin-carousel__nav-icon"
+                            aria-hidden="true"
+                          />
+                        </button>
+                        {activeProposalSubtitle ? (
+                          <div className="skin-carousel__legend" role="presentation">
+                            <span className="skin-carousel__subtitle">{activeProposalSubtitle}</span>
+                          </div>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="skin-carousel__nav"
+                          onClick={handleNextProposal}
+                          disabled={proposalCount <= 1}
+                          aria-label="Skin suivant"
+                        >
+                          <img
+                            src="/icons/arrow-right.svg"
+                            alt=""
+                            className="skin-carousel__nav-icon"
+                            aria-hidden="true"
+                          />
+                        </button>
+                      </div>
+                      <div className="skin-carousel__viewport">
+                        <div
+                          className="skin-carousel__track"
+                          style={{ transform: `translateX(-${safeActiveProposalIndex * 100}%)` }}
+                        >
+                          {proposals.map((proposal) => {
+                            const primaryColor = proposal.palette[0] ?? "#1f2937";
+                            const canvasBackground = buildGradientFromHex(primaryColor);
+                            const lookPreview = lookPreviews?.[proposal.id];
+                            const lookLoaded =
+                              lookPreview?.status === "loaded" &&
+                              typeof lookPreview?.dataUrl === "string" &&
+                              lookPreview.dataUrl.length > 0;
+                            const lookLoading = lookPreview?.status === "loading";
+                            const lookError =
+                              lookPreview?.status === "error" && lookPreview?.error
+                                ? lookPreview.error
+                                : lookPreview?.status === "error"
+                                ? "Prévisualisation Dofus indisponible"
+                                : null;
+                            const previewSrc = lookLoaded ? lookPreview.dataUrl : null;
+                            const heroSrc = !lookLoaded ? proposal.heroImage ?? null : null;
+                            const previewAlt = `Aperçu généré pour le skin ${proposal.index + 1}`;
+                            return (
+                              <article key={proposal.id} className="skin-card">
+                                <h3 className="sr-only">{`Proposition ${proposal.index + 1}`}</h3>
+                                <div className="skin-card__body">
+                                  <div
+                                    className="skin-card__canvas"
+                                    style={{ backgroundImage: canvasBackground }}
+                                  >
+                                    <div className="skin-card__render">
+                                      {lookLoading ? (
+                                        <div className="skin-card__loader" role="status" aria-live="polite">
+                                          <span className="skin-card__loader-spinner" aria-hidden="true" />
+                                          <span className="sr-only">Chargement du rendu Dofus…</span>
+                                        </div>
+                                      ) : null}
+                                      {lookError && !lookLoading && !lookLoaded ? (
+                                        <div className="skin-card__status skin-card__status--error">
+                                          {lookError}
+                                        </div>
+                                      ) : null}
+                                      <div className="skin-card__glow" aria-hidden="true" />
+                                      {previewSrc ? (
                                         <img
-                                          src={item.imageUrl}
-                                          alt={`Illustration de ${item.name}`}
+                                          src={previewSrc}
+                                          alt={previewAlt}
                                           loading="lazy"
+                                          className="skin-card__preview"
+                                          onError={() => handleLookPreviewError(proposal.id)}
+                                        />
+                                      ) : heroSrc ? (
+                                        <img
+                                          src={heroSrc}
+                                          alt={`Aperçu principal de la proposition ${proposal.index + 1}`}
+                                          loading="lazy"
+                                          className="skin-card__hero"
                                         />
                                       ) : (
-                                        <span>{ITEM_TYPE_LABELS[item.slotType] ?? item.slotType}</span>
+                                        <div className="skin-card__placeholder" aria-hidden="true">
+                                          Aperçu indisponible
+                                        </div>
                                       )}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                              <div className="skin-card__details">
-                                <ul className="skin-card__swatches" role="list">
-                                  {proposal.palette.length ? (
-                                    proposal.palette.map((hex) => (
-                                      <li key={`${proposal.id}-${hex}`} className="skin-card__swatch">
+                                    </div>
+                                    <ul className="skin-card__equipment" role="list">
+                                      {proposal.items.map((item) => {
+                                        const slotLabel = ITEM_TYPE_LABELS[item.slotType] ?? item.slotType;
+                                        const itemName = item.name ?? slotLabel;
+                                        const altText = item.name
+                                          ? `Illustration de ${item.name}`
+                                          : `Illustration de ${slotLabel}`;
+
+                                        return (
+                                          <li key={`${proposal.id}-${item.id}`} className="skin-card__equipment-slot">
+                                            <div className="skin-card__equipment-trigger" tabIndex={0}>
+                                              {item.imageUrl ? (
+                                                <img
+                                                  src={item.imageUrl}
+                                                  alt={altText}
+                                                  loading="lazy"
+                                                  className="skin-card__equipment-icon"
+                                                />
+                                              ) : (
+                                                <span className="skin-card__equipment-fallback">{slotLabel}</span>
+                                              )}
+                                              <div className="skin-card__tooltip" role="tooltip">
+                                                {item.imageUrl ? (
+                                                  <span className="skin-card__tooltip-thumb" aria-hidden="true">
+                                                    <img src={item.imageUrl} alt="" loading="lazy" />
+                                                  </span>
+                                                ) : null}
+                                                <div className="skin-card__tooltip-body">
+                                                  <span className="skin-card__tooltip-title">{itemName}</span>
+                                                  <span className="skin-card__tooltip-subtitle">{slotLabel}</span>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                  </div>
+                                  <div className="skin-card__details">
+                                    <ul className="skin-card__swatches" role="list">
+                                      {proposal.palette.length ? (
+                                        proposal.palette.map((hex) => (
+                                          <li key={`${proposal.id}-${hex}`} className="skin-card__swatch">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleCopy(hex, { swatch: hex })}
+                                              style={{ backgroundImage: buildGradientFromHex(hex) }}
+                                              className="skin-card__swatch-button"
+                                            >
+                                              <span>{hex}</span>
+                                            </button>
+                                          </li>
+                                        ))
+                                      ) : (
+                                        <li className="skin-card__swatch skin-card__swatch--empty">
+                                          Palette indisponible
+                                        </li>
+                                      )}
+                                    </ul>
+                                    <ul className="skin-card__list" role="list">
+                                      {proposal.items.map((item) => {
+                                        const slotLabel = ITEM_TYPE_LABELS[item.slotType] ?? item.slotType;
+                                        const itemName = item.name ?? slotLabel;
+                                        return (
+                                          <li key={`${proposal.id}-${item.id}-entry`} className="skin-card__list-item">
+                                            <span className="skin-card__list-type">{slotLabel}</span>
+                                            <a
+                                              href={item.url}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="skin-card__list-link"
+                                            >
+                                              {item.imageUrl ? (
+                                                <span className="skin-card__list-thumb" aria-hidden="true">
+                                                  <img src={item.imageUrl} alt="" loading="lazy" />
+                                                </span>
+                                              ) : null}
+                                              <span className="skin-card__list-text">{itemName}</span>
+                                            </a>
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                    <div className="skin-card__actions">
+                                      {lookLoaded ? (
                                         <button
                                           type="button"
-                                          onClick={() => handleCopy(hex, { swatch: hex })}
-                                          style={{ backgroundImage: buildGradientFromHex(hex) }}
-                                          className="skin-card__swatch-button"
+                                          onClick={() => handleDownloadPreview(proposal)}
+                                          className="skin-card__cta"
+                                          disabled={downloadingPreviewId === proposal.id}
+                                          aria-busy={downloadingPreviewId === proposal.id}
                                         >
-                                          <span>{hex}</span>
+                                          {downloadingPreviewId === proposal.id
+                                            ? "Téléchargement…"
+                                            : "Télécharger l'image"}
                                         </button>
-                                      </li>
-                                    ))
-                                  ) : (
-                                    <li className="skin-card__swatch skin-card__swatch--empty">
-                                      Palette indisponible
-                                    </li>
-                                  )}
-                                </ul>
-                                <ul className="skin-card__list" role="list">
-                                  {proposal.items.map((item) => (
-                                    <li key={`${proposal.id}-${item.id}-entry`} className="skin-card__list-item">
-                                      <span className="skin-card__list-type">
-                                        {ITEM_TYPE_LABELS[item.slotType] ?? item.slotType}
-                                      </span>
-                                      <a
-                                        href={item.url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="skin-card__list-link"
-                                      >
-                                        {item.name}
-                                      </a>
-                                    </li>
-                                  ))}
-                                </ul>
-                                <div className="skin-card__actions">
-                                  {lookLoaded ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDownloadPreview(proposal)}
-                                      className="skin-card__cta"
-                                      disabled={downloadingPreviewId === proposal.id}
-                                      aria-busy={downloadingPreviewId === proposal.id}
-                                    >
-                                      {downloadingPreviewId === proposal.id
-                                        ? "Téléchargement…"
-                                        : "Télécharger l'image"}
-                                    </button>
-                                  ) : lookLoading ? (
-                                    <span className="skin-card__cta skin-card__cta--disabled">
-                                      Rendu en cours…
-                                    </span>
-                                  ) : (
-                                    <span className="skin-card__cta skin-card__cta--disabled">
-                                      Rendu indisponible
-                                    </span>
-                                  )}
-                                  {proposal.barbofusLink ? (
-                                    <a
-                                      href={proposal.barbofusLink}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="skin-card__cta"
-                                    >
-                                      Tester sur Barbofus
-                                      <span aria-hidden="true" className="skin-card__cta-icon">
-                                        ↗
-                                      </span>
-                                    </a>
-                                  ) : (
-                                    <span className="skin-card__cta skin-card__cta--disabled">
-                                      Lien Barbofus indisponible
-                                    </span>
-                                  )}
+                                      ) : lookLoading ? (
+                                        <span className="skin-card__cta skin-card__cta--disabled">
+                                          Rendu en cours…
+                                        </span>
+                                      ) : (
+                                        <span className="skin-card__cta skin-card__cta--disabled">
+                                          Rendu indisponible
+                                        </span>
+                                      )}
+                                      {proposal.barbofusLink ? (
+                                        <a
+                                          href={proposal.barbofusLink}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="skin-card__cta"
+                                        >
+                                          Tester sur Barbofus
+                                          <span aria-hidden="true" className="skin-card__cta-icon">
+                                            ↗
+                                          </span>
+                                        </a>
+                                      ) : (
+                                        <span className="skin-card__cta skin-card__cta--disabled">
+                                          Lien Barbofus indisponible
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
-                            </div>
-                          </article>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="skin-carousel__dots" role="tablist" aria-label="Choisir une proposition">
+                        {proposals.map((proposal, index) => (
+                          <button
+                            key={`${proposal.id}-dot`}
+                            type="button"
+                            className={`skin-carousel__dot${index === safeActiveProposalIndex ? " is-active" : ""}`}
+                            onClick={() => handleSelectProposal(index)}
+                            aria-label={`Afficher le skin ${index + 1}`}
+                            aria-pressed={index === safeActiveProposalIndex}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <aside
+                    className={`suggestions__panel${showDetailedMatches ? " is-open" : ""}`}
+                    aria-hidden={!showDetailedMatches}
+                  >
+                    <div className="suggestions__panel-header">
+                      <h3>Correspondances détaillées</h3>
+                      <button
+                        type="button"
+                        className="suggestions__panel-close"
+                        onClick={toggleDetailedMatches}
+                        aria-label="Fermer les correspondances détaillées"
+                      >
+                        <span aria-hidden="true">×</span>
+                      </button>
+                    </div>
+                    {itemsError ? (
+                      <p className="suggestions__status suggestions__status--error suggestions__status--inline">
+                        {itemsError}
+                      </p>
+                    ) : null}
+                    {itemsLoading ? (
+                      <p className="suggestions__status suggestions__status--loading suggestions__status--inline">
+                        Mise à jour des suggestions…
+                      </p>
+                    ) : null}
+                    <div className="suggestions__grid">
+                      {ITEM_TYPES.map((type) => {
+                        const items = recommendations?.[type] ?? [];
+                        return (
+                          <section key={type} className="suggestions__group">
+                            <header className="suggestions__group-header">
+                              <span className="suggestions__group-type">{ITEM_TYPE_LABELS[type] ?? type}</span>
+                              {items.length > 0 ? (
+                                <span className="suggestions__group-badge">Meilleur match</span>
+                              ) : null}
+                            </header>
+                            {items.length === 0 ? (
+                              <p className="suggestions__group-empty">Aucune correspondance probante pour cette teinte.</p>
+                            ) : (
+                              <ul className="suggestions__deck">
+                                {items.map((item) => {
+                                  const hasPalette = item.palette.length > 0;
+                                  const paletteFromImage = item.paletteSource === "image" && hasPalette;
+                                  const notes = [];
+                                  if (!hasPalette) {
+                                    notes.push("Palette non détectée sur l'illustration.");
+                                  } else if (!paletteFromImage) {
+                                    notes.push("Palette estimée à partir des données DofusDB.");
+                                  }
+                                  if (!item.imageUrl) {
+                                    notes.push("Illustration manquante sur DofusDB.");
+                                  }
+
+                                  return (
+                                    <li key={item.id} className="suggestions__card">
+                                      <div className="suggestions__thumb">
+                                        {item.imageUrl ? (
+                                          <img
+                                            src={item.imageUrl}
+                                            alt={`Illustration de ${item.name}`}
+                                            loading="lazy"
+                                          />
+                                        ) : (
+                                          <div className="suggestions__thumb-placeholder" aria-hidden="true">
+                                            Aperçu indisponible
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="suggestions__card-body">
+                                        <a
+                                          href={item.url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="suggestions__title"
+                                        >
+                                          {item.name}
+                                        </a>
+                                        <div
+                                          className={`suggestions__swatches${hasPalette ? "" : " suggestions__swatches--empty"}`}
+                                          aria-hidden={hasPalette}
+                                        >
+                                          {hasPalette ? (
+                                            item.palette.map((hex) => (
+                                              <span
+                                                key={hex}
+                                                className="suggestions__swatch"
+                                                style={{ backgroundColor: hex }}
+                                              />
+                                            ))
+                                          ) : (
+                                            <span className="suggestions__swatch-note">Palette indisponible</span>
+                                          )}
+                                        </div>
+                                        {notes.length ? (
+                                          <div className="suggestions__notes">
+                                            {notes.map((note, index) => (
+                                              <span key={`${item.id}-note-${index}`} className="suggestions__note">
+                                                {note}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+                          </section>
                         );
                       })}
                     </div>
-                  </div>
-                  <div className="skin-carousel__dots" role="tablist" aria-label="Choisir une proposition">
-                    {proposals.map((proposal, index) => (
-                      <button
-                        key={`${proposal.id}-dot`}
-                        type="button"
-                        className={`skin-carousel__dot${index === safeActiveProposalIndex ? " is-active" : ""}`}
-                        onClick={() => handleSelectProposal(index)}
-                        aria-label={`Afficher le skin ${index + 1}`}
-                        aria-pressed={index === safeActiveProposalIndex}
-                      />
-                    ))}
-                  </div>
+                  </aside>
                 </div>
               ) : null}
-              <div className="suggestions__details-toggle">
-                <button
-                  type="button"
-                  className={`suggestions__toggle${showDetailedMatches ? " is-open" : ""}`}
-                  onClick={toggleDetailedMatches}
-                  aria-expanded={showDetailedMatches}
-                >
-                  <span>
-                    {showDetailedMatches
-                      ? "Masquer les correspondances détaillées"
-                      : "Afficher les correspondances détaillées"}
-                  </span>
-                  <span className="suggestions__toggle-icon" aria-hidden="true" />
-                </button>
-                {itemsLoading ? (
-                  <span className="suggestions__inline-status">Mise à jour…</span>
-                ) : null}
-                {itemsError && !showDetailedMatches ? (
-                  <span className="suggestions__inline-status suggestions__inline-status--error">
-                    {itemsError}
-                  </span>
-                ) : null}
-              </div>
-              <div
-                className={`suggestions__details${showDetailedMatches ? " is-visible" : ""}`}
-                hidden={!showDetailedMatches}
-              >
-                {itemsError ? (
-                  <p className="suggestions__status suggestions__status--error suggestions__status--inline">
-                    {itemsError}
-                  </p>
-                ) : null}
-                {itemsLoading ? (
-                  <p className="suggestions__status suggestions__status--loading suggestions__status--inline">
-                    Mise à jour des suggestions…
-                  </p>
-                ) : null}
-                <div className="suggestions__grid">
-                  {ITEM_TYPES.map((type) => {
-                    const items = recommendations?.[type] ?? [];
-                    return (
-                      <section key={type} className="suggestions__group">
-                        <header className="suggestions__group-header">
-                          <span className="suggestions__group-type">{ITEM_TYPE_LABELS[type] ?? type}</span>
-                          {items.length > 0 ? (
-                            <span className="suggestions__group-badge">Meilleur match</span>
-                          ) : null}
-                        </header>
-                        {items.length === 0 ? (
-                          <p className="suggestions__group-empty">Aucune correspondance probante pour cette teinte.</p>
-                        ) : (
-                          <ul className="suggestions__deck">
-                            {items.map((item) => {
-                              const hasPalette = item.palette.length > 0;
-                              const paletteFromImage = item.paletteSource === "image" && hasPalette;
-                              const notes = [];
-                              if (!hasPalette) {
-                                notes.push("Palette non détectée sur l'illustration.");
-                              } else if (!paletteFromImage) {
-                                notes.push("Palette estimée à partir des données DofusDB.");
-                              }
-                              if (!item.imageUrl) {
-                                notes.push("Illustration manquante sur DofusDB.");
-                              }
-
-                              return (
-                                <li key={item.id} className="suggestions__card">
-                                  <div className="suggestions__thumb">
-                                    {item.imageUrl ? (
-                                      <img
-                                        src={item.imageUrl}
-                                        alt={`Illustration de ${item.name}`}
-                                        loading="lazy"
-                                      />
-                                    ) : (
-                                      <div className="suggestions__thumb-placeholder" aria-hidden="true">
-                                        Aperçu indisponible
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="suggestions__card-body">
-                                    <a
-                                      href={item.url}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="suggestions__title"
-                                    >
-                                      {item.name}
-                                    </a>
-                                    <div
-                                      className={`suggestions__swatches${hasPalette ? "" : " suggestions__swatches--empty"}`}
-                                      aria-hidden={hasPalette}
-                                    >
-                                      {hasPalette ? (
-                                        item.palette.map((hex) => (
-                                          <span
-                                            key={hex}
-                                            className="suggestions__swatch"
-                                            style={{ backgroundColor: hex }}
-                                          />
-                                        ))
-                                      ) : (
-                                        <span className="suggestions__swatch-note">Palette indisponible</span>
-                                      )}
-                                    </div>
-                                    {notes.length ? (
-                                      <div className="suggestions__notes">
-                                        {notes.map((note, index) => (
-                                          <span key={`${item.id}-note-${index}`} className="suggestions__note">
-                                            {note}
-                                          </span>
-                                        ))}
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        )}
-                      </section>
-                    );
-                  })}
-                </div>
               </div>
             </>
           )}
