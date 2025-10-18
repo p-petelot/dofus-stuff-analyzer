@@ -3567,25 +3567,8 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         </section>
 
         <section className="suggestions">
-          <div className="suggestions__header">
-            <div className="suggestions__intro">
-              <h2>Correspondances Dofus</h2>
-              {proposalCount > 0 ? (
-                <span className="suggestions__headline-count">
-                  Skin {safeActiveProposalIndex + 1} / {proposalCount}
-                </span>
-              ) : null}
-            </div>
-            <div className="suggestions__actions">
-              <button
-                type="button"
-                className={`suggestions__panel-toggle${showDetailedMatches ? " is-open" : ""}`}
-                onClick={toggleDetailedMatches}
-                aria-expanded={showDetailedMatches}
-              >
-                <span>{showDetailedMatches ? "Masquer" : "Correspondances détaillées"}</span>
-                <span className="suggestions__panel-icon" aria-hidden="true" />
-              </button>
+          {itemsLoading || (itemsError && !showDetailedMatches) ? (
+            <div className="suggestions__header">
               {itemsLoading ? (
                 <span className="suggestions__inline-status">Mise à jour…</span>
               ) : null}
@@ -3595,7 +3578,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                 </span>
               ) : null}
             </div>
-          </div>
+          ) : null}
           {colors.length === 0 ? (
             <div className="suggestions__empty">
               <p>Lance une analyse pour découvrir des correspondances Dofus adaptées.</p>
@@ -3617,48 +3600,56 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                   className={`suggestions__layout${showDetailedMatches ? " has-panel-open" : ""}`}
                 >
                   <div className="suggestions__main" aria-live="polite">
-                    <div className="skin-carousel">
-                      <div className="skin-carousel__controls">
-                        <button
-                          type="button"
-                          className="skin-carousel__nav"
-                          onClick={handlePrevProposal}
-                          disabled={proposalCount <= 1}
-                          aria-label="Skin précédent"
-                        >
-                          <img
-                            src="/icons/arrow-left.svg"
-                            alt=""
-                            className="skin-carousel__nav-icon"
-                            aria-hidden="true"
-                          />
-                        </button>
-                        {activeProposalSubtitle ? (
-                          <div className="skin-carousel__legend" role="presentation">
-                            <span className="skin-carousel__subtitle">{activeProposalSubtitle}</span>
-                          </div>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="skin-carousel__nav"
-                          onClick={handleNextProposal}
-                          disabled={proposalCount <= 1}
-                          aria-label="Skin suivant"
-                        >
-                          <img
-                            src="/icons/arrow-right.svg"
-                            alt=""
-                            className="skin-carousel__nav-icon"
-                            aria-hidden="true"
-                          />
-                        </button>
-                      </div>
-                      <div className="skin-carousel__viewport">
-                        <div
-                          className="skin-carousel__track"
-                          style={{ transform: `translateX(-${safeActiveProposalIndex * 100}%)` }}
-                        >
-                          {proposals.map((proposal) => {
+                    <div className="skin-carousel__shell">
+                      <div className="skin-carousel">
+                        <div className="skin-carousel__controls">
+                          <button
+                            type="button"
+                            className="skin-carousel__nav"
+                            onClick={handlePrevProposal}
+                            disabled={proposalCount <= 1}
+                            aria-label="Skin précédent"
+                          >
+                            <img
+                              src="/icons/arrow-left.svg"
+                              alt=""
+                              className="skin-carousel__nav-icon"
+                              aria-hidden="true"
+                            />
+                          </button>
+                          {(activeProposalSubtitle || proposalCount > 0) ? (
+                            <div className="skin-carousel__legend" role="presentation">
+                              {activeProposalSubtitle ? (
+                                <span className="skin-carousel__subtitle">{activeProposalSubtitle}</span>
+                              ) : null}
+                              {proposalCount > 0 ? (
+                                <span className="skin-carousel__count">
+                                  Skin {safeActiveProposalIndex + 1} / {proposalCount}
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="skin-carousel__nav"
+                            onClick={handleNextProposal}
+                            disabled={proposalCount <= 1}
+                            aria-label="Skin suivant"
+                          >
+                            <img
+                              src="/icons/arrow-right.svg"
+                              alt=""
+                              className="skin-carousel__nav-icon"
+                              aria-hidden="true"
+                            />
+                          </button>
+                        </div>
+                        <div className="skin-carousel__viewport">
+                          <div
+                            className="skin-carousel__track"
+                            style={{ transform: `translateX(-${safeActiveProposalIndex * 100}%)` }}
+                          >
+                            {proposals.map((proposal) => {
                             const primaryColor = proposal.palette[0] ?? "#1f2937";
                             const canvasBackground = buildGradientFromHex(primaryColor);
                             const lookPreview = lookPreviews?.[proposal.id];
@@ -3859,7 +3850,17 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                             aria-pressed={index === safeActiveProposalIndex}
                           />
                         ))}
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        className={`suggestions__panel-toggle skin-carousel__panel-toggle${showDetailedMatches ? " is-open" : ""}`}
+                        onClick={toggleDetailedMatches}
+                        aria-expanded={showDetailedMatches}
+                      >
+                        <span>{showDetailedMatches ? "Masquer" : "Correspondances détaillées"}</span>
+                        <span className="suggestions__panel-icon" aria-hidden="true" />
+                      </button>
                     </div>
                   </div>
                   <aside
