@@ -31,6 +31,9 @@ const ITEM_TYPE_CONFIG = {
     requests: [
       { typeIds: [18], skip: 0, limit: 1200 },
       { typeIds: [249], skip: 0, limit: 1200 },
+      { typeIds: [97], skip: 0, limit: 1200 },
+      { typeIds: [196], skip: 0, limit: 1200 },
+      { typeIds: [207], skip: 0, limit: 1200 },
       { typeIds: [121], skip: 0, limit: 1200 },
       { typeIds: [250], skip: 0, limit: 1200 },
     ],

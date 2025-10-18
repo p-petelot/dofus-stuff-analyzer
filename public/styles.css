@@ -1911,6 +1911,10 @@ a {
     width: 100%;
     border-radius: 0;
   }
+
+  .suggestions__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .suggestions__inline-status {
@@ -1957,8 +1961,9 @@ a {
 
 .suggestions__grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 8px;
+  align-items: stretch;
 }
 
 .suggestions__group {
@@ -1969,6 +1974,7 @@ a {
   border-radius: var(--radius-md);
   border: 1px solid rgba(148, 163, 184, 0.18);
   padding: 8px;
+  height: 100%;
 }
 
 .suggestions__group-header {
