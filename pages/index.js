@@ -3247,17 +3247,20 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         <div className={`toast-tray${toast ? " toast-tray--visible" : ""}`} aria-live="polite">
           {toast ? (
             <div className="toast">
-              <span className="toast__icon" aria-hidden="true">✓</span>
-              {toast.swatch ? (
-                <span
-                  className="toast__swatch"
-                  style={{ backgroundImage: buildGradientFromHex(toast.swatch) }}
-                  aria-hidden="true"
-                />
-              ) : null}
-              <div className="toast__body">
-                <span className="toast__title">{toast.label}</span>
-                <span className="toast__value">{toast.value}</span>
+              <span className="toast__glow" aria-hidden="true" />
+              <div className="toast__content">
+                <span className="toast__icon" aria-hidden="true">✓</span>
+                <div className="toast__body">
+                  <span className="toast__title">{toast.label}</span>
+                  <span className="toast__value">{toast.value}</span>
+                </div>
+                {toast.swatch ? (
+                  <span
+                    className="toast__swatch"
+                    style={{ backgroundImage: buildGradientFromHex(toast.swatch) }}
+                    aria-hidden="true"
+                  />
+                ) : null}
               </div>
             </div>
           ) : null}

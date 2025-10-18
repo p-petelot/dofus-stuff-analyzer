@@ -80,57 +80,80 @@ a {
 }
 
 .toast {
-  background: rgba(15, 23, 42, 0.92);
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  border-radius: 14px;
-  padding: 12px 16px;
-  color: var(--text);
-  font-size: 0.9rem;
-  box-shadow: 0 18px 40px -28px rgba(15, 23, 42, 0.85);
-  backdrop-filter: blur(12px);
+  position: relative;
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.45), rgba(139, 92, 246, 0.65));
+  box-shadow:
+    0 25px 60px -34px rgba(15, 23, 42, 0.95),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+
+.toast__glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at top left, rgba(129, 140, 248, 0.72), transparent 58%);
+  filter: blur(28px);
+  opacity: 0.9;
+  transform: scale(1.1);
+}
+
+.toast__content {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  backdrop-filter: blur(14px);
 }
 
 .toast__icon {
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: rgba(52, 211, 153, 0.22);
-  border: 1px solid rgba(16, 185, 129, 0.4);
-  font-size: 0.95rem;
-  color: #34d399;
-}
-
-.toast__swatch {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(45, 212, 191, 0.2), rgba(16, 185, 129, 0.45));
+  color: #5eead4;
+  font-size: 1rem;
   box-shadow:
-    inset 0 0 0 1px rgba(15, 23, 42, 0.32),
-    0 12px 28px -22px rgba(56, 189, 248, 0.75);
-  overflow: hidden;
+    inset 0 0 0 1px rgba(16, 185, 129, 0.35),
+    0 10px 18px -16px rgba(16, 185, 129, 0.8);
 }
 
 .toast__body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .toast__title {
   font-weight: 600;
   font-size: 0.9rem;
+  letter-spacing: -0.01em;
 }
 
 .toast__value {
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   color: rgba(226, 232, 240, 0.7);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.toast__swatch {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  box-shadow:
+    inset 0 0 0 1px rgba(15, 23, 42, 0.28),
+    0 12px 26px -20px rgba(59, 130, 246, 0.8);
+  overflow: hidden;
 }
 
 .hero {
@@ -1989,8 +2012,8 @@ a {
   padding: 0;
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
-  gap: 4px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .suggestions__card {
@@ -2115,14 +2138,15 @@ a {
   }
 
   .toast__swatch {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
   }
 }
 
 @media (max-width: 520px) {
   .suggestions__deck {
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
   }
 
   .suggestions__card {
