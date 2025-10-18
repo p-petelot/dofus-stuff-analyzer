@@ -376,7 +376,11 @@ function normalizeBreedEntry(entry, options = {}) {
     return null;
   }
 
-  const { language = DEFAULT_LANGUAGE, languagePriority = getActiveLocalizationPriority() } = options;
+  const {
+    language = DEFAULT_LANGUAGE,
+    languagePriority = getActiveLocalizationPriority(),
+    translator = translate,
+  } = options;
 
   const id = Number(entry.id);
   if (!Number.isFinite(id)) {
