@@ -2449,6 +2449,13 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
           values.push(normalized);
         };
 
+        if (!useCustomSkinTone && Array.isArray(activeClassDefaults) && activeClassDefaults.length) {
+          const defaultSkin = activeClassDefaults.find((entry) => Number.isFinite(entry));
+          if (defaultSkin !== undefined) {
+            register(defaultSkin);
+          }
+        }
+
         paletteSample.forEach((hex) => {
           const numeric = hexToNumeric(hex);
           if (numeric !== null) {
@@ -2459,7 +2466,12 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         fallbackColorValues.forEach(register);
 
         if (!useCustomSkinTone && Array.isArray(activeClassDefaults) && activeClassDefaults.length) {
-          activeClassDefaults.forEach(register);
+          activeClassDefaults.forEach((value, index) => {
+            if (index === 0) {
+              return;
+            }
+            register(value);
+          });
         }
 
         return values.slice(0, MAX_ITEM_PALETTE_COLORS);
