@@ -658,12 +658,15 @@ const ITEM_TYPE_LABEL_KEYS = {
 };
 
 const BARBOFUS_BASE_URL = "https://barbofus.com/skinator";
-const BARBOFUS_EQUIPMENT_SLOTS = ["6", "7", "8", "9", "10", "11", "12", "13"];
+const BARBOFUS_EQUIPMENT_SLOTS = ["6", "7", "8", "9", "10", "11", "12"];
 const BARBOFUS_SLOT_BY_TYPE = {
   coiffe: "6",
   cape: "7",
   familier: "8",
   bouclier: "9",
+  ailes: "10",
+  epauliere: "11",
+  costume: "12",
 };
 
 const LOOK_PREVIEW_SIZE = 512;
