@@ -1164,9 +1164,9 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: clamp(180px, 70%, 320px);
+  width: clamp(168px, 62%, 288px);
   max-width: 100%;
-  min-height: 220px;
+  min-height: 210px;
   margin: 0 auto;
 }
 
@@ -1182,8 +1182,8 @@ a {
 .skin-card__preview,
 .skin-card__hero {
   position: relative;
-  max-width: 82%;
-  max-height: 220px;
+  max-width: 74%;
+  max-height: 210px;
   width: auto;
   height: auto;
   object-fit: contain;

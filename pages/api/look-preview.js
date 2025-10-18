@@ -1,5 +1,6 @@
 const DOFUS_LOOK_API_URL = "https://api.dofusdb.fr/look";
 const DOFUS_RENDERER_BASE_URL = "https://renderer.dofusdb.fr/kool";
+const SOUFF_RENDERER_ENDPOINT = "https://skin.souff.fr/renderer/";
 const DEFAULT_RENDER_SIZE = 512;
 const DEFAULT_LANG = "fr";
 const MAX_RENDER_SIZE = 2048;
@@ -43,6 +44,17 @@ export function normalizeGender(input) {
   return null;
 }
 
+export function genderToSouffSexCode(gender) {
+  const normalized = normalizeGender(gender);
+  if (normalized === "f") {
+    return 1;
+  }
+  if (normalized === "m") {
+    return 0;
+  }
+  return null;
+}
+
 export function extractItemIdsFromQuery(query) {
   if (!query || typeof query !== "object") {
     return [];
@@ -76,6 +88,36 @@ export function extractItemIdsFromQuery(query) {
 
   const unique = Array.from(new Set(collected)).filter((value) => Number.isFinite(value));
   return unique;
+}
+
+export function extractFaceIdFromQuery(query) {
+  if (!query || typeof query !== "object") {
+    return null;
+  }
+
+  const keys = ["faceId", "head", "headId", "lookId", "face", "head_id"];
+  for (const key of keys) {
+    const value = query[key];
+    if (value == null) {
+      continue;
+    }
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        const parsed = extractFaceIdFromQuery({ [key]: entry });
+        if (Number.isFinite(parsed) && parsed > 0) {
+          return parsed;
+        }
+      }
+      continue;
+    }
+
+    const numeric = Number(String(value).trim());
+    if (Number.isFinite(numeric) && numeric > 0) {
+      return Math.trunc(numeric);
+    }
+  }
+
+  return null;
 }
 
 function parseColorValue(value) {
@@ -188,7 +230,93 @@ async function fetchRendererImage(rendererUrl) {
   };
 }
 
+export function buildSouffLookPayload({
+  breedId,
+  faceId,
+  gender,
+  itemIds,
+  colors,
+}) {
+  if (!Number.isFinite(breedId) || breedId <= 0) {
+    throw new Error("Paramètre breedId invalide");
+  }
+
+  if (!Number.isFinite(faceId) || faceId <= 0) {
+    throw new Error("Paramètre faceId invalide");
+  }
+
+  if (!Array.isArray(itemIds) || itemIds.length === 0) {
+    throw new Error("Au moins un identifiant d'objet est requis");
+  }
+
+  const sex = genderToSouffSexCode(gender);
+  if (sex === null) {
+    throw new Error("Paramètre sexe/gender invalide");
+  }
+
+  const normalizedItems = Array.from(
+    new Set(
+      itemIds
+        .map((value) => (Number.isFinite(value) ? Math.trunc(value) : null))
+        .filter((value) => Number.isFinite(value) && value > 0)
+    )
+  );
+
+  if (!normalizedItems.length) {
+    throw new Error("Au moins un identifiant d'objet valide est requis");
+  }
+
+  const normalizedColors = Array.from(
+    new Set(
+      Array.isArray(colors)
+        ? colors
+            .map((value) => (Number.isFinite(value) ? Math.trunc(value) : null))
+            .filter((value) => Number.isFinite(value) && value >= 0)
+        : []
+    )
+  );
+
+  return {
+    breed: Math.trunc(breedId),
+    head: Math.trunc(faceId),
+    sex,
+    item_id: normalizedItems,
+    colors: normalizedColors,
+  };
+}
+
+async function fetchSouffRenderer(payload) {
+  const response = await fetch(SOUFF_RENDERER_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "image/png",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    const reason = text ? `${response.status} ${response.statusText}: ${text}` : `${response.status}`;
+    throw new Error(`Renderer Souff indisponible (${reason})`);
+  }
+
+  const contentType = response.headers.get("content-type") || "image/png";
+  if (!contentType.includes("image/png")) {
+    const preview = await response.text().catch(() => "");
+    throw new Error(`Réponse inattendue du renderer Souff (${contentType}): ${preview}`);
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  return {
+    base64: buffer.toString("base64"),
+    contentType,
+    byteLength: buffer.byteLength,
+  };
+}
+
 export default async function handler(req, res) {
+  let warnings = [];
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
     res.status(405).json({ error: "Méthode non autorisée" });
@@ -210,6 +338,12 @@ export default async function handler(req, res) {
       return;
     }
 
+    const faceId = extractFaceIdFromQuery(req.query);
+    if (!Number.isFinite(faceId) || faceId <= 0) {
+      res.status(400).json({ error: "Paramètre faceId invalide" });
+      return;
+    }
+
     const itemIds = extractItemIdsFromQuery(req.query);
     const colors = extractColorsFromQuery(req.query);
     if (!itemIds.length) {
@@ -219,6 +353,46 @@ export default async function handler(req, res) {
 
     const resolvedLang = typeof lang === "string" && lang.trim() ? lang.trim() : DEFAULT_LANG;
     const resolvedSize = coercePositiveInteger(size, DEFAULT_RENDER_SIZE);
+
+    const souffPayload = buildSouffLookPayload({
+      breedId: numericBreedId,
+      faceId,
+      gender: normalizedGender,
+      itemIds,
+      colors,
+    });
+
+    warnings = [];
+    const requested = {
+      breedId: numericBreedId,
+      gender: normalizedGender,
+      faceId,
+      itemIds,
+      colors,
+      lang: resolvedLang,
+      size: resolvedSize,
+    };
+
+    try {
+      const { base64, contentType, byteLength } = await fetchSouffRenderer(souffPayload);
+      const dataUrl = `data:${contentType};base64,${base64}`;
+
+      res.status(200).json({
+        requested,
+        renderer: "souff",
+        base64,
+        contentType,
+        byteLength,
+        dataUrl,
+        lookUrl: null,
+        rendererUrl: null,
+        token: null,
+        warnings,
+      });
+      return;
+    } catch (souffError) {
+      warnings.push(souffError instanceof Error ? souffError.message : String(souffError));
+    }
 
     const searchParams = new URLSearchParams();
     searchParams.set("breedId", String(numericBreedId));
@@ -237,13 +411,13 @@ export default async function handler(req, res) {
     if (!lookResponse.ok) {
       res
         .status(lookResponse.status)
-        .json({ error: `L'API look a retourné ${lookResponse.status}` });
+        .json({ error: `L'API look a retourné ${lookResponse.status}`, warnings });
       return;
     }
 
     const token = (await lookResponse.text()).trim();
     if (!token || token.length < 4) {
-      res.status(502).json({ error: "Jeton de rendu invalide" });
+      res.status(502).json({ error: "Jeton de rendu invalide", warnings });
       return;
     }
 
@@ -252,14 +426,7 @@ export default async function handler(req, res) {
     const dataUrl = `data:${contentType};base64,${base64}`;
 
     res.status(200).json({
-      requested: {
-        breedId: numericBreedId,
-        gender: normalizedGender,
-        itemIds,
-        colors,
-        lang: resolvedLang,
-        size: resolvedSize,
-      },
+      requested,
       lookUrl,
       rendererUrl,
       token,
@@ -267,11 +434,14 @@ export default async function handler(req, res) {
       contentType,
       byteLength,
       dataUrl,
+      renderer: "dofusdb",
+      warnings,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    res.status(502).json({ error: message });
+    const payload = warnings.length ? { error: message, warnings } : { error: message };
+    res.status(502).json(payload);
   }
 }
 
-export { DOFUS_LOOK_API_URL, DOFUS_RENDERER_BASE_URL };
+export { DOFUS_LOOK_API_URL, DOFUS_RENDERER_BASE_URL, SOUFF_RENDERER_ENDPOINT };

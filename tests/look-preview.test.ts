@@ -5,6 +5,9 @@ import {
   extractItemIdsFromQuery,
   extractColorsFromQuery,
   normalizeGender,
+  genderToSouffSexCode,
+  extractFaceIdFromQuery,
+  buildSouffLookPayload,
 } from "../pages/api/look-preview";
 
 describe("normalizeGender", () => {
@@ -23,6 +26,22 @@ describe("normalizeGender", () => {
   it("returns null for unknown values", () => {
     expect(normalizeGender("non-binary")).toBeNull();
     expect(normalizeGender(null)).toBeNull();
+  });
+});
+
+describe("genderToSouffSexCode", () => {
+  it("maps male genders to 0", () => {
+    expect(genderToSouffSexCode("male")).toBe(0);
+    expect(genderToSouffSexCode("m")).toBe(0);
+  });
+
+  it("maps female genders to 1", () => {
+    expect(genderToSouffSexCode("female")).toBe(1);
+    expect(genderToSouffSexCode("f")).toBe(1);
+  });
+
+  it("returns null for unknown values", () => {
+    expect(genderToSouffSexCode("?")).toBeNull();
   });
 });
 
@@ -70,6 +89,17 @@ describe("extractColorsFromQuery", () => {
   });
 });
 
+describe("extractFaceIdFromQuery", () => {
+  it("extracts the first valid numeric face id", () => {
+    expect(extractFaceIdFromQuery({ faceId: "105" })).toBe(105);
+    expect(extractFaceIdFromQuery({ head: ["", "73"] })).toBe(73);
+  });
+
+  it("returns null when no valid face id is present", () => {
+    expect(extractFaceIdFromQuery({ faceId: "abc" })).toBeNull();
+  });
+});
+
 describe("buildRendererUrl", () => {
   it("encodes the look token into a renderer URL", () => {
     const token = Buffer.from("deadbeef", "utf8").toString("base64");
@@ -82,5 +112,67 @@ describe("buildRendererUrl", () => {
   it("throws when no token is provided", () => {
     expect(() => buildRendererUrl(""))
       .toThrowError("Jeton de rendu invalide");
+  });
+});
+
+describe("buildSouffLookPayload", () => {
+  it("creates a payload ready for the Souff renderer", () => {
+    const payload = buildSouffLookPayload({
+      breedId: 7,
+      faceId: 105,
+      gender: "f",
+      itemIds: [22258, 8632, 8632, 8644],
+      colors: [0xffffff, 0x123456, "garbage"],
+    });
+
+    expect(payload).toEqual({
+      breed: 7,
+      head: 105,
+      sex: 1,
+      item_id: [22258, 8632, 8644],
+      colors: [0xffffff, 0x123456],
+    });
+  });
+
+  it("throws when required properties are missing", () => {
+    expect(() =>
+      buildSouffLookPayload({
+        breedId: 0,
+        faceId: 10,
+        gender: "m",
+        itemIds: [1],
+        colors: [],
+      })
+    ).toThrowError("Paramètre breedId invalide");
+
+    expect(() =>
+      buildSouffLookPayload({
+        breedId: 7,
+        faceId: null,
+        gender: "m",
+        itemIds: [1],
+        colors: [],
+      })
+    ).toThrowError("Paramètre faceId invalide");
+
+    expect(() =>
+      buildSouffLookPayload({
+        breedId: 7,
+        faceId: 105,
+        gender: "x",
+        itemIds: [1],
+        colors: [],
+      })
+    ).toThrowError("Paramètre sexe/gender invalide");
+
+    expect(() =>
+      buildSouffLookPayload({
+        breedId: 7,
+        faceId: 105,
+        gender: "m",
+        itemIds: [],
+        colors: [],
+      })
+    ).toThrowError("Au moins un identifiant d'objet est requis");
   });
 });

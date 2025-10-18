@@ -2469,6 +2469,10 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       if (Number.isFinite(activeClassId)) {
         keyParts.push(activeClassId);
       }
+      const lookFaceId = Number.isFinite(activeClassFaceId) ? activeClassFaceId : null;
+      if (lookFaceId) {
+        keyParts.push(`head${lookFaceId}`);
+      }
       keyParts.push(lookGenderCode);
       keyParts.push(...lookItemIds);
       lookColors.forEach((value) => {
@@ -2490,6 +2494,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         classIcon: activeBreed?.icon ?? null,
         subtitle: sharedSubtitle,
         lookGender: lookGenderCode,
+        lookFaceId,
         lookItemIds,
         lookColors,
         lookKey,
@@ -2560,7 +2565,8 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         !proposal ||
         !Array.isArray(proposal.lookItemIds) ||
         proposal.lookItemIds.length === 0 ||
-        !Number.isFinite(proposal.classId)
+        !Number.isFinite(proposal.classId) ||
+        !Number.isFinite(proposal.lookFaceId)
       ) {
         return;
       }
@@ -2607,6 +2613,9 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         params.set("gender", proposal.lookGender ?? "m");
         params.set("lang", "fr");
         params.set("size", String(LOOK_PREVIEW_SIZE));
+        if (Number.isFinite(proposal.lookFaceId)) {
+          params.set("faceId", String(Math.trunc(proposal.lookFaceId)));
+        }
         proposal.lookItemIds.forEach((id) => {
           params.append("itemIds[]", String(id));
         });
