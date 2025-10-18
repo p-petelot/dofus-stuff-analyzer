@@ -2532,6 +2532,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     : 0;
   const activeProposalDetails = proposalCount ? proposals[safeActiveProposalIndex] : null;
   const activeProposalSubtitle = activeProposalDetails?.subtitle ?? "";
+  const activeProposalClassIcon = activeProposalDetails?.classIcon ?? null;
 
   useEffect(() => {
     if (!proposalCount) {
@@ -3620,7 +3621,14 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                           {(activeProposalSubtitle || proposalCount > 0) ? (
                             <div className="skin-carousel__legend" role="presentation">
                               {activeProposalSubtitle ? (
-                                <span className="skin-carousel__subtitle">{activeProposalSubtitle}</span>
+                                <span className="skin-carousel__subtitle">
+                                  {activeProposalClassIcon ? (
+                                    <span className="skin-carousel__class-icon" aria-hidden="true">
+                                      <img src={activeProposalClassIcon} alt="" loading="lazy" />
+                                    </span>
+                                  ) : null}
+                                  <span>{activeProposalSubtitle}</span>
+                                </span>
                               ) : null}
                               {proposalCount > 0 ? (
                                 <span className="skin-carousel__count">
@@ -3857,9 +3865,13 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                         className={`suggestions__panel-toggle skin-carousel__panel-toggle${showDetailedMatches ? " is-open" : ""}`}
                         onClick={toggleDetailedMatches}
                         aria-expanded={showDetailedMatches}
+                        aria-label={
+                          showDetailedMatches
+                            ? "Masquer les correspondances détaillées"
+                            : "Afficher les correspondances détaillées"
+                        }
                       >
-                        <span>{showDetailedMatches ? "Masquer" : "Correspondances détaillées"}</span>
-                        <span className="suggestions__panel-icon" aria-hidden="true" />
+                        <span className="skin-carousel__panel-toggle-icon" aria-hidden="true" />
                       </button>
                     </div>
                   </div>
@@ -3976,6 +3988,16 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                       })}
                     </div>
                   </aside>
+                  {showDetailedMatches ? (
+                    <button
+                      type="button"
+                      className="suggestions__panel-backdrop"
+                      onClick={toggleDetailedMatches}
+                      aria-label="Fermer les correspondances détaillées"
+                    >
+                      <span className="sr-only">Fermer les correspondances détaillées</span>
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
             </>
