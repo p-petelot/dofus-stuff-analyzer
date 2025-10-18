@@ -78,6 +78,77 @@ export function extractItemIdsFromQuery(query) {
   return unique;
 }
 
+function parseColorValue(value) {
+  if (value == null) {
+    return null;
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const candidate = parseColorValue(entry);
+      if (candidate !== null) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  const trimmed = String(value).trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (/^#?[0-9a-fA-F]{6}$/.test(trimmed)) {
+    if (trimmed.startsWith("#") || /[a-fA-F]/.test(trimmed)) {
+      const normalized = trimmed.replace(/#/g, "");
+      const numeric = parseInt(normalized, 16);
+      return Number.isFinite(numeric) ? numeric : null;
+    }
+  }
+
+  if (/^0x[0-9a-fA-F]+$/.test(trimmed)) {
+    const numeric = parseInt(trimmed, 16);
+    return Number.isFinite(numeric) ? numeric : null;
+  }
+
+  const numeric = Number(trimmed);
+  if (Number.isFinite(numeric)) {
+    return Math.trunc(numeric);
+  }
+
+  return null;
+}
+
+export function extractColorsFromQuery(query) {
+  if (!query || typeof query !== "object") {
+    return [];
+  }
+
+  const collected = [];
+
+  const register = (value) => {
+    if (value == null) {
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(register);
+      return;
+    }
+
+    const parsed = parseColorValue(value);
+    if (parsed !== null) {
+      collected.push(parsed);
+    }
+  };
+
+  register(query["colors[]"]);
+  register(query.colors);
+  register(query.color);
+  register(query.palette);
+
+  const unique = Array.from(new Set(collected)).filter((value) => Number.isFinite(value));
+  return unique;
+}
+
 export function buildRendererUrl(tokenBase64, size = DEFAULT_RENDER_SIZE) {
   if (!tokenBase64 || typeof tokenBase64 !== "string") {
     throw new Error("Jeton de rendu invalide");
@@ -140,6 +211,7 @@ export default async function handler(req, res) {
     }
 
     const itemIds = extractItemIdsFromQuery(req.query);
+    const colors = extractColorsFromQuery(req.query);
     if (!itemIds.length) {
       res.status(400).json({ error: "Au moins un identifiant d'objet est requis" });
       return;
@@ -154,6 +226,9 @@ export default async function handler(req, res) {
     searchParams.set("lang", resolvedLang);
     itemIds.forEach((id) => {
       searchParams.append("itemIds[]", String(id));
+    });
+    colors.forEach((value) => {
+      searchParams.append("colors[]", String(value));
     });
 
     const lookUrl = `${DOFUS_LOOK_API_URL}?${searchParams.toString()}`;
@@ -181,6 +256,7 @@ export default async function handler(req, res) {
         breedId: numericBreedId,
         gender: normalizedGender,
         itemIds,
+        colors,
         lang: resolvedLang,
         size: resolvedSize,
       },

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildRendererUrl,
   extractItemIdsFromQuery,
+  extractColorsFromQuery,
   normalizeGender,
 } from "../pages/api/look-preview";
 
@@ -44,6 +45,28 @@ describe("extractItemIdsFromQuery", () => {
     });
 
     expect(ids).toEqual([321, 642]);
+  });
+});
+
+describe("extractColorsFromQuery", () => {
+  it("collects numeric color values from different query keys", () => {
+    const colors = extractColorsFromQuery({
+      "colors[]": ["123456", "#ABCDEF"],
+      colors: "0x654321",
+      color: ["not-a-color", "789012"],
+      palette: "#112233",
+    });
+
+    expect(colors).toEqual([123456, 0xabcdef, 0x654321, 789012, 0x112233]);
+  });
+
+  it("deduplicates values and ignores invalid entries", () => {
+    const colors = extractColorsFromQuery({
+      colors: ["#FFFFFF", "#ffffff", ""],
+      palette: "garbage",
+    });
+
+    expect(colors).toEqual([0xffffff]);
   });
 });
 

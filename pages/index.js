@@ -569,6 +569,15 @@ const ITEM_TYPE_LABELS = {
   bouclier: "Bouclier",
 };
 
+const BARBOFUS_BASE_URL = "https://barbofus.com/skinator";
+const BARBOFUS_EQUIPMENT_SLOTS = ["6", "7", "8", "9", "10", "11", "12", "13"];
+const BARBOFUS_SLOT_BY_TYPE = {
+  coiffe: "6",
+  cape: "7",
+  familier: "8",
+  bouclier: "9",
+};
+
 const LOOK_PREVIEW_SIZE = 512;
 const BARBOFUS_FACE_ID_BY_CLASS = Object.freeze({
   1: { male: 1, female: 9 },
@@ -626,6 +635,118 @@ const BARBOFUS_DEFAULT_BREED = Object.freeze({
     colors: EMPTY_BREED_COLORS,
   },
 });
+
+const LZ_KEY_STR_URI_SAFE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-$";
+
+function getUriSafeCharFromInt(value) {
+  return LZ_KEY_STR_URI_SAFE.charAt(value);
+}
+
+function _compress(uncompressed, bitsPerChar, getCharFromInt) {
+  if (uncompressed == null) {
+    return "";
+  }
+
+  let i;
+  const dictionary = Object.create(null);
+  const dictionaryToCreate = Object.create(null);
+  let c = "";
+  let wc = "";
+  let w = "";
+  let enlargeIn = 2;
+  let dictSize = 3;
+  let numBits = 2;
+  const data = [];
+  let data_val = 0;
+  let data_position = 0;
+
+  const pushBits = (value, bits) => {
+    for (i = 0; i < bits; i += 1) {
+      data_val = (data_val << 1) | (value & 1);
+      if (data_position === bitsPerChar - 1) {
+        data_position = 0;
+        data.push(getCharFromInt(data_val));
+        data_val = 0;
+      } else {
+        data_position += 1;
+      }
+      value >>= 1;
+    }
+  };
+
+  const writeDictionaryEntry = (entry) => {
+    if (entry.charCodeAt(0) < 256) {
+      pushBits(0, numBits);
+      pushBits(entry.charCodeAt(0), 8);
+    } else {
+      pushBits(1, numBits);
+      pushBits(entry.charCodeAt(0), 16);
+    }
+    enlargeIn -= 1;
+    if (enlargeIn === 0) {
+      enlargeIn = 1 << numBits;
+      numBits += 1;
+    }
+    delete dictionaryToCreate[entry];
+  };
+
+  for (let ii = 0; ii < uncompressed.length; ii += 1) {
+    c = uncompressed.charAt(ii);
+    if (!Object.prototype.hasOwnProperty.call(dictionary, c)) {
+      dictionary[c] = dictSize;
+      dictSize += 1;
+      dictionaryToCreate[c] = true;
+    }
+    wc = w + c;
+    if (Object.prototype.hasOwnProperty.call(dictionary, wc)) {
+      w = wc;
+    } else {
+      if (Object.prototype.hasOwnProperty.call(dictionaryToCreate, w)) {
+        writeDictionaryEntry(w);
+      } else {
+        pushBits(dictionary[w], numBits);
+      }
+
+      enlargeIn -= 1;
+      if (enlargeIn === 0) {
+        enlargeIn = 1 << numBits;
+        numBits += 1;
+      }
+
+      dictionary[wc] = dictSize;
+      dictSize += 1;
+      w = String(c);
+    }
+  }
+
+  if (w !== "") {
+    if (Object.prototype.hasOwnProperty.call(dictionaryToCreate, w)) {
+      writeDictionaryEntry(w);
+    } else {
+      pushBits(dictionary[w], numBits);
+    }
+  }
+
+  pushBits(2, numBits);
+
+  while (true) {
+    data_val <<= 1;
+    if (data_position === bitsPerChar - 1) {
+      data.push(getCharFromInt(data_val));
+      break;
+    }
+    data_position += 1;
+  }
+
+  return data.join("");
+}
+
+function compressToEncodedURIComponent(input) {
+  if (input == null) {
+    return "";
+  }
+  return _compress(input, 6, getUriSafeCharFromInt);
+}
 function hexToNumeric(hex) {
   const normalized = normalizeColorToHex(hex);
   if (!normalized) {
@@ -633,6 +754,135 @@ function hexToNumeric(hex) {
   }
   const numeric = parseInt(normalized.replace(/#/g, ""), 16);
   return Number.isFinite(numeric) ? numeric : null;
+}
+
+function buildBarbofusLink(
+  items,
+  paletteHexes,
+  fallbackColorValues = [],
+  options = {}
+) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return null;
+  }
+
+  const {
+    useCustomSkinTone = true,
+    classId = BARBOFUS_DEFAULTS.classId,
+    gender = BARBOFUS_DEFAULTS.gender,
+    faceId = BARBOFUS_DEFAULTS.faceId,
+    classDefaults = [],
+  } = options;
+
+  const paletteValues = Array.isArray(paletteHexes)
+    ? paletteHexes
+        .map((hex) => hexToNumeric(hex))
+        .filter((value) => Number.isFinite(value))
+    : [];
+
+  const defaultColorValues = Array.isArray(classDefaults)
+    ? classDefaults.filter((value) => Number.isFinite(value))
+    : [];
+
+  const fallbackValues = Array.isArray(fallbackColorValues)
+    ? fallbackColorValues.filter((value) => Number.isFinite(value))
+    : [];
+
+  const overlayValues = paletteValues.length ? paletteValues : fallbackValues;
+  const initialColors = new Array(MAX_ITEM_PALETTE_COLORS).fill(null);
+
+  if (!useCustomSkinTone && defaultColorValues.length) {
+    const defaultSkin = defaultColorValues.find((value) => Number.isFinite(value));
+    if (defaultSkin !== undefined) {
+      initialColors[0] = defaultSkin;
+    }
+  }
+
+  const startIndex = !useCustomSkinTone && Number.isFinite(initialColors[0]) ? 1 : 0;
+
+  overlayValues.forEach((value) => {
+    if (!Number.isFinite(value)) {
+      return;
+    }
+    if (initialColors.includes(value)) {
+      return;
+    }
+    const targetIndex = initialColors.findIndex((entry, index) => entry === null && index >= startIndex);
+    if (targetIndex !== -1) {
+      initialColors[targetIndex] = value;
+    }
+  });
+
+  if (initialColors.every((value) => value === null) && defaultColorValues.length) {
+    defaultColorValues.forEach((value, index) => {
+      if (index < MAX_ITEM_PALETTE_COLORS && Number.isFinite(value)) {
+        initialColors[index] = value;
+      }
+    });
+  }
+
+  if (useCustomSkinTone && !defaultColorValues.length && !overlayValues.length) {
+    return null;
+  }
+
+  const resolvedColors = initialColors.filter((value) => Number.isFinite(value));
+
+  if (!resolvedColors.length && !useCustomSkinTone) {
+    const defaultSkin = defaultColorValues.length ? defaultColorValues[0] : null;
+    if (defaultSkin !== null) {
+      resolvedColors.push(defaultSkin);
+    }
+  }
+
+  if (!resolvedColors.length) {
+    return null;
+  }
+
+  const equipment = BARBOFUS_EQUIPMENT_SLOTS.reduce((accumulator, slot) => {
+    accumulator[slot] = null;
+    return accumulator;
+  }, {});
+
+  let hasEquipment = false;
+
+  items.forEach((item) => {
+    if (!item) {
+      return;
+    }
+    const slot = BARBOFUS_SLOT_BY_TYPE[item.slotType];
+    if (!slot || !item.ankamaId) {
+      return;
+    }
+    equipment[slot] = item.ankamaId;
+    hasEquipment = true;
+  });
+
+  if (!hasEquipment) {
+    return null;
+  }
+
+  const payload = {
+    1: Number.isFinite(gender) ? gender : BARBOFUS_DEFAULTS.gender,
+    2: Number.isFinite(classId) ? classId : BARBOFUS_DEFAULTS.classId,
+    4: resolvedColors,
+    5: equipment,
+  };
+
+  const resolvedFaceId = Number.isFinite(faceId) ? faceId : null;
+  if (resolvedFaceId !== null) {
+    payload[3] = resolvedFaceId;
+  }
+
+  try {
+    const encoded = compressToEncodedURIComponent(JSON.stringify(payload));
+    if (!encoded) {
+      return null;
+    }
+    return `${BARBOFUS_BASE_URL}?s=${encoded}`;
+  } catch (err) {
+    console.error(err);
+    return null;
+  }
 }
 
 function componentToHex(value) {
@@ -1852,6 +2102,30 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   const activeClassId = typeof activeBreed?.id === "number" ? activeBreed.id : BARBOFUS_DEFAULTS.classId;
   const activeGenderValue = BARBOFUS_GENDER_VALUES[selectedGender] ?? BARBOFUS_DEFAULTS.gender;
   const activeGenderLabel = selectedGender === "male" ? "Homme" : "Femme";
+  const activeClassDefaults = activeGenderConfig?.colors?.numeric ?? [];
+  const fallbackFaceId = Number.isFinite(activeGenderConfig?.faceId)
+    ? activeGenderConfig.faceId
+    : Number.isFinite(activeGenderConfig?.lookId)
+    ? activeGenderConfig.lookId
+    : BARBOFUS_DEFAULTS.faceId;
+  const activeClassFaceId = getBarbofusFaceId(activeClassId, selectedGender, fallbackFaceId);
+
+  const fallbackColorValues = useMemo(() => {
+    if (!colors.length) {
+      return [];
+    }
+    const seen = new Set();
+    const values = [];
+    colors.forEach((entry) => {
+      const candidate = typeof entry === "string" ? entry : entry?.hex;
+      const numeric = hexToNumeric(candidate);
+      if (numeric !== null && !seen.has(numeric)) {
+        seen.add(numeric);
+        values.push(numeric);
+      }
+    });
+    return values;
+  }, [colors]);
 
   const loadBreeds = useCallback(async () => {
     if (typeof fetch !== "function") {
@@ -2151,10 +2425,57 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
 
       const lookGenderCode =
         activeGenderValue === BARBOFUS_GENDER_VALUES.female ? "f" : "m";
-      const lookKey =
-        lookItemIds.length && Number.isFinite(activeClassId)
-          ? [activeClassId, lookGenderCode, ...lookItemIds].join("-")
-          : null;
+      const barbofusLink = buildBarbofusLink(items, paletteSample, fallbackColorValues, {
+        useCustomSkinTone,
+        classId: activeClassId,
+        gender: activeGenderValue,
+        faceId: activeClassFaceId,
+        classDefaults: activeClassDefaults,
+      });
+
+      const lookColors = (() => {
+        const values = [];
+        const seenColors = new Set();
+
+        const register = (value) => {
+          if (!Number.isFinite(value)) {
+            return;
+          }
+          const normalized = Math.trunc(value);
+          if (seenColors.has(normalized)) {
+            return;
+          }
+          seenColors.add(normalized);
+          values.push(normalized);
+        };
+
+        paletteSample.forEach((hex) => {
+          const numeric = hexToNumeric(hex);
+          if (numeric !== null) {
+            register(numeric);
+          }
+        });
+
+        fallbackColorValues.forEach(register);
+
+        if (!useCustomSkinTone && Array.isArray(activeClassDefaults) && activeClassDefaults.length) {
+          activeClassDefaults.forEach(register);
+        }
+
+        return values.slice(0, MAX_ITEM_PALETTE_COLORS);
+      })();
+
+      const keyParts = [];
+      if (Number.isFinite(activeClassId)) {
+        keyParts.push(activeClassId);
+      }
+      keyParts.push(lookGenderCode);
+      keyParts.push(...lookItemIds);
+      lookColors.forEach((value) => {
+        keyParts.push(`c${value}`);
+      });
+
+      const lookKey = keyParts.length ? keyParts.join("-") : null;
 
       combos.push({
         id: `proposal-${index}`,
@@ -2162,6 +2483,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         items,
         palette: paletteSample,
         heroImage: items.find((item) => item.imageUrl)?.imageUrl ?? null,
+        barbofusLink,
         className: activeBreed?.name ?? null,
         classId: Number.isFinite(activeClassId) ? activeClassId : null,
         genderLabel: activeGenderLabel,
@@ -2169,12 +2491,23 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         subtitle: sharedSubtitle,
         lookGender: lookGenderCode,
         lookItemIds,
+        lookColors,
         lookKey,
       });
     }
 
     return combos;
-  }, [activeBreed, activeClassId, activeGenderLabel, activeGenderValue, recommendations]);
+  }, [
+    activeBreed,
+    activeClassDefaults,
+    activeClassFaceId,
+    activeClassId,
+    activeGenderLabel,
+    activeGenderValue,
+    fallbackColorValues,
+    recommendations,
+    useCustomSkinTone,
+  ]);
 
   const proposalCount = proposals.length;
   const safeActiveProposalIndex = proposalCount
@@ -2277,6 +2610,13 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         proposal.lookItemIds.forEach((id) => {
           params.append("itemIds[]", String(id));
         });
+        if (Array.isArray(proposal.lookColors) && proposal.lookColors.length) {
+          proposal.lookColors.slice(0, MAX_ITEM_PALETTE_COLORS).forEach((value) => {
+            if (Number.isFinite(value)) {
+              params.append("colors[]", String(Math.trunc(value)));
+            }
+          });
+        }
 
         const response = await fetch(`/api/look-preview?${params.toString()}`, {
           signal: abortController.signal,
@@ -3303,38 +3643,40 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                 className="skin-card__canvas"
                                 style={{ backgroundImage: canvasBackground }}
                               >
-                                {lookLoading ? (
-                                  <div className="skin-card__loader" role="status" aria-live="polite">
-                                    <span className="skin-card__loader-spinner" aria-hidden="true" />
-                                    <span className="sr-only">Chargement du rendu Dofus…</span>
-                                  </div>
-                                ) : null}
-                                {lookError && !lookLoading && !lookLoaded ? (
-                                  <div className="skin-card__status skin-card__status--error">
-                                    {lookError}
-                                  </div>
-                                ) : null}
-                                <div className="skin-card__glow" aria-hidden="true" />
-                                {previewSrc ? (
-                                  <img
-                                    src={previewSrc}
-                                    alt={previewAlt}
-                                    loading="lazy"
-                                    className="skin-card__preview"
-                                    onError={() => handleLookPreviewError(proposal.id)}
-                                  />
-                                ) : heroSrc ? (
-                                  <img
-                                    src={heroSrc}
-                                    alt={`Aperçu principal de la proposition ${proposal.index + 1}`}
-                                    loading="lazy"
-                                    className="skin-card__hero"
-                                  />
-                                ) : (
-                                  <div className="skin-card__placeholder" aria-hidden="true">
-                                    Aperçu indisponible
-                                  </div>
-                                )}
+                                <div className="skin-card__render">
+                                  {lookLoading ? (
+                                    <div className="skin-card__loader" role="status" aria-live="polite">
+                                      <span className="skin-card__loader-spinner" aria-hidden="true" />
+                                      <span className="sr-only">Chargement du rendu Dofus…</span>
+                                    </div>
+                                  ) : null}
+                                  {lookError && !lookLoading && !lookLoaded ? (
+                                    <div className="skin-card__status skin-card__status--error">
+                                      {lookError}
+                                    </div>
+                                  ) : null}
+                                  <div className="skin-card__glow" aria-hidden="true" />
+                                  {previewSrc ? (
+                                    <img
+                                      src={previewSrc}
+                                      alt={previewAlt}
+                                      loading="lazy"
+                                      className="skin-card__preview"
+                                      onError={() => handleLookPreviewError(proposal.id)}
+                                    />
+                                  ) : heroSrc ? (
+                                    <img
+                                      src={heroSrc}
+                                      alt={`Aperçu principal de la proposition ${proposal.index + 1}`}
+                                      loading="lazy"
+                                      className="skin-card__hero"
+                                    />
+                                  ) : (
+                                    <div className="skin-card__placeholder" aria-hidden="true">
+                                      Aperçu indisponible
+                                    </div>
+                                  )}
+                                </div>
                                 <ul className="skin-card__equipment" role="list">
                                   {proposal.items.map((item) => (
                                     <li key={`${proposal.id}-${item.id}`} className="skin-card__equipment-slot">
@@ -3409,6 +3751,23 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                   ) : (
                                     <span className="skin-card__cta skin-card__cta--disabled">
                                       Rendu indisponible
+                                    </span>
+                                  )}
+                                  {proposal.barbofusLink ? (
+                                    <a
+                                      href={proposal.barbofusLink}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="skin-card__cta"
+                                    >
+                                      Tester sur Barbofus
+                                      <span aria-hidden="true" className="skin-card__cta-icon">
+                                        ↗
+                                      </span>
+                                    </a>
+                                  ) : (
+                                    <span className="skin-card__cta skin-card__cta--disabled">
+                                      Lien Barbofus indisponible
                                     </span>
                                   )}
                                 </div>
