@@ -1052,6 +1052,7 @@ a {
   display: flex;
   align-items: stretch;
   gap: 4px;
+  position: relative;
 }
 
 .skin-carousel__shell .skin-carousel {
@@ -1145,40 +1146,44 @@ a {
 
 .skin-carousel__legend {
   flex: 1;
+  min-width: 0;
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   text-align: center;
 }
 
 .skin-carousel__count {
-  font-size: 0.82rem;
-  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: rgba(226, 232, 240, 0.78);
   font-weight: 600;
 }
 
-.skin-carousel__separator {
-  font-size: 0.9rem;
-  color: rgba(148, 163, 184, 0.5);
+.skin-carousel__divider {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(148, 163, 184, 0.5);
+  display: inline-block;
 }
 
 .skin-carousel__subtitle {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.82rem;
+  gap: 6px;
+  font-size: 0.78rem;
   letter-spacing: 0.04em;
   text-transform: none;
   color: rgba(148, 163, 184, 0.92);
 }
 
 .skin-carousel__class-icon {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 12px;
   background: rgba(15, 23, 42, 0.58);
   border: 1px solid rgba(148, 163, 184, 0.2);
@@ -1196,10 +1201,20 @@ a {
 @media (max-width: 960px) {
   .skin-carousel__shell {
     flex-direction: column;
+    padding-right: 58px;
   }
 
   .skin-carousel__panel-toggle {
-    align-self: stretch;
+    position: absolute;
+    top: 50%;
+    right: 14px;
+    width: 42px;
+    height: 42px;
+    margin: 0;
+    margin-top: -21px;
+    align-self: center;
+    border-radius: 50%;
+    box-shadow: 0 8px 18px -12px rgba(15, 23, 42, 0.88);
   }
 }
 
@@ -1919,8 +1934,8 @@ a {
 
 .suggestions__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
 }
 
 .suggestions__group {

@@ -3630,6 +3630,9 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                   <span>{activeProposalSubtitle}</span>
                                 </span>
                               ) : null}
+                              {activeProposalSubtitle && proposalCount > 0 ? (
+                                <span className="skin-carousel__divider" aria-hidden="true" />
+                              ) : null}
                               {proposalCount > 0 ? (
                                 <span className="skin-carousel__count">
                                   Skin {safeActiveProposalIndex + 1} / {proposalCount}
