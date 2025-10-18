@@ -570,6 +570,8 @@ const ITEM_TYPE_LABELS = {
   bouclier: "Bouclier",
 };
 
+const LOOK_PREVIEW_SIZE = 512;
+
 const BARBOFUS_BASE_URL = "https://barbofus.com/skinator";
 const BARBOFUS_RENDER_PROXY = "/api/skin-preview";
 const BARBOFUS_FACE_ID_BY_CLASS = Object.freeze({
@@ -2053,6 +2055,8 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   const [selectedColor, setSelectedColor] = useState("#8B5CF6");
   const [activeProposal, setActiveProposal] = useState(0);
   const [previewErrors, setPreviewErrors] = useState({});
+  const [lookPreviews, setLookPreviews] = useState({});
+  const lookPreviewsRef = useRef({});
   const [downloadingPreviewId, setDownloadingPreviewId] = useState(null);
   const [useCustomSkinTone, setUseCustomSkinTone] = useState(false);
   const [showDetailedMatches, setShowDetailedMatches] = useState(false);
@@ -2439,6 +2443,21 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         ? previewSources.filter((value) => typeof value === "string" && value.length > 0)
         : [];
 
+      const lookItemIds = Array.from(
+        new Set(
+          items
+            .map((item) => (Number.isFinite(item.ankamaId) ? Math.trunc(item.ankamaId) : null))
+            .filter((value) => Number.isFinite(value))
+        )
+      ).sort((a, b) => a - b);
+
+      const lookGenderCode =
+        activeGenderValue === BARBOFUS_GENDER_VALUES.female ? "f" : "m";
+      const lookKey =
+        lookItemIds.length && Number.isFinite(activeClassId)
+          ? [activeClassId, lookGenderCode, ...lookItemIds].join("-")
+          : null;
+
       combos.push({
         id: `proposal-${index}`,
         index,
@@ -2449,9 +2468,13 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         barbofusPreview: normalizedPreviewSources[0] ?? barbofusPreview ?? null,
         barbofusPreviewSources: normalizedPreviewSources,
         className: activeBreed?.name ?? null,
+        classId: Number.isFinite(activeClassId) ? activeClassId : null,
         genderLabel: activeGenderLabel,
         classIcon: activeBreed?.icon ?? null,
         subtitle: sharedSubtitle,
+        lookGender: lookGenderCode,
+        lookItemIds,
+        lookKey,
       });
     }
 
@@ -2507,6 +2530,169 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     setPreviewErrors({});
   }, [proposals]);
 
+  useEffect(() => {
+    lookPreviewsRef.current = lookPreviews;
+  }, [lookPreviews]);
+
+  useEffect(() => {
+    if (!proposals.length) {
+      setLookPreviews({});
+      lookPreviewsRef.current = {};
+      return;
+    }
+
+    const activeIds = new Set(proposals.map((proposal) => proposal.id));
+    setLookPreviews((previous = {}) => {
+      const entries = Object.entries(previous).filter(([key]) => activeIds.has(key));
+      if (entries.length === Object.keys(previous).length) {
+        lookPreviewsRef.current = previous;
+        return previous;
+      }
+      const next = Object.fromEntries(entries);
+      lookPreviewsRef.current = next;
+      return next;
+    });
+
+    const abortController = new AbortController();
+    let cancelled = false;
+
+    const loadPreview = async (proposal) => {
+      if (
+        !proposal ||
+        !Array.isArray(proposal.lookItemIds) ||
+        proposal.lookItemIds.length === 0 ||
+        !Number.isFinite(proposal.classId)
+      ) {
+        return;
+      }
+
+      const existing = lookPreviewsRef.current?.[proposal.id];
+      if (
+        existing &&
+        existing.lookKey === proposal.lookKey &&
+        (existing.status === "loaded" || existing.status === "loading")
+      ) {
+        return;
+      }
+
+      setLookPreviews((previous = {}) => {
+        const entry = previous[proposal.id];
+        if (
+          entry &&
+          entry.lookKey === proposal.lookKey &&
+          (entry.status === "loaded" || entry.status === "loading")
+        ) {
+          return previous;
+        }
+
+        const next = {
+          ...previous,
+          [proposal.id]: {
+            lookKey: proposal.lookKey,
+            status: "loading",
+            dataUrl: entry?.dataUrl ?? null,
+            rendererUrl: entry?.rendererUrl ?? null,
+            base64: entry?.base64 ?? null,
+            contentType: entry?.contentType ?? null,
+            byteLength: entry?.byteLength ?? null,
+            error: null,
+          },
+        };
+        lookPreviewsRef.current = next;
+        return next;
+      });
+
+      try {
+        const params = new URLSearchParams();
+        params.set("breedId", String(proposal.classId));
+        params.set("gender", proposal.lookGender ?? "m");
+        params.set("lang", "fr");
+        params.set("size", String(LOOK_PREVIEW_SIZE));
+        proposal.lookItemIds.forEach((id) => {
+          params.append("itemIds[]", String(id));
+        });
+
+        const response = await fetch(`/api/look-preview?${params.toString()}`, {
+          signal: abortController.signal,
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          const message = payload?.error ?? `HTTP ${response.status}`;
+          throw new Error(message);
+        }
+
+        const payload = await response.json();
+        if (cancelled) {
+          return;
+        }
+
+        const contentType = payload?.contentType ?? "image/png";
+        const base64 = payload?.base64 ?? null;
+        const rendererUrl = payload?.rendererUrl ?? null;
+        const byteLength =
+          typeof payload?.byteLength === "number" && Number.isFinite(payload.byteLength)
+            ? payload.byteLength
+            : null;
+        const dataUrl =
+          payload?.dataUrl ??
+          (base64 ? `data:${contentType};base64,${base64}` : rendererUrl ?? null);
+
+        setLookPreviews((previous = {}) => {
+          if (cancelled) {
+            return previous;
+          }
+
+          const next = {
+            ...previous,
+            [proposal.id]: {
+              lookKey: proposal.lookKey,
+              status: dataUrl ? "loaded" : "error",
+              dataUrl,
+              rendererUrl,
+              base64,
+              contentType,
+              byteLength,
+              error: dataUrl ? null : payload?.error ?? "Prévisualisation indisponible",
+            },
+          };
+          lookPreviewsRef.current = next;
+          return next;
+        });
+      } catch (error) {
+        if (cancelled || error?.name === "AbortError") {
+          return;
+        }
+
+        setLookPreviews((previous = {}) => {
+          const next = {
+            ...previous,
+            [proposal.id]: {
+              lookKey: proposal.lookKey,
+              status: "error",
+              dataUrl: null,
+              rendererUrl: null,
+              base64: null,
+              contentType: null,
+              byteLength: null,
+              error: error?.message ?? "Prévisualisation indisponible",
+            },
+          };
+          lookPreviewsRef.current = next;
+          return next;
+        });
+      }
+    };
+
+    proposals.forEach((proposal) => {
+      void loadPreview(proposal);
+    });
+
+    return () => {
+      cancelled = true;
+      abortController.abort();
+    };
+  }, [proposals]);
+
   const handleNextProposal = useCallback(() => {
     if (!proposalCount) {
       return;
@@ -2531,11 +2717,35 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     [proposalCount]
   );
 
-  const handlePreviewFallback = useCallback((id) => {
+  const handlePreviewFallback = useCallback((id, options = {}) => {
     if (!id) {
       return;
     }
-    setPreviewErrors((previous) => {
+
+    const { lookFailed = false } = options;
+
+    if (lookFailed) {
+      setLookPreviews((previous = {}) => {
+        const entry = previous[id];
+        if (!entry || entry.status === "error") {
+          return previous;
+        }
+
+        const nextEntry = {
+          ...entry,
+          status: "error",
+          dataUrl: null,
+          base64: entry?.base64 ?? null,
+          error: entry?.error ?? "Impossible de charger l'aperçu Dofus",
+        };
+
+        const next = { ...previous, [id]: nextEntry };
+        lookPreviewsRef.current = next;
+        return next;
+      });
+    }
+
+    setPreviewErrors((previous = {}) => {
       const nextIndex = (previous?.[id] ?? 0) + 1;
       return { ...previous, [id]: nextIndex };
     });
@@ -2546,41 +2756,78 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       return;
     }
 
+    const lookPreview = lookPreviews?.[proposal.id];
+    const hasLookPreview =
+      lookPreview?.status === "loaded" &&
+      typeof lookPreview?.dataUrl === "string" &&
+      lookPreview.dataUrl.length > 0;
+
     const sources = Array.isArray(proposal.barbofusPreviewSources)
       ? proposal.barbofusPreviewSources
       : proposal.barbofusPreview
         ? [proposal.barbofusPreview]
         : [];
 
-    if (!sources.length) {
+    if (!hasLookPreview && !sources.length) {
       return;
     }
 
-    const source = sources[0];
+    const resolveExtension = (type) => {
+      if (!type || typeof type !== "string") {
+        return "png";
+      }
+      const normalized = type.toLowerCase();
+      if (normalized.includes("png")) return "png";
+      if (normalized.includes("jpeg") || normalized.includes("jpg")) return "jpg";
+      if (normalized.includes("gif")) return "gif";
+      if (normalized.includes("bmp")) return "bmp";
+      if (normalized.includes("webp")) return "webp";
+      return "png";
+    };
 
     try {
       setDownloadingPreviewId(proposal.id);
+
+      const fallbackName = `skin-${proposal.index + 1}`;
+      const baseName = slugify(proposal.className ?? fallbackName) || fallbackName;
+
+      if (hasLookPreview) {
+        const response = await fetch(lookPreview.dataUrl);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const responseType = response.headers.get("content-type");
+        const contentType = lookPreview.contentType ?? responseType ?? "image/png";
+        const blob = await response.blob();
+        const extension = resolveExtension(contentType);
+        const url = URL.createObjectURL(blob);
+        const filename = `${baseName}.${extension}`;
+
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        return;
+      }
+
+      if (!sources.length) {
+        throw new Error("Aucun aperçu disponible");
+      }
+
+      const source = sources[0];
       const response = await fetch(source);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
 
       const contentType = response.headers.get("content-type") ?? "image/webp";
-      const extension = contentType.includes("png")
-        ? "png"
-        : contentType.includes("jpeg") || contentType.includes("jpg")
-        ? "jpg"
-        : contentType.includes("gif")
-        ? "gif"
-        : contentType.includes("bmp")
-        ? "bmp"
-        : "webp";
-
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
-
-      const fallbackName = `skin-${proposal.index + 1}`;
-      const baseName = slugify(proposal.className ?? fallbackName) || fallbackName;
+      const extension = resolveExtension(contentType);
       const filename = `${baseName}.${extension}`;
 
       const link = document.createElement("a");
@@ -2591,11 +2838,11 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (error) {
-      console.error("Unable to download Barbofus preview:", error);
+      console.error("Unable to download preview:", error);
     } finally {
       setDownloadingPreviewId(null);
     }
-  }, []);
+  }, [lookPreviews]);
 
   const toggleDetailedMatches = useCallback(() => {
     setShowDetailedMatches((previous) => !previous);
@@ -3411,11 +3658,27 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                           : proposal.barbofusPreview
                           ? [proposal.barbofusPreview]
                           : [];
+                        const lookPreview = lookPreviews?.[proposal.id];
+                        const lookLoaded =
+                          lookPreview?.status === "loaded" &&
+                          typeof lookPreview?.dataUrl === "string" &&
+                          lookPreview.dataUrl.length > 0;
+                        const lookLoading = lookPreview?.status === "loading";
+                        const lookError =
+                          lookPreview?.status === "error" && lookPreview?.error
+                            ? lookPreview.error
+                            : lookPreview?.status === "error"
+                            ? "Prévisualisation Dofus indisponible"
+                            : null;
+                        const candidateSources = [
+                          ...(lookLoaded ? [lookPreview.dataUrl] : []),
+                          ...previewSources,
+                        ];
                         const previewIndex = previewErrors?.[proposal.id] ?? 0;
-                        const previewFailed = previewIndex >= previewSources.length;
-                        const previewSrc = !previewFailed ? previewSources[previewIndex] ?? null : null;
-                        const hasBarbofusPreview = Boolean(previewSrc);
-                        const previewAlt = `Aperçu Barbofus du skin ${proposal.index + 1}`;
+                        const previewFailed = previewIndex >= candidateSources.length;
+                        const previewSrc = !previewFailed ? candidateSources[previewIndex] ?? null : null;
+                        const previewAlt = `Aperçu généré pour le skin ${proposal.index + 1}`;
+                        const activeLookCandidate = lookLoaded && previewIndex === 0;
                         return (
                           <article key={proposal.id} className="skin-card">
                             <h3 className="sr-only">{`Proposition ${proposal.index + 1}`}</h3>
@@ -3424,14 +3687,28 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                 className="skin-card__canvas"
                                 style={{ backgroundImage: canvasBackground }}
                               >
+                                {lookLoading ? (
+                                  <div className="skin-card__status skin-card__status--loading">
+                                    Génération du rendu Dofus…
+                                  </div>
+                                ) : null}
+                                {lookError && !lookLoading && !lookLoaded ? (
+                                  <div className="skin-card__status skin-card__status--error">
+                                    {lookError}
+                                  </div>
+                                ) : null}
                                 <div className="skin-card__glow" aria-hidden="true" />
-                                {hasBarbofusPreview ? (
+                                {previewSrc ? (
                                   <img
                                     src={previewSrc}
                                     alt={previewAlt}
                                     loading="lazy"
                                     className="skin-card__preview"
-                                    onError={() => handlePreviewFallback(proposal.id)}
+                                    onError={() =>
+                                      handlePreviewFallback(proposal.id, {
+                                        lookFailed: activeLookCandidate,
+                                      })
+                                    }
                                   />
                                 ) : proposal.heroImage ? (
                                   <img
