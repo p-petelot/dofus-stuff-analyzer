@@ -62,6 +62,11 @@ FAMILIER_FILTERS.forEach((filter) => {
   });
 });
 
+const ITEM_FLAG_FILTERS = Object.freeze([
+  { key: "colorable", labelKey: "items.filters.colorable", flagKey: "isColorable" },
+  { key: "cosmetic", labelKey: "items.filters.cosmetic", flagKey: "isCosmetic" },
+]);
+
 const ITEM_TYPE_CONFIG = {
   coiffe: {
     requests: [
@@ -2442,6 +2447,12 @@ export default function Home({ initialBreeds = [] }) {
       return accumulator;
     }, {})
   );
+  const [itemFlagFilters, setItemFlagFilters] = useState(() =>
+    ITEM_FLAG_FILTERS.reduce((accumulator, filter) => {
+      accumulator[filter.key] = true;
+      return accumulator;
+    }, {})
+  );
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [inputMode, setInputMode] = useState("image");
   const [selectedColor, setSelectedColor] = useState(null);
@@ -2497,6 +2508,17 @@ export default function Home({ initialBreeds = [] }) {
     }
 
     setFamilierFilters((previous) => ({
+      ...previous,
+      [key]: !previous[key],
+    }));
+  }, []);
+
+  const handleItemFlagFilterToggle = useCallback((key) => {
+    if (!ITEM_FLAG_FILTERS.some((filter) => filter.key === key)) {
+      return;
+    }
+
+    setItemFlagFilters((previous) => ({
       ...previous,
       [key]: !previous[key],
     }));
@@ -2782,6 +2804,24 @@ export default function Home({ initialBreeds = [] }) {
     return ITEM_TYPES.reduce((accumulator, type) => {
       let catalogItems = itemsCatalog[type] ?? [];
 
+      if (catalogItems.length) {
+        catalogItems = catalogItems.filter((item) => {
+          if (!item) {
+            return false;
+          }
+
+          if (itemFlagFilters.colorable === false && item.isColorable === true) {
+            return false;
+          }
+
+          if (itemFlagFilters.cosmetic === false && item.isCosmetic === true) {
+            return false;
+          }
+
+          return true;
+        });
+      }
+
       if (type === "familier") {
         const activeFilters = FAMILIER_FILTERS.filter((filter) => familierFilters[filter.key]);
         if (!activeFilters.length) {
@@ -2847,6 +2887,7 @@ export default function Home({ initialBreeds = [] }) {
     imageEdges,
     itemsCatalog,
     familierFilters,
+    itemFlagFilters,
   ]);
 
   useEffect(() => {
@@ -4310,6 +4351,54 @@ export default function Home({ initialBreeds = [] }) {
                 <p className="companion-toggle__empty" role="status">{t("identity.companion.empty")}</p>
               ) : null}
             </div>
+            <div
+              className="identity-card__section"
+              role="group"
+              aria-label={t("aria.itemFlagSection")}
+            >
+              <span className="identity-card__section-title">{t("identity.filters.sectionTitle")}</span>
+              <div
+                className="companion-toggle companion-toggle--item-flags"
+                role="group"
+                aria-label={t("aria.itemFlagFilter")}
+              >
+                {ITEM_FLAG_FILTERS.map((filter) => {
+                  const isActive = itemFlagFilters[filter.key] !== false;
+                  const label = t(filter.labelKey);
+                  const title = isActive
+                    ? t("companions.toggle.hide", { label: label.toLowerCase() })
+                    : t("companions.toggle.show", { label: label.toLowerCase() });
+
+                  return (
+                    <button
+                      key={filter.key}
+                      type="button"
+                      className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
+                      onClick={() => handleItemFlagFilterToggle(filter.key)}
+                      aria-pressed={isActive}
+                      title={title}
+                    >
+                      <span className="companion-toggle__indicator" aria-hidden="true">
+                        {isActive ? (
+                          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                              d="M5 10.5 8.2 13.7 15 6.5"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        ) : (
+                          <span className="companion-toggle__dot" />
+                        )}
+                      </span>
+                      <span className="companion-toggle__label">{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -4798,8 +4887,6 @@ export default function Home({ initialBreeds = [] }) {
                                   const notes = [];
                                   const typeLabel =
                                     ITEM_TYPE_LABEL_KEYS[type] ? t(ITEM_TYPE_LABEL_KEYS[type]) : type;
-                                  const flagEntries = buildItemFlags(item, t);
-                                  const flagSummary = flagEntries.map((flag) => flag.label).join(", ");
                                   const isColorable = item.isColorable === true;
                                   const thumbClasses = ["suggestions__thumb"];
                                   if (isColorable) {
@@ -4839,9 +4926,6 @@ export default function Home({ initialBreeds = [] }) {
                                           >
                                             {item.name}
                                           </a>
-                                          {flagEntries.length ? (
-                                            <span className="suggestions__card-flags">{flagSummary}</span>
-                                          ) : null}
                                         </div>
                                         <div
                                           className={`suggestions__swatches${hasPalette ? "" : " suggestions__swatches--empty"}`}
