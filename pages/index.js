@@ -2842,18 +2842,43 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         if (!pool.length) {
           return null;
         }
+
         const selections = Array.isArray(proposalItemIndexes?.[type]) ? proposalItemIndexes[type] : [];
         const selectionIndex = selections[index];
-        const poolIndex =
+        const fallbackIndex =
           Number.isFinite(selectionIndex) && selectionIndex >= 0 && selectionIndex < pool.length
             ? selectionIndex
             : index;
-        const pick = pool[poolIndex] ?? pool[0];
+
+        let pick = null;
+        if (pool.length) {
+          const startIndex = Math.min(pool.length - 1, Math.max(0, fallbackIndex));
+          for (let offset = 0; offset < pool.length; offset += 1) {
+            const candidate = pool[(startIndex + offset) % pool.length];
+            if (!candidate) {
+              continue;
+            }
+            if (Number.isFinite(candidate.ankamaId)) {
+              pick = candidate;
+              break;
+            }
+            if (!pick) {
+              pick = candidate;
+            }
+          }
+        }
+
         if (!pick) {
           return null;
         }
+
         return { ...pick, slotType: type };
       }).filter(Boolean);
+
+      const hasRenderableEquipment = items.some((item) => Number.isFinite(item.ankamaId));
+      if (!hasRenderableEquipment) {
+        continue;
+      }
 
       if (!items.length) {
         continue;

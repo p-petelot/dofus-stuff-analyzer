@@ -2096,7 +2096,7 @@ a {
   top: 0;
   right: 0;
   bottom: 0;
-  width: min(420px, 90vw);
+  width: min(520px, 92vw);
   display: flex;
   flex-direction: column;
   gap: 12px;
