@@ -655,6 +655,89 @@ function buildEncyclopediaUrl(item, fallbackId, language = DEFAULT_LANGUAGE) {
   return `https://dofusdb.fr/${normalized}/database/object/${ankamaId}`;
 }
 
+function normalizeBooleanFlag(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined) {
+      continue;
+    }
+
+    if (typeof value === "boolean") {
+      return value;
+    }
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+      if (value > 0) {
+        return true;
+      }
+      if (value === 0) {
+        return false;
+      }
+      continue;
+    }
+
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (!normalized) {
+        continue;
+      }
+      if (["true", "1", "yes", "y", "oui", "vrai", "si", "sí", "sim", "ja", "verdadeiro"].includes(normalized)) {
+        return true;
+      }
+      if (["false", "0", "no", "n", "non", "faux", "nao", "não", "nein"].includes(normalized)) {
+        return false;
+      }
+    }
+  }
+
+  return false;
+}
+
+const ITEM_FLAG_CONFIG = {
+  cosmetic: {
+    icon: "/icons/cosmetic.svg",
+    labelKey: "items.flags.cosmetic",
+    fallback: "Cosmetic item",
+  },
+  colorable: {
+    icon: "/icons/colorable.svg",
+    labelKey: "items.flags.colorable",
+    fallback: "Matches character colors",
+  },
+};
+
+function buildItemFlags(item, translator) {
+  if (!item) {
+    return [];
+  }
+
+  const keys = [];
+
+  if (item.isCosmetic === true) {
+    keys.push("cosmetic");
+  }
+
+  if (item.isColorable === true) {
+    keys.push("colorable");
+  }
+
+  return keys
+    .map((key) => {
+      const config = ITEM_FLAG_CONFIG[key];
+      if (!config) {
+        return null;
+      }
+      const label =
+        typeof translator === "function"
+          ? translator(config.labelKey, undefined, config.fallback ?? key)
+          : config.fallback ?? key;
+      if (!label || !config.icon) {
+        return null;
+      }
+      return { key, icon: config.icon, label };
+    })
+    .filter(Boolean);
+}
+
 function normalizeDofusItem(rawItem, type, options = {}) {
   const {
     language = DEFAULT_LANGUAGE,
@@ -687,6 +770,31 @@ function normalizeDofusItem(rawItem, type, options = {}) {
     type === "familier" && rawTypeId != null
       ? FAMILIER_TYPE_ID_TO_FILTER_KEY.get(rawTypeId) ?? null
       : null;
+  const superTypeId = Number.isFinite(Number(rawItem?.type?.superTypeId))
+    ? Number(rawItem.type.superTypeId)
+    : null;
+  const superTypeNameFr =
+    typeof rawItem?.type?.superType?.name?.fr === "string"
+      ? rawItem.type.superType.name.fr.trim().toLowerCase()
+      : null;
+  const superTypeNameEn =
+    typeof rawItem?.type?.superType?.name?.en === "string"
+      ? rawItem.type.superType.name.en.trim().toLowerCase()
+      : null;
+  const isCosmetic = normalizeBooleanFlag(
+    rawItem?.isCosmetic,
+    rawItem?.itemSet?.isCosmetic,
+    superTypeId === 22 ? true : null,
+    superTypeNameFr === "cosmétiques" ? true : null,
+    superTypeNameEn === "cosmetics" ? true : null
+  );
+  const isColorable = normalizeBooleanFlag(
+    rawItem?.isColorable,
+    rawItem?.appearance?.isColorable,
+    rawItem?.type?.isColorable,
+    rawItem?.isDyeable,
+    rawItem?.dyeable
+  );
 
   return {
     id: `${type}-${identifierString}`,
@@ -699,6 +807,8 @@ function normalizeDofusItem(rawItem, type, options = {}) {
     ankamaId,
     typeId: rawTypeId,
     familierCategory,
+    isCosmetic,
+    isColorable,
     signature: null,
     shape: null,
     tones: null,
@@ -4366,6 +4476,8 @@ export default function Home({ initialBreeds = [] }) {
                                         });
                                         const rerollDisabled =
                                           (recommendations?.[item.slotType]?.length ?? 0) <= 1;
+                                        const flagEntries = buildItemFlags(item, t);
+                                        const flagSummary = flagEntries.map((flag) => flag.label).join(", ");
 
                                         return (
                                           <li key={`${proposal.id}-${item.id}`} className="skin-card__equipment-slot">
@@ -4380,6 +4492,23 @@ export default function Home({ initialBreeds = [] }) {
                                               ) : (
                                                 <span className="skin-card__equipment-fallback">{slotLabel}</span>
                                               )}
+                                              {flagEntries.length ? (
+                                                <span
+                                                  className="item-flags item-flags--overlay"
+                                                  role="img"
+                                                  aria-label={flagSummary}
+                                                  title={flagSummary}
+                                                >
+                                                  {flagEntries.map((flag) => (
+                                                    <span
+                                                      key={`${proposal.id}-${item.id}-${flag.key}-equip`}
+                                                      className="item-flag item-flag--overlay"
+                                                    >
+                                                      <img src={flag.icon} alt="" aria-hidden="true" />
+                                                    </span>
+                                                  ))}
+                                                </span>
+                                              ) : null}
                                               <div className="skin-card__tooltip" role="tooltip">
                                                 {item.imageUrl ? (
                                                   <span className="skin-card__tooltip-thumb" aria-hidden="true">
@@ -4389,6 +4518,9 @@ export default function Home({ initialBreeds = [] }) {
                                                 <div className="skin-card__tooltip-body">
                                                   <span className="skin-card__tooltip-title">{itemName}</span>
                                                   <span className="skin-card__tooltip-subtitle">{slotLabel}</span>
+                                                  {flagEntries.length ? (
+                                                    <span className="skin-card__tooltip-flags">{flagSummary}</span>
+                                                  ) : null}
                                                 </div>
                                               </div>
                                             </div>
@@ -4442,6 +4574,8 @@ export default function Home({ initialBreeds = [] }) {
                                         const itemName = item.name ?? slotLabel;
                                         const rerollDisabled =
                                           (recommendations?.[item.slotType]?.length ?? 0) <= 1;
+                                        const flagEntries = buildItemFlags(item, t);
+                                        const flagSummary = flagEntries.map((flag) => flag.label).join(", ");
                                         return (
                                           <li key={`${proposal.id}-${item.id}-entry`} className="skin-card__list-item">
                                             <span className="skin-card__list-type">{slotLabel}</span>
@@ -4458,6 +4592,23 @@ export default function Home({ initialBreeds = [] }) {
                                                   </span>
                                                 ) : null}
                                                 <span className="skin-card__list-text">{itemName}</span>
+                                                {flagEntries.length ? (
+                                                  <span
+                                                    className="item-flags item-flags--compact"
+                                                    role="img"
+                                                    aria-label={flagSummary}
+                                                    title={flagSummary}
+                                                  >
+                                                    {flagEntries.map((flag) => (
+                                                      <span
+                                                        key={`${proposal.id}-${item.id}-${flag.key}-list`}
+                                                        className="item-flag"
+                                                      >
+                                                        <img src={flag.icon} alt="" aria-hidden="true" />
+                                                      </span>
+                                                    ))}
+                                                  </span>
+                                                ) : null}
                                               </a>
                                               <button
                                                 type="button"
@@ -4621,10 +4772,8 @@ export default function Home({ initialBreeds = [] }) {
                                   const notes = [];
                                   const typeLabel =
                                     ITEM_TYPE_LABEL_KEYS[type] ? t(ITEM_TYPE_LABEL_KEYS[type]) : type;
-                                  const typeLabelForAria =
-                                    typeof typeLabel === "string"
-                                      ? typeLabel.toLowerCase()
-                                      : String(typeLabel ?? type);
+                                  const flagEntries = buildItemFlags(item, t);
+                                  const flagSummary = flagEntries.map((flag) => flag.label).join(", ");
                                   if (!hasPalette) {
                                     notes.push(t("errors.paletteMissing"));
                                   } else if (!paletteFromImage) {
@@ -4648,6 +4797,19 @@ export default function Home({ initialBreeds = [] }) {
                                             {t("suggestions.thumb.placeholder")}
                                           </div>
                                         )}
+                                        {flagEntries.length ? (
+                                          <span className="item-flags item-flags--overlay" aria-hidden="true">
+                                            {flagEntries.map((flag) => (
+                                              <span
+                                                key={`${item.id}-${flag.key}-overlay`}
+                                                className="item-flag item-flag--overlay"
+                                                aria-hidden="true"
+                                              >
+                                                <img src={flag.icon} alt="" aria-hidden="true" />
+                                              </span>
+                                            ))}
+                                          </span>
+                                        ) : null}
                                       </div>
                                       <div className="suggestions__card-body">
                                         <div className="suggestions__card-header">
@@ -4659,6 +4821,20 @@ export default function Home({ initialBreeds = [] }) {
                                           >
                                             {item.name}
                                           </a>
+                                          {flagEntries.length ? (
+                                            <span
+                                              className="item-flags item-flags--compact"
+                                              role="img"
+                                              aria-label={flagSummary}
+                                              title={flagSummary}
+                                            >
+                                              {flagEntries.map((flag) => (
+                                                <span key={`${item.id}-${flag.key}-inline`} className="item-flag">
+                                                  <img src={flag.icon} alt="" aria-hidden="true" />
+                                                </span>
+                                              ))}
+                                            </span>
+                                          ) : null}
                                         </div>
                                         <div
                                           className={`suggestions__swatches${hasPalette ? "" : " suggestions__swatches--empty"}`}

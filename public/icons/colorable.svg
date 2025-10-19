@@ -1,0 +1,14 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="12" cy="12" r="10.2" fill="rgba(15, 23, 42, 0.2)"/>
+  <g stroke-width="3.2" stroke-linecap="round" fill="none" transform="rotate(-15 12 12)">
+    <circle cx="12" cy="12" r="8.2" stroke="#F97316" stroke-dasharray="9.42 47.13" stroke-dashoffset="0"/>
+    <circle cx="12" cy="12" r="8.2" stroke="#F43F5E" stroke-dasharray="9.42 47.13" stroke-dashoffset="-9.42"/>
+    <circle cx="12" cy="12" r="8.2" stroke="#EC4899" stroke-dasharray="9.42 47.13" stroke-dashoffset="-18.84"/>
+    <circle cx="12" cy="12" r="8.2" stroke="#8B5CF6" stroke-dasharray="9.42 47.13" stroke-dashoffset="-28.26"/>
+    <circle cx="12" cy="12" r="8.2" stroke="#38BDF8" stroke-dasharray="9.42 47.13" stroke-dashoffset="-37.68"/>
+    <circle cx="12" cy="12" r="8.2" stroke="#10B981" stroke-dasharray="9.42 47.13" stroke-dashoffset="-47.1"/>
+  </g>
+  <circle cx="12" cy="12" r="4" fill="#0EA5E9" opacity="0.18"/>
+  <circle cx="12" cy="12" r="3.2" fill="#111827" stroke="#38BDF8" stroke-width="0.8"/>
+  <circle cx="14.2" cy="9.4" r="1.1" fill="#F8FAFC" opacity="0.6"/>
+</svg>

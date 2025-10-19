@@ -2351,6 +2351,72 @@ a {
   flex: 1 1 auto;
 }
 
+.item-flags {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.item-flag {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(5, 8, 22, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 18px -16px rgba(15, 23, 42, 0.95);
+}
+
+.item-flag img {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.item-flags--compact .item-flag {
+  width: 18px;
+  height: 18px;
+}
+
+.item-flags--compact .item-flag img {
+  width: 12px;
+  height: 12px;
+}
+
+.item-flags--overlay {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  gap: 3px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.item-flag--overlay {
+  width: 18px;
+  height: 18px;
+  background: rgba(5, 8, 22, 0.82);
+  border-color: rgba(148, 163, 184, 0.4);
+  box-shadow: 0 10px 18px -16px rgba(15, 23, 42, 0.95);
+}
+
+.skin-card__list-link .item-flags {
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+
+.skin-card__tooltip-flags {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: rgba(226, 232, 240, 0.72);
+}
+
 .suggestions__swatches {
   display: inline-flex;
   gap: 3px;
