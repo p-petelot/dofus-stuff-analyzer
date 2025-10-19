@@ -1646,6 +1646,26 @@ a {
   text-transform: uppercase;
 }
 
+.skin-card__equipment-trigger--colorable {
+  background:
+    radial-gradient(circle at 18% 22%, rgba(248, 113, 113, 0.36), transparent 56%),
+    radial-gradient(circle at 78% 18%, rgba(245, 158, 11, 0.3), transparent 55%),
+    radial-gradient(circle at 24% 82%, rgba(34, 197, 94, 0.28), transparent 60%),
+    radial-gradient(circle at 82% 78%, rgba(14, 165, 233, 0.34), transparent 58%),
+    rgba(5, 8, 22, 0.7);
+  border-color: rgba(148, 163, 184, 0.4);
+  box-shadow:
+    inset 0 0 0 1px rgba(15, 23, 42, 0.45),
+    0 16px 32px -28px rgba(14, 165, 233, 0.6);
+}
+
+.skin-card__equipment-trigger--colorable:hover,
+.skin-card__equipment-trigger--colorable:focus-visible {
+  box-shadow:
+    inset 0 0 0 1px rgba(15, 23, 42, 0.45),
+    0 22px 36px -24px rgba(14, 165, 233, 0.75);
+}
+
 .skin-card__reroll {
   display: inline-flex;
   align-items: center;
@@ -2320,6 +2340,17 @@ a {
   margin: 0 auto;
 }
 
+.suggestions__thumb--colorable {
+  background:
+    radial-gradient(circle at 18% 22%, rgba(248, 113, 113, 0.34), transparent 55%),
+    radial-gradient(circle at 76% 18%, rgba(245, 158, 11, 0.3), transparent 54%),
+    radial-gradient(circle at 26% 82%, rgba(34, 197, 94, 0.26), transparent 58%),
+    radial-gradient(circle at 84% 78%, rgba(14, 165, 233, 0.34), transparent 58%),
+    rgba(15, 23, 42, 0.62);
+  border-color: rgba(148, 163, 184, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.42);
+}
+
 .suggestions__thumb img {
   width: 100%;
   height: 100%;
@@ -2416,29 +2447,21 @@ a {
 }
 
 .item-flag--overlay img {
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   filter: drop-shadow(0 4px 6px rgba(5, 8, 22, 0.35));
 }
 
 .item-flag--overlay.item-flag--cosmetic {
-  top: -10px;
-  left: -12px;
+  top: -8px;
+  left: -10px;
 }
 
 .item-flag--overlay.item-flag--cosmetic img {
-  transform: rotate(-18deg);
-  transform-origin: 85% 15%;
-}
-
-.item-flag--overlay.item-flag--colorable {
-  bottom: -12px;
-  right: -10px;
-}
-
-.item-flag--overlay.item-flag--colorable img {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
+  transform: rotate(-16deg);
+  transform-origin: 80% 18%;
 }
 
 .skin-card__list-link .item-flags {

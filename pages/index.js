@@ -4484,11 +4484,18 @@ export default function Home({ initialBreeds = [] }) {
                                         const rerollDisabled =
                                           (recommendations?.[item.slotType]?.length ?? 0) <= 1;
                                         const flagEntries = buildItemFlags(item, t);
+                                        const overlayFlags = flagEntries.filter((flag) => flag.key !== "colorable");
                                         const flagSummary = flagEntries.map((flag) => flag.label).join(", ");
+                                        const overlaySummary = overlayFlags.map((flag) => flag.label).join(", ");
+                                        const isColorable = item.isColorable === true;
+                                        const triggerClasses = ["skin-card__equipment-trigger"];
+                                        if (isColorable) {
+                                          triggerClasses.push("skin-card__equipment-trigger--colorable");
+                                        }
 
                                         return (
                                           <li key={`${proposal.id}-${item.id}`} className="skin-card__equipment-slot">
-                                            <div className="skin-card__equipment-trigger" tabIndex={0}>
+                                            <div className={triggerClasses.join(" ")} tabIndex={0}>
                                               {item.imageUrl ? (
                                                 <img
                                                   src={item.imageUrl}
@@ -4499,14 +4506,14 @@ export default function Home({ initialBreeds = [] }) {
                                               ) : (
                                                 <span className="skin-card__equipment-fallback">{slotLabel}</span>
                                               )}
-                                              {flagEntries.length ? (
+                                              {overlayFlags.length ? (
                                                 <span
                                                   className="item-flags item-flags--overlay"
                                                   role="img"
-                                                  aria-label={flagSummary}
-                                                  title={flagSummary}
+                                                  aria-label={overlaySummary || undefined}
+                                                  title={overlaySummary || undefined}
                                                 >
-                                                  {flagEntries.map((flag) => {
+                                                  {overlayFlags.map((flag) => {
                                                     const classes = ["item-flag", "item-flag--overlay"];
                                                     if (flag.className) {
                                                       classes.push(flag.className);
@@ -4792,7 +4799,13 @@ export default function Home({ initialBreeds = [] }) {
                                   const typeLabel =
                                     ITEM_TYPE_LABEL_KEYS[type] ? t(ITEM_TYPE_LABEL_KEYS[type]) : type;
                                   const flagEntries = buildItemFlags(item, t);
+                                  const overlayFlags = flagEntries.filter((flag) => flag.key !== "colorable");
                                   const flagSummary = flagEntries.map((flag) => flag.label).join(", ");
+                                  const isColorable = item.isColorable === true;
+                                  const thumbClasses = ["suggestions__thumb"];
+                                  if (isColorable) {
+                                    thumbClasses.push("suggestions__thumb--colorable");
+                                  }
                                   if (!hasPalette) {
                                     notes.push(t("errors.paletteMissing"));
                                   } else if (!paletteFromImage) {
@@ -4804,7 +4817,7 @@ export default function Home({ initialBreeds = [] }) {
 
                                   return (
                                     <li key={item.id} className="suggestions__card">
-                                      <div className="suggestions__thumb">
+                                      <div className={thumbClasses.join(" ")}>
                                         {item.imageUrl ? (
                                           <img
                                             src={item.imageUrl}
@@ -4816,9 +4829,9 @@ export default function Home({ initialBreeds = [] }) {
                                             {t("suggestions.thumb.placeholder")}
                                           </div>
                                         )}
-                                        {flagEntries.length ? (
+                                        {overlayFlags.length ? (
                                           <span className="item-flags item-flags--overlay" aria-hidden="true">
-                                            {flagEntries.map((flag) => {
+                                            {overlayFlags.map((flag) => {
                                               const classes = ["item-flag", "item-flag--overlay"];
                                               if (flag.className) {
                                                 classes.push(flag.className);
