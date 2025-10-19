@@ -2384,6 +2384,12 @@ a {
   flex: 1 1 auto;
 }
 
+.suggestions__card-flags {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.2;
+}
+
 .item-flags {
   display: inline-flex;
   align-items: center;

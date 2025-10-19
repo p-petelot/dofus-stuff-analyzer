@@ -4799,7 +4799,6 @@ export default function Home({ initialBreeds = [] }) {
                                   const typeLabel =
                                     ITEM_TYPE_LABEL_KEYS[type] ? t(ITEM_TYPE_LABEL_KEYS[type]) : type;
                                   const flagEntries = buildItemFlags(item, t);
-                                  const overlayFlags = flagEntries.filter((flag) => flag.key !== "colorable");
                                   const flagSummary = flagEntries.map((flag) => flag.label).join(", ");
                                   const isColorable = item.isColorable === true;
                                   const thumbClasses = ["suggestions__thumb"];
@@ -4829,25 +4828,6 @@ export default function Home({ initialBreeds = [] }) {
                                             {t("suggestions.thumb.placeholder")}
                                           </div>
                                         )}
-                                        {overlayFlags.length ? (
-                                          <span className="item-flags item-flags--overlay" aria-hidden="true">
-                                            {overlayFlags.map((flag) => {
-                                              const classes = ["item-flag", "item-flag--overlay"];
-                                              if (flag.className) {
-                                                classes.push(flag.className);
-                                              }
-                                              return (
-                                                <span
-                                                  key={`${item.id}-${flag.key}-overlay`}
-                                                  className={classes.join(" ")}
-                                                  aria-hidden="true"
-                                                >
-                                                  <img src={flag.icon} alt="" aria-hidden="true" />
-                                                </span>
-                                              );
-                                            })}
-                                          </span>
-                                        ) : null}
                                       </div>
                                       <div className="suggestions__card-body">
                                         <div className="suggestions__card-header">
@@ -4860,27 +4840,7 @@ export default function Home({ initialBreeds = [] }) {
                                             {item.name}
                                           </a>
                                           {flagEntries.length ? (
-                                            <span
-                                              className="item-flags item-flags--compact"
-                                              role="img"
-                                              aria-label={flagSummary}
-                                              title={flagSummary}
-                                            >
-                                              {flagEntries.map((flag) => {
-                                                const classes = ["item-flag"];
-                                                if (flag.className) {
-                                                  classes.push(flag.className);
-                                                }
-                                                return (
-                                                  <span
-                                                    key={`${item.id}-${flag.key}-inline`}
-                                                    className={classes.join(" ")}
-                                                  >
-                                                    <img src={flag.icon} alt="" aria-hidden="true" />
-                                                  </span>
-                                                );
-                                              })}
-                                            </span>
+                                            <span className="suggestions__card-flags">{flagSummary}</span>
                                           ) : null}
                                         </div>
                                         <div
