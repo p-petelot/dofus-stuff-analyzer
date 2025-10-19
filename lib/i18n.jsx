@@ -156,6 +156,7 @@ const TRANSLATIONS = {
     "suggestions.panel.updating": "Mise à jour des suggestions…",
     "suggestions.panel.bestMatch": "Meilleur match",
     "suggestions.panel.empty": "Aucune correspondance probante pour cette teinte.",
+    "suggestions.panel.reroll": "Autre proposition",
     "suggestions.palette.unavailable": "Palette indisponible",
     "suggestions.thumb.placeholder": "Aperçu indisponible",
     "actions.retry": "Réessayer",
@@ -183,6 +184,7 @@ const TRANSLATIONS = {
     "aria.panelToggleClose": "Masquer les correspondances détaillées",
     "aria.panelClose": "Fermer les correspondances détaillées",
     "aria.panelBackdrop": "Fermer les correspondances détaillées",
+    "aria.itemReroll": "Proposer un autre {type}",
   },
   en: {
     "brand.tagline": "Dofus skin studio",
@@ -281,6 +283,7 @@ const TRANSLATIONS = {
     "suggestions.panel.updating": "Refreshing suggestions…",
     "suggestions.panel.bestMatch": "Best match",
     "suggestions.panel.empty": "No convincing match for this palette.",
+    "suggestions.panel.reroll": "Show another item",
     "suggestions.palette.unavailable": "Palette unavailable",
     "suggestions.thumb.placeholder": "Preview unavailable",
     "actions.retry": "Retry",
@@ -308,6 +311,7 @@ const TRANSLATIONS = {
     "aria.panelToggleClose": "Hide detailed matches",
     "aria.panelClose": "Close detailed matches",
     "aria.panelBackdrop": "Close detailed matches",
+    "aria.itemReroll": "Show another {type}",
   },
   es: {
     "brand.tagline": "Estudio de skins de Dofus",
@@ -406,6 +410,7 @@ const TRANSLATIONS = {
     "suggestions.panel.updating": "Actualizando sugerencias…",
     "suggestions.panel.bestMatch": "Mejor coincidencia",
     "suggestions.panel.empty": "No hay coincidencias convincentes para este tono.",
+    "suggestions.panel.reroll": "Mostrar otro objeto",
     "suggestions.palette.unavailable": "Paleta no disponible",
     "suggestions.thumb.placeholder": "Vista previa no disponible",
     "actions.retry": "Reintentar",
@@ -433,6 +438,7 @@ const TRANSLATIONS = {
     "aria.panelToggleClose": "Ocultar coincidencias detalladas",
     "aria.panelClose": "Cerrar coincidencias detalladas",
     "aria.panelBackdrop": "Cerrar coincidencias detalladas",
+    "aria.itemReroll": "Mostrar otro {type}",
   },
   de: {
     "brand.tagline": "Dofus-Skin-Studio",
@@ -531,6 +537,7 @@ const TRANSLATIONS = {
     "suggestions.panel.updating": "Vorschläge werden aktualisiert…",
     "suggestions.panel.bestMatch": "Beste Übereinstimmung",
     "suggestions.panel.empty": "Keine überzeugende Übereinstimmung für diesen Ton.",
+    "suggestions.panel.reroll": "Anderer Gegenstand",
     "suggestions.palette.unavailable": "Palette nicht verfügbar",
     "suggestions.thumb.placeholder": "Vorschau nicht verfügbar",
     "actions.retry": "Erneut versuchen",
@@ -558,6 +565,7 @@ const TRANSLATIONS = {
     "aria.panelToggleClose": "Detailierte Treffer ausblenden",
     "aria.panelClose": "Detailierte Treffer schließen",
     "aria.panelBackdrop": "Detailierte Treffer schließen",
+    "aria.itemReroll": "Anderen {type} anzeigen",
   },
   pt: {
     "brand.tagline": "Estúdio de skins de Dofus",
@@ -656,6 +664,7 @@ const TRANSLATIONS = {
     "suggestions.panel.updating": "Atualizando sugestões…",
     "suggestions.panel.bestMatch": "Melhor combinação",
     "suggestions.panel.empty": "Nenhuma combinação convincente para este tom.",
+    "suggestions.panel.reroll": "Mostrar outro item",
     "suggestions.palette.unavailable": "Paleta indisponível",
     "suggestions.thumb.placeholder": "Prévia indisponível",
     "actions.retry": "Tentar novamente",
@@ -683,6 +692,7 @@ const TRANSLATIONS = {
     "aria.panelToggleClose": "Ocultar correspondências detalhadas",
     "aria.panelClose": "Fechar correspondências detalhadas",
     "aria.panelBackdrop": "Fechar correspondências detalhadas",
+    "aria.itemReroll": "Mostrar outro {type}",
   },
 };
 
