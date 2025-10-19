@@ -1648,11 +1648,12 @@ a {
 
 .skin-card__equipment-trigger--colorable {
   background:
-    radial-gradient(circle at 18% 22%, rgba(248, 113, 113, 0.36), transparent 56%),
-    radial-gradient(circle at 78% 18%, rgba(245, 158, 11, 0.3), transparent 55%),
-    radial-gradient(circle at 24% 82%, rgba(34, 197, 94, 0.28), transparent 60%),
-    radial-gradient(circle at 82% 78%, rgba(14, 165, 233, 0.34), transparent 58%),
-    rgba(5, 8, 22, 0.7);
+    radial-gradient(circle at 18% 20%, rgba(248, 113, 113, 0.6), transparent 52%),
+    radial-gradient(circle at 78% 18%, rgba(250, 204, 21, 0.48), transparent 50%),
+    radial-gradient(circle at 26% 84%, rgba(34, 197, 94, 0.46), transparent 55%),
+    radial-gradient(circle at 84% 76%, rgba(14, 165, 233, 0.52), transparent 54%),
+    radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.38), transparent 68%),
+    rgba(17, 24, 39, 0.85);
   border-color: rgba(148, 163, 184, 0.4);
   box-shadow:
     inset 0 0 0 1px rgba(15, 23, 42, 0.45),
@@ -2342,11 +2343,12 @@ a {
 
 .suggestions__thumb--colorable {
   background:
-    radial-gradient(circle at 18% 22%, rgba(248, 113, 113, 0.34), transparent 55%),
-    radial-gradient(circle at 76% 18%, rgba(245, 158, 11, 0.3), transparent 54%),
-    radial-gradient(circle at 26% 82%, rgba(34, 197, 94, 0.26), transparent 58%),
-    radial-gradient(circle at 84% 78%, rgba(14, 165, 233, 0.34), transparent 58%),
-    rgba(15, 23, 42, 0.62);
+    radial-gradient(circle at 18% 20%, rgba(248, 113, 113, 0.52), transparent 52%),
+    radial-gradient(circle at 78% 16%, rgba(250, 204, 21, 0.44), transparent 50%),
+    radial-gradient(circle at 28% 84%, rgba(34, 197, 94, 0.42), transparent 55%),
+    radial-gradient(circle at 86% 78%, rgba(14, 165, 233, 0.48), transparent 54%),
+    radial-gradient(circle at 52% 54%, rgba(168, 85, 247, 0.32), transparent 64%),
+    rgba(30, 41, 59, 0.76);
   border-color: rgba(148, 163, 184, 0.32);
   box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.42);
 }
