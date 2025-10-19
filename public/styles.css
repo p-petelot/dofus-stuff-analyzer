@@ -1646,6 +1646,61 @@ a {
   text-transform: uppercase;
 }
 
+.skin-card__reroll {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: rgba(15, 23, 42, 0.78);
+  color: rgba(226, 232, 240, 0.88);
+  font-size: 0.9rem;
+  line-height: 1;
+  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease,
+    transform 0.2s ease;
+  cursor: pointer;
+}
+
+.skin-card__reroll:hover,
+.skin-card__reroll:focus-visible {
+  color: var(--highlight);
+  border-color: rgba(139, 92, 246, 0.5);
+  background: rgba(30, 41, 59, 0.9);
+  transform: rotate(-10deg);
+}
+
+.skin-card__reroll:focus-visible {
+  outline: 2px solid rgba(139, 92, 246, 0.55);
+  outline-offset: 2px;
+}
+
+.skin-card__reroll:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.skin-card__reroll span {
+  display: inline-block;
+}
+
+.skin-card__equipment-slot > .skin-card__reroll {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 28px;
+  height: 28px;
+  backdrop-filter: blur(8px);
+}
+
+.skin-card__reroll--inline {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+}
+
 .skin-card__tooltip {
   position: absolute;
   bottom: calc(100% + 12px);
@@ -1818,6 +1873,15 @@ a {
   letter-spacing: 0.1em;
   color: rgba(226, 232, 240, 0.65);
   flex-shrink: 0;
+}
+
+.skin-card__list-actions {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .skin-card__list-link {
@@ -2032,7 +2096,7 @@ a {
   top: 0;
   right: 0;
   bottom: 0;
-  width: min(420px, 90vw);
+  width: min(520px, 92vw);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -2220,15 +2284,15 @@ a {
   padding: 0;
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
 }
 
 .suggestions__card {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 5px;
+  padding: 4px;
   border-radius: var(--radius-sm);
   border: 1px solid rgba(148, 163, 184, 0.16);
   background: rgba(15, 23, 42, 0.58);
@@ -2251,8 +2315,8 @@ a {
   display: grid;
   place-items: center;
   overflow: hidden;
-  width: clamp(56px, 7.4vw, 78px);
-  height: clamp(56px, 7.4vw, 78px);
+  width: clamp(46px, 5.6vw, 66px);
+  height: clamp(46px, 5.6vw, 66px);
   margin: 0 auto;
 }
 
@@ -2274,6 +2338,17 @@ a {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+
+.suggestions__card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.suggestions__card-header .suggestions__title {
+  flex: 1 1 auto;
 }
 
 .suggestions__swatches {
@@ -2362,12 +2437,12 @@ a {
 
 @media (max-width: 520px) {
   .suggestions__deck {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 4px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 3px;
   }
 
   .suggestions__card {
-    padding: 10px;
+    padding: 4px;
   }
 
   .suggestions__swatches {

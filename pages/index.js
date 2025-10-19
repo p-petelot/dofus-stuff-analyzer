@@ -203,6 +203,108 @@ function normalizeColorToHex(color) {
   return null;
 }
 
+function normalizeSelection(indexes, limit, poolLength) {
+  if (!Number.isFinite(limit) || limit <= 0 || !Number.isFinite(poolLength) || poolLength <= 0) {
+    return { indexes: [], changed: Array.isArray(indexes) && indexes.length > 0 };
+  }
+
+  const previous = Array.isArray(indexes) ? indexes : [];
+  const used = new Set();
+  const normalized = Array.from({ length: limit }, (_, slotIndex) => {
+    let candidate = previous[slotIndex];
+    if (!Number.isFinite(candidate) || candidate < 0 || candidate >= poolLength) {
+      candidate = slotIndex;
+    }
+
+    let safety = 0;
+    while (used.has(candidate) && safety < poolLength) {
+      candidate = (candidate + 1) % poolLength;
+      safety += 1;
+    }
+
+    used.add(candidate);
+    return candidate;
+  });
+
+  const changed =
+    normalized.length !== previous.length ||
+    normalized.some((value, index) => value !== previous[index]);
+
+  return { indexes: normalized, changed };
+}
+
+function cycleItemSelection(indexes, limit, poolLength, targetSlot, options = {}) {
+  const normalizedResult = normalizeSelection(indexes, limit, poolLength);
+  const normalized = normalizedResult.indexes;
+  let changed = normalizedResult.changed;
+
+  if (!Number.isFinite(limit) || limit <= 0 || !Number.isFinite(poolLength) || poolLength <= 0) {
+    return { indexes: normalized, selection: null, changed };
+  }
+
+  if (!Number.isFinite(targetSlot) || targetSlot < 0 || targetSlot >= limit) {
+    return { indexes: normalized, selection: null, changed };
+  }
+
+  if (Number.isFinite(options.forcedSelection)) {
+    const desired = Math.min(poolLength - 1, Math.max(0, Math.trunc(options.forcedSelection)));
+    const used = new Set([desired]);
+    const updated = Array.from({ length: limit }, (_, slotIndex) => {
+      if (slotIndex === targetSlot) {
+        return desired;
+      }
+
+      let candidate = normalized[slotIndex];
+      if (!Number.isFinite(candidate) || candidate < 0 || candidate >= poolLength) {
+        candidate = slotIndex >= targetSlot ? slotIndex + 1 : slotIndex;
+      }
+
+      let safety = 0;
+      while (used.has(candidate) && safety < poolLength) {
+        candidate = (candidate + 1) % poolLength;
+        safety += 1;
+      }
+
+      used.add(candidate);
+      return candidate;
+    });
+
+    const updatedChanged =
+      changed ||
+      updated.length !== normalized.length ||
+      updated.some((value, index) => value !== normalized[index]);
+
+    return { indexes: updated, selection: desired, changed: updatedChanged };
+  }
+
+  const activeIndex = normalized[targetSlot];
+  if (!Number.isFinite(activeIndex)) {
+    return { indexes: normalized, selection: null, changed };
+  }
+
+  if (poolLength <= 1) {
+    return { indexes: normalized, selection: activeIndex, changed };
+  }
+
+  const forbidden = new Set(normalized.filter((_, index) => index !== targetSlot));
+  let nextIndex = activeIndex;
+  let safety = 0;
+
+  do {
+    nextIndex = (nextIndex + 1) % poolLength;
+    safety += 1;
+  } while (forbidden.has(nextIndex) && safety < poolLength * 2);
+
+  if (nextIndex === activeIndex || forbidden.has(nextIndex)) {
+    return { indexes: normalized, selection: activeIndex, changed };
+  }
+
+  const updated = [...normalized];
+  updated[targetSlot] = nextIndex;
+
+  return { indexes: updated, selection: nextIndex, changed: true };
+}
+
 function extractPaletteFromItemData(item) {
   const palette = [];
   const seen = new Set();
@@ -637,7 +739,8 @@ const SHAPE_STRONG_THRESHOLD = 0.18;
 const TONE_CONFIDENCE_DISTANCE = 0.72;
 const TONE_CONFIDENCE_WEIGHT = 0.18;
 const MIN_ALPHA_WEIGHT = 0.05;
-const MAX_RECOMMENDATIONS = 3;
+const MAX_RECOMMENDATIONS = 12;
+const PANEL_ITEMS_LIMIT = 5;
 const PROPOSAL_COUNT = 5;
 const HASH_CONFIDENCE_DISTANCE = 0.32;
 const HASH_CONFIDENCE_WEIGHT = 0.18;
@@ -859,11 +962,15 @@ function buildBarbofusLink(
 
   const {
     useCustomSkinTone = true,
-    classId = BARBOFUS_DEFAULTS.classId,
+    classId = null,
     gender = BARBOFUS_DEFAULTS.gender,
     faceId = BARBOFUS_DEFAULTS.faceId,
     classDefaults = [],
   } = options;
+
+  if (!Number.isFinite(classId)) {
+    return null;
+  }
 
   const paletteValues = Array.isArray(paletteHexes)
     ? paletteHexes
@@ -954,7 +1061,7 @@ function buildBarbofusLink(
 
   const payload = {
     1: Number.isFinite(gender) ? gender : BARBOFUS_DEFAULTS.gender,
-    2: Number.isFinite(classId) ? classId : BARBOFUS_DEFAULTS.classId,
+    2: classId,
     4: resolvedColors,
     5: equipment,
   };
@@ -1087,9 +1194,13 @@ function adjustHexLightness(hex, deltaL, deltaS = 0) {
 }
 
 function buildGradientFromHex(hex) {
-  const darker = adjustHexLightness(hex, -0.2, -0.08);
-  const lighter = adjustHexLightness(hex, 0.18, -0.12);
-  return `linear-gradient(135deg, ${darker}, ${hex}, ${lighter})`;
+  const normalized = normalizeColorToHex(hex);
+  if (!normalized) {
+    return "linear-gradient(135deg, #1F2937, #111827)";
+  }
+  const darker = adjustHexLightness(normalized, -0.2, -0.08);
+  const lighter = adjustHexLightness(normalized, 0.18, -0.12);
+  return `linear-gradient(135deg, ${darker}, ${normalized}, ${lighter})`;
 }
 
 function getImageDimensions(image) {
@@ -2118,7 +2229,7 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
   return enriched;
 }
 
-export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
+export default function Home({ initialBreeds = [] }) {
   const router = useRouter();
   const routerLang = router?.query?.lang;
   const { language, languages: languageOptions, setLanguage, t } = useLanguage();
@@ -2205,6 +2316,8 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   const [itemsCatalog, setItemsCatalog] = useState({});
   const [itemsLoading, setItemsLoading] = useState(false);
   const [itemsError, setItemsError] = useState(null);
+  const [panelItemIndexes, setPanelItemIndexes] = useState({});
+  const [proposalItemIndexes, setProposalItemIndexes] = useState({});
   const [familierFilters, setFamilierFilters] = useState(() =>
     FAMILIER_FILTERS.reduce((accumulator, filter) => {
       const isDefaultEnabled = filter.key === "pet" || filter.key === "mount";
@@ -2214,7 +2327,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   );
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [inputMode, setInputMode] = useState("image");
-  const [selectedColor, setSelectedColor] = useState("#8B5CF6");
+  const [selectedColor, setSelectedColor] = useState(null);
   const [activeProposal, setActiveProposal] = useState(0);
   const [lookPreviews, setLookPreviews] = useState({});
   const lookPreviewsRef = useRef({});
@@ -2222,22 +2335,11 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   const [useCustomSkinTone, setUseCustomSkinTone] = useState(false);
   const [showDetailedMatches, setShowDetailedMatches] = useState(false);
   const [breeds, setBreeds] = useState(() =>
-    Array.isArray(initialBreeds) && initialBreeds.length
-      ? initialBreeds
-      : [BARBOFUS_DEFAULT_BREED]
+    Array.isArray(initialBreeds) && initialBreeds.length ? initialBreeds : []
   );
   const [breedsLoading, setBreedsLoading] = useState(false);
   const [breedsError, setBreedsError] = useState(null);
-  const [selectedBreedId, setSelectedBreedId] = useState(() => {
-    if (Array.isArray(initialBreeds) && initialBreeds.length) {
-      const fallbackEntry =
-        initialBreeds.find((entry) => entry.id === BARBOFUS_DEFAULTS.classId) ?? initialBreeds[0];
-      if (fallbackEntry && Number.isFinite(fallbackEntry.id)) {
-        return fallbackEntry.id;
-      }
-    }
-    return BARBOFUS_DEFAULTS.classId;
-  });
+  const [selectedBreedId, setSelectedBreedId] = useState(null);
   const [selectedGender, setSelectedGender] = useState(BARBOFUS_DEFAULT_GENDER_KEY);
   const progressHandles = useRef({ frame: null, timeout: null, value: 0 });
   const breedsRequestRef = useRef(null);
@@ -2285,24 +2387,27 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
 
   const activeBreed = useMemo(() => {
     if (!Array.isArray(breeds) || breeds.length === 0) {
-      return BARBOFUS_DEFAULT_BREED;
+      return null;
+    }
+    if (!Number.isFinite(selectedBreedId)) {
+      return null;
     }
     const found = breeds.find((entry) => entry.id === selectedBreedId);
-    return found ?? breeds[0] ?? BARBOFUS_DEFAULT_BREED;
+    return found ?? null;
   }, [breeds, selectedBreedId]);
 
   const activeGenderConfig = useMemo(() => {
-    const fallback = selectedGender === "male" ? BARBOFUS_DEFAULT_BREED.male : BARBOFUS_DEFAULT_BREED.female;
     if (!activeBreed) {
-      return fallback;
+      return null;
     }
+    const fallback = selectedGender === "male" ? BARBOFUS_DEFAULT_BREED.male : BARBOFUS_DEFAULT_BREED.female;
     return selectedGender === "male" ? activeBreed.male ?? fallback : activeBreed.female ?? fallback;
   }, [activeBreed, selectedGender]);
 
-  const activeClassId = typeof activeBreed?.id === "number" ? activeBreed.id : BARBOFUS_DEFAULTS.classId;
+  const activeClassId = Number.isFinite(activeBreed?.id) ? activeBreed.id : null;
   const activeGenderValue = BARBOFUS_GENDER_VALUES[selectedGender] ?? BARBOFUS_DEFAULTS.gender;
   const activeGenderLabel = selectedGender === "male" ? t("identity.gender.male") : t("identity.gender.female");
-  const activeClassDefaults = activeGenderConfig?.colors?.numeric ?? [];
+  const activeClassDefaults = activeBreed ? activeGenderConfig?.colors?.numeric ?? [] : [];
   const fallbackFaceId = Number.isFinite(activeGenderConfig?.faceId)
     ? activeGenderConfig.faceId
     : Number.isFinite(activeGenderConfig?.lookId)
@@ -2381,9 +2486,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         if (previous != null && dataset.some((entry) => entry.id === previous)) {
           return previous;
         }
-        const fallbackEntry =
-          dataset.find((entry) => entry.id === BARBOFUS_DEFAULTS.classId) ?? dataset[0] ?? null;
-        return fallbackEntry?.id ?? previous ?? BARBOFUS_DEFAULTS.classId;
+        return null;
       });
     } catch (err) {
       if (controller?.signal?.aborted) {
@@ -2392,7 +2495,9 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       console.error(err);
       setBreedsError(t("errors.breeds"));
       setBreeds([BARBOFUS_DEFAULT_BREED]);
-      setSelectedBreedId(BARBOFUS_DEFAULT_BREED.id);
+      setSelectedBreedId((previous) =>
+        Number.isFinite(previous) && previous === BARBOFUS_DEFAULT_BREED.id ? previous : null
+      );
     } finally {
       if (controller && breedsRequestRef.current === controller) {
         setBreedsLoading(false);
@@ -2425,9 +2530,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       if (initialBreeds.some((entry) => entry.id === previous)) {
         return previous;
       }
-      const fallbackEntry =
-        initialBreeds.find((entry) => entry.id === BARBOFUS_DEFAULTS.classId) ?? initialBreeds[0];
-      return fallbackEntry?.id ?? BARBOFUS_DEFAULTS.classId;
+      return null;
     });
   }, [initialBreeds]);
 
@@ -2451,6 +2554,21 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
 
   const applyColorSeed = useCallback(
     (seedHex) => {
+      if (!seedHex) {
+        setColors([]);
+        setImageSignature(null);
+        setImageShape(null);
+        setImageTones(null);
+        setImageHash(null);
+        setImageEdges(null);
+        setIsProcessing(false);
+        setAnalysisProgress(0);
+        setCopiedCode(null);
+        setToast(null);
+        setError(null);
+        return;
+      }
+
       const palette = generatePaletteFromSeed(seedHex);
       setColors(palette);
       setImageSignature(null);
@@ -2473,6 +2591,10 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
 
   useEffect(() => {
     if (inputMode !== "color") {
+      return;
+    }
+
+    if (!selectedColor) {
       return;
     }
 
@@ -2536,7 +2658,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   }, [colorsCount, imageSrc, isProcessing]);
 
   const recommendations = useMemo(() => {
-    if (!colors.length) {
+    if (!colors.length || !Number.isFinite(activeClassId)) {
       return null;
     }
 
@@ -2599,6 +2721,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       return accumulator;
     }, {});
   }, [
+    activeClassId,
     colors,
     imageSignature,
     imageShape,
@@ -2609,8 +2732,94 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     familierFilters,
   ]);
 
-  const proposals = useMemo(() => {
+  useEffect(() => {
     if (!recommendations) {
+      setPanelItemIndexes({});
+      setProposalItemIndexes({});
+      return;
+    }
+
+    setPanelItemIndexes((previous) => {
+      const next = {};
+      let changed = false;
+
+      ITEM_TYPES.forEach((type) => {
+        const pool = recommendations[type] ?? [];
+        if (!pool.length) {
+          next[type] = [];
+          if (Array.isArray(previous?.[type]) && previous[type].length) {
+            changed = true;
+          }
+          return;
+        }
+
+        const limit = Math.min(PANEL_ITEMS_LIMIT, pool.length);
+        const { indexes, changed: normalizedChanged } = normalizeSelection(previous?.[type], limit, pool.length);
+        next[type] = indexes;
+        if (normalizedChanged) {
+          changed = true;
+        }
+      });
+
+      const previousKeys = previous ? Object.keys(previous) : [];
+      const nextKeys = Object.keys(next);
+
+      if (
+        previousKeys.length !== nextKeys.length ||
+        previousKeys.some((key) => !(key in next))
+      ) {
+        changed = true;
+      }
+
+      if (!changed) {
+        return previous;
+      }
+
+      return next;
+    });
+
+    setProposalItemIndexes((previous) => {
+      const next = {};
+      let changed = false;
+
+      ITEM_TYPES.forEach((type) => {
+        const pool = recommendations[type] ?? [];
+        if (!pool.length) {
+          next[type] = [];
+          if (Array.isArray(previous?.[type]) && previous[type].length) {
+            changed = true;
+          }
+          return;
+        }
+
+        const limit = Math.min(PROPOSAL_COUNT, pool.length);
+        const { indexes, changed: normalizedChanged } = normalizeSelection(previous?.[type], limit, pool.length);
+        next[type] = indexes;
+        if (normalizedChanged) {
+          changed = true;
+        }
+      });
+
+      const previousKeys = previous ? Object.keys(previous) : [];
+      const nextKeys = Object.keys(next);
+
+      if (
+        previousKeys.length !== nextKeys.length ||
+        previousKeys.some((key) => !(key in next))
+      ) {
+        changed = true;
+      }
+
+      if (!changed) {
+        return previous;
+      }
+
+      return next;
+    });
+  }, [recommendations]);
+
+  const proposals = useMemo(() => {
+    if (!recommendations || !Number.isFinite(activeClassId)) {
       return [];
     }
 
@@ -2633,12 +2842,46 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     for (let index = 0; index < total; index += 1) {
       const items = ITEM_TYPES.map((type) => {
         const pool = recommendations[type] ?? [];
-        const pick = pool[index] ?? pool[0];
+        if (!pool.length) {
+          return null;
+        }
+
+        const selections = Array.isArray(proposalItemIndexes?.[type]) ? proposalItemIndexes[type] : [];
+        const selectionIndex = selections[index];
+        const fallbackIndex =
+          Number.isFinite(selectionIndex) && selectionIndex >= 0 && selectionIndex < pool.length
+            ? selectionIndex
+            : index;
+
+        let pick = null;
+        if (pool.length) {
+          const startIndex = Math.min(pool.length - 1, Math.max(0, fallbackIndex));
+          for (let offset = 0; offset < pool.length; offset += 1) {
+            const candidate = pool[(startIndex + offset) % pool.length];
+            if (!candidate) {
+              continue;
+            }
+            if (Number.isFinite(candidate.ankamaId)) {
+              pick = candidate;
+              break;
+            }
+            if (!pick) {
+              pick = candidate;
+            }
+          }
+        }
+
         if (!pick) {
           return null;
         }
+
         return { ...pick, slotType: type };
       }).filter(Boolean);
+
+      const hasRenderableEquipment = items.some((item) => Number.isFinite(item.ankamaId));
+      if (!hasRenderableEquipment) {
+        continue;
+      }
 
       if (!items.length) {
         continue;
@@ -2764,6 +3007,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     activeGenderLabel,
     activeGenderValue,
     fallbackColorValues,
+    proposalItemIndexes,
     recommendations,
     useCustomSkinTone,
   ]);
@@ -2830,7 +3074,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       if (
         existing &&
         existing.lookKey === proposal.lookKey &&
-        (existing.status === "loaded" || existing.status === "loading")
+        existing.status === "loaded"
       ) {
         return;
       }
@@ -3083,6 +3327,62 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   const toggleDetailedMatches = useCallback(() => {
     setShowDetailedMatches((previous) => !previous);
   }, []);
+
+  const handleRerollItem = useCallback(
+    (type, options = {}) => {
+      if (!recommendations) {
+        return;
+      }
+
+      const pool = recommendations[type] ?? [];
+      if (!pool.length) {
+        return;
+      }
+
+      const { proposalIndex = null, panelSlotIndex = null } =
+        typeof options === "number" ? { panelSlotIndex: options } : options;
+
+      let nextSelection = null;
+
+      if (Number.isFinite(proposalIndex)) {
+        const limit = Math.min(PROPOSAL_COUNT, pool.length);
+        if (proposalIndex >= 0 && proposalIndex < limit) {
+          setProposalItemIndexes((previous = {}) => {
+            const prevIndexes = Array.isArray(previous[type]) ? previous[type] : [];
+            const result = cycleItemSelection(prevIndexes, limit, pool.length, proposalIndex);
+            nextSelection = result.selection;
+            if (!result.changed) {
+              return previous;
+            }
+            return { ...previous, [type]: result.indexes };
+          });
+        }
+      }
+
+      const targetSlot = Number.isFinite(panelSlotIndex)
+        ? panelSlotIndex
+        : Number.isFinite(proposalIndex)
+        ? 0
+        : null;
+
+      if (Number.isFinite(targetSlot)) {
+        const limit = Math.min(PANEL_ITEMS_LIMIT, pool.length);
+        if (targetSlot >= 0 && targetSlot < limit) {
+          setPanelItemIndexes((previous = {}) => {
+            const prevIndexes = Array.isArray(previous[type]) ? previous[type] : [];
+            const result = cycleItemSelection(prevIndexes, limit, pool.length, targetSlot, {
+              forcedSelection: Number.isFinite(nextSelection) ? nextSelection : undefined,
+            });
+            if (!result.changed) {
+              return previous;
+            }
+            return { ...previous, [type]: result.indexes };
+          });
+        }
+      }
+    },
+    [recommendations]
+  );
 
   const inputRef = useRef(null);
 
@@ -3619,7 +3919,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                   className="color-picker__preview"
                   style={{ backgroundImage: buildGradientFromHex(selectedColor) }}
                 >
-                  <span className="color-picker__preview-value">{selectedColor}</span>
+                  <span className="color-picker__preview-value">{selectedColor ?? "—"}</span>
                 </div>
                 <div className="color-picker__controls">
                   <label className="color-picker__label sr-only" htmlFor="seed-color">
@@ -3630,7 +3930,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                       id="seed-color"
                       className="color-picker__input"
                       type="color"
-                      value={selectedColor}
+                      value={selectedColor ?? "#8B5CF6"}
                       onChange={handleColorInput}
                     />
                     <button type="button" className="color-picker__random" onClick={handleRandomizeColor}>
@@ -3913,6 +4213,10 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
             <div className="suggestions__empty">
               <p>{t("suggestions.empty.start")}</p>
             </div>
+          ) : !Number.isFinite(activeClassId) ? (
+            <div className="suggestions__status suggestions__status--empty">
+              <p>{t("suggestions.empty.identity")}</p>
+            </div>
           ) : !hasCatalogData && itemsLoading ? (
             <div className="suggestions__status suggestions__status--loading">
               {t("suggestions.loading.items")}
@@ -4060,6 +4364,8 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                         const altText = t("suggestions.render.itemAlt", {
                                           name: item.name ?? slotLabel,
                                         });
+                                        const rerollDisabled =
+                                          (recommendations?.[item.slotType]?.length ?? 0) <= 1;
 
                                         return (
                                           <li key={`${proposal.id}-${item.id}`} className="skin-card__equipment-slot">
@@ -4086,6 +4392,23 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                                 </div>
                                               </div>
                                             </div>
+                                            <button
+                                              type="button"
+                                              className="skin-card__reroll"
+                                              onClick={() =>
+                                                handleRerollItem(item.slotType, {
+                                                  proposalIndex: proposal.index,
+                                                })
+                                              }
+                                              title={t("suggestions.render.reroll")}
+                                              aria-label={t("aria.itemReroll", {
+                                                type: slotLabel,
+                                                item: itemName,
+                                              })}
+                                              disabled={rerollDisabled}
+                                            >
+                                              <span aria-hidden="true">↻</span>
+                                            </button>
                                           </li>
                                         );
                                       })}
@@ -4117,22 +4440,43 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                         const slotLabelKey = ITEM_TYPE_LABEL_KEYS[item.slotType];
                                         const slotLabel = slotLabelKey ? t(slotLabelKey) : item.slotType;
                                         const itemName = item.name ?? slotLabel;
+                                        const rerollDisabled =
+                                          (recommendations?.[item.slotType]?.length ?? 0) <= 1;
                                         return (
                                           <li key={`${proposal.id}-${item.id}-entry`} className="skin-card__list-item">
                                             <span className="skin-card__list-type">{slotLabel}</span>
-                                            <a
-                                              href={item.url}
-                                              target="_blank"
-                                              rel="noreferrer"
-                                              className="skin-card__list-link"
-                                            >
-                                              {item.imageUrl ? (
-                                                <span className="skin-card__list-thumb" aria-hidden="true">
-                                                  <img src={item.imageUrl} alt="" loading="lazy" />
-                                                </span>
-                                              ) : null}
-                                              <span className="skin-card__list-text">{itemName}</span>
-                                            </a>
+                                            <div className="skin-card__list-actions">
+                                              <a
+                                                href={item.url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="skin-card__list-link"
+                                              >
+                                                {item.imageUrl ? (
+                                                  <span className="skin-card__list-thumb" aria-hidden="true">
+                                                    <img src={item.imageUrl} alt="" loading="lazy" />
+                                                  </span>
+                                                ) : null}
+                                                <span className="skin-card__list-text">{itemName}</span>
+                                              </a>
+                                              <button
+                                                type="button"
+                                                className="skin-card__reroll skin-card__reroll--inline"
+                                                onClick={() =>
+                                                  handleRerollItem(item.slotType, {
+                                                    proposalIndex: proposal.index,
+                                                  })
+                                                }
+                                                title={t("suggestions.render.reroll")}
+                                                aria-label={t("aria.itemReroll", {
+                                                  type: slotLabel,
+                                                  item: itemName,
+                                                })}
+                                                disabled={rerollDisabled}
+                                              >
+                                                <span aria-hidden="true">↻</span>
+                                              </button>
+                                            </div>
                                           </li>
                                         );
                                       })}
@@ -4237,7 +4581,26 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                     ) : null}
                     <div className="suggestions__grid">
                       {ITEM_TYPES.map((type) => {
-                        const items = (recommendations?.[type] ?? []).slice(0, 3);
+                        const pool = recommendations?.[type] ?? [];
+                        const limit = pool.length > 0 ? Math.min(PANEL_ITEMS_LIMIT, pool.length) : 0;
+                        const selections = Array.isArray(panelItemIndexes[type])
+                          ? panelItemIndexes[type]
+                          : [];
+                        const items = Array.from({ length: limit }, (_, slotIndex) => {
+                          const selectionIndex = selections[slotIndex];
+                          const poolIndex =
+                            Number.isFinite(selectionIndex) &&
+                            selectionIndex >= 0 &&
+                            selectionIndex < pool.length
+                              ? selectionIndex
+                              : slotIndex;
+
+                          if (!pool[poolIndex]) {
+                            return null;
+                          }
+
+                          return { item: pool[poolIndex], slotIndex };
+                        }).filter(Boolean);
                         return (
                           <section key={type} className="suggestions__group">
                             <header className="suggestions__group-header">
@@ -4252,10 +4615,16 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                               <p className="suggestions__group-empty">{t("suggestions.panel.empty")}</p>
                             ) : (
                               <ul className="suggestions__deck">
-                                {items.map((item) => {
+                                {items.map(({ item, slotIndex }) => {
                                   const hasPalette = item.palette.length > 0;
                                   const paletteFromImage = item.paletteSource === "image" && hasPalette;
                                   const notes = [];
+                                  const typeLabel =
+                                    ITEM_TYPE_LABEL_KEYS[type] ? t(ITEM_TYPE_LABEL_KEYS[type]) : type;
+                                  const typeLabelForAria =
+                                    typeof typeLabel === "string"
+                                      ? typeLabel.toLowerCase()
+                                      : String(typeLabel ?? type);
                                   if (!hasPalette) {
                                     notes.push(t("errors.paletteMissing"));
                                   } else if (!paletteFromImage) {
@@ -4281,14 +4650,16 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                         )}
                                       </div>
                                       <div className="suggestions__card-body">
-                                        <a
-                                          href={item.url}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="suggestions__title"
-                                        >
-                                          {item.name}
-                                        </a>
+                                        <div className="suggestions__card-header">
+                                          <a
+                                            href={item.url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="suggestions__title"
+                                          >
+                                            {item.name}
+                                          </a>
+                                        </div>
                                         <div
                                           className={`suggestions__swatches${hasPalette ? "" : " suggestions__swatches--empty"}`}
                                           aria-hidden={hasPalette}
@@ -4336,7 +4707,11 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                   </button>
                 ) : null}
                 </div>
-              ) : null}
+              ) : (
+                <div className="suggestions__status suggestions__status--empty">
+                  <p>{t("suggestions.empty.results")}</p>
+                </div>
+              )}
             </>
           )}
         </section>

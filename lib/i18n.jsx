@@ -134,6 +134,10 @@ const TRANSLATIONS = {
     "errors.paletteEstimated": "Palette estimée à partir des données DofusDB.",
     "suggestions.header.updating": "Mise à jour…",
     "suggestions.empty.start": "Lance une analyse pour découvrir des correspondances Dofus adaptées.",
+    "suggestions.empty.identity":
+      "Sélectionne une classe et une référence couleur pour afficher des suggestions.",
+    "suggestions.empty.results":
+      "Aucune combinaison exploitable n'a été trouvée pour cette palette.",
     "suggestions.loading.items": "Chargement des objets Dofus…",
     "suggestions.empty.catalog": "Aucun objet n'a pu être récupéré pour le moment.",
     "suggestions.carousel.skinCount": "Skin {current} / {total}",
@@ -156,6 +160,7 @@ const TRANSLATIONS = {
     "suggestions.panel.updating": "Mise à jour des suggestions…",
     "suggestions.panel.bestMatch": "Meilleur match",
     "suggestions.panel.empty": "Aucune correspondance probante pour cette teinte.",
+    "suggestions.render.reroll": "Autre proposition",
     "suggestions.palette.unavailable": "Palette indisponible",
     "suggestions.thumb.placeholder": "Aperçu indisponible",
     "actions.retry": "Réessayer",
@@ -183,6 +188,7 @@ const TRANSLATIONS = {
     "aria.panelToggleClose": "Masquer les correspondances détaillées",
     "aria.panelClose": "Fermer les correspondances détaillées",
     "aria.panelBackdrop": "Fermer les correspondances détaillées",
+    "aria.itemReroll": "Proposer un autre {type}",
   },
   en: {
     "brand.tagline": "Dofus skin studio",
@@ -259,6 +265,8 @@ const TRANSLATIONS = {
     "errors.paletteEstimated": "Palette estimated from DofusDB data.",
     "suggestions.header.updating": "Updating…",
     "suggestions.empty.start": "Start an analysis to discover matching Dofus equipment.",
+    "suggestions.empty.identity": "Pick a class and a reference color to see tailored suggestions.",
+    "suggestions.empty.results": "No usable combinations were found for this palette.",
     "suggestions.loading.items": "Loading Dofus items…",
     "suggestions.empty.catalog": "No items could be retrieved yet.",
     "suggestions.carousel.skinCount": "Skin {current} / {total}",
@@ -281,6 +289,7 @@ const TRANSLATIONS = {
     "suggestions.panel.updating": "Refreshing suggestions…",
     "suggestions.panel.bestMatch": "Best match",
     "suggestions.panel.empty": "No convincing match for this palette.",
+    "suggestions.render.reroll": "Show another item",
     "suggestions.palette.unavailable": "Palette unavailable",
     "suggestions.thumb.placeholder": "Preview unavailable",
     "actions.retry": "Retry",
@@ -308,6 +317,7 @@ const TRANSLATIONS = {
     "aria.panelToggleClose": "Hide detailed matches",
     "aria.panelClose": "Close detailed matches",
     "aria.panelBackdrop": "Close detailed matches",
+    "aria.itemReroll": "Show another {type}",
   },
   es: {
     "brand.tagline": "Estudio de skins de Dofus",
@@ -384,6 +394,8 @@ const TRANSLATIONS = {
     "errors.paletteEstimated": "Paleta estimada a partir de los datos de DofusDB.",
     "suggestions.header.updating": "Actualizando…",
     "suggestions.empty.start": "Inicia un análisis para descubrir combinaciones de Dofus adecuadas.",
+    "suggestions.empty.identity": "Selecciona una clase y un color de referencia para ver sugerencias adaptadas.",
+    "suggestions.empty.results": "No se encontraron combinaciones utilizables para esta paleta.",
     "suggestions.loading.items": "Cargando objetos de Dofus…",
     "suggestions.empty.catalog": "Todavía no se han podido recuperar objetos.",
     "suggestions.carousel.skinCount": "Skin {current} / {total}",
@@ -406,6 +418,7 @@ const TRANSLATIONS = {
     "suggestions.panel.updating": "Actualizando sugerencias…",
     "suggestions.panel.bestMatch": "Mejor coincidencia",
     "suggestions.panel.empty": "No hay coincidencias convincentes para este tono.",
+    "suggestions.render.reroll": "Mostrar otro objeto",
     "suggestions.palette.unavailable": "Paleta no disponible",
     "suggestions.thumb.placeholder": "Vista previa no disponible",
     "actions.retry": "Reintentar",
@@ -433,6 +446,7 @@ const TRANSLATIONS = {
     "aria.panelToggleClose": "Ocultar coincidencias detalladas",
     "aria.panelClose": "Cerrar coincidencias detalladas",
     "aria.panelBackdrop": "Cerrar coincidencias detalladas",
+    "aria.itemReroll": "Mostrar otro {type}",
   },
   de: {
     "brand.tagline": "Dofus-Skin-Studio",
@@ -509,6 +523,9 @@ const TRANSLATIONS = {
     "errors.paletteEstimated": "Palette aus DofusDB-Daten geschätzt.",
     "suggestions.header.updating": "Aktualisierung…",
     "suggestions.empty.start": "Starte eine Analyse, um passende Dofus-Gegenstände zu entdecken.",
+    "suggestions.empty.identity":
+      "Wähle eine Klasse und eine Referenzfarbe, um passende Vorschläge zu erhalten.",
+    "suggestions.empty.results": "Für diese Palette wurden keine passenden Kombinationen gefunden.",
     "suggestions.loading.items": "Dofus-Gegenstände werden geladen…",
     "suggestions.empty.catalog": "Es konnten noch keine Gegenstände abgerufen werden.",
     "suggestions.carousel.skinCount": "Skin {current} / {total}",
@@ -531,6 +548,7 @@ const TRANSLATIONS = {
     "suggestions.panel.updating": "Vorschläge werden aktualisiert…",
     "suggestions.panel.bestMatch": "Beste Übereinstimmung",
     "suggestions.panel.empty": "Keine überzeugende Übereinstimmung für diesen Ton.",
+    "suggestions.render.reroll": "Anderer Gegenstand",
     "suggestions.palette.unavailable": "Palette nicht verfügbar",
     "suggestions.thumb.placeholder": "Vorschau nicht verfügbar",
     "actions.retry": "Erneut versuchen",
@@ -558,6 +576,7 @@ const TRANSLATIONS = {
     "aria.panelToggleClose": "Detailierte Treffer ausblenden",
     "aria.panelClose": "Detailierte Treffer schließen",
     "aria.panelBackdrop": "Detailierte Treffer schließen",
+    "aria.itemReroll": "Anderen {type} anzeigen",
   },
   pt: {
     "brand.tagline": "Estúdio de skins de Dofus",
@@ -634,6 +653,9 @@ const TRANSLATIONS = {
     "errors.paletteEstimated": "Paleta estimada a partir dos dados do DofusDB.",
     "suggestions.header.updating": "Atualizando…",
     "suggestions.empty.start": "Inicie uma análise para descobrir combinações adequadas de Dofus.",
+    "suggestions.empty.identity":
+      "Escolha uma classe e uma cor de referência para ver sugestões personalizadas.",
+    "suggestions.empty.results": "Nenhuma combinação utilizável foi encontrada para esta paleta.",
     "suggestions.loading.items": "Carregando itens de Dofus…",
     "suggestions.empty.catalog": "Nenhum item pôde ser recuperado por enquanto.",
     "suggestions.carousel.skinCount": "Skin {current} / {total}",
@@ -656,6 +678,7 @@ const TRANSLATIONS = {
     "suggestions.panel.updating": "Atualizando sugestões…",
     "suggestions.panel.bestMatch": "Melhor combinação",
     "suggestions.panel.empty": "Nenhuma combinação convincente para este tom.",
+    "suggestions.render.reroll": "Mostrar outro item",
     "suggestions.palette.unavailable": "Paleta indisponível",
     "suggestions.thumb.placeholder": "Prévia indisponível",
     "actions.retry": "Tentar novamente",
@@ -683,6 +706,7 @@ const TRANSLATIONS = {
     "aria.panelToggleClose": "Ocultar correspondências detalhadas",
     "aria.panelClose": "Fechar correspondências detalhadas",
     "aria.panelBackdrop": "Fechar correspondências detalhadas",
+    "aria.itemReroll": "Mostrar outro {type}",
   },
 };
 
