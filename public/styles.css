@@ -2436,6 +2436,7 @@ a {
   inset: 0;
   z-index: 2;
   pointer-events: none;
+  display: block;
 }
 
 .item-flag--overlay {
@@ -2449,21 +2450,21 @@ a {
 }
 
 .item-flag--overlay img {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   filter: drop-shadow(0 4px 6px rgba(5, 8, 22, 0.35));
 }
 
 .item-flag--overlay.item-flag--cosmetic {
-  top: -8px;
-  left: -10px;
+  left: 4px;
+  bottom: 2px;
 }
 
 .item-flag--overlay.item-flag--cosmetic img {
-  width: 20px;
-  height: 20px;
-  transform: rotate(-16deg);
-  transform-origin: 80% 18%;
+  width: 18px;
+  height: 18px;
+  transform: rotate(-18deg);
+  transform-origin: 58% 92%;
 }
 
 .skin-card__list-link .item-flags {
