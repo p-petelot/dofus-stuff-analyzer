@@ -135,6 +135,16 @@ export async function queryIndex(
   return scored.slice(0, Math.max(k, 1)).map(({ entry }) => entry);
 }
 
+export function getAllIndexedItems(): CandidateRef[] {
+  const index = requireIndex();
+  const results: CandidateRef[] = [];
+  for (const slot of SLOTS) {
+    const entries = index.items[slot] ?? [];
+    results.push(...entries);
+  }
+  return results;
+}
+
 // Warm the index cache immediately when possible.
 (function bootstrap() {
   try {

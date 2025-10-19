@@ -1,4 +1,9 @@
 import { ROI, SLOTS } from "../config/suggestions";
+import {
+  deltaE2000,
+  hexToLab,
+  rgbToLab,
+} from "./colorEngine";
 import type {
   BoundingBox,
   DofusPalette,
@@ -33,33 +38,6 @@ interface LabAccumulator {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
-}
-
-function rgbToLab(r: number, g: number, b: number): Lab {
-  const srgb = [r, g, b].map((v) => {
-    const c = v / 255;
-    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-  });
-  const [R, G, B] = srgb;
-  const X = R * 0.4124 + G * 0.3576 + B * 0.1805;
-  const Y = R * 0.2126 + G * 0.7152 + B * 0.0722;
-  const Z = R * 0.0193 + G * 0.1192 + B * 0.9505;
-  const refX = 0.95047;
-  const refY = 1;
-  const refZ = 1.08883;
-  const xyz = [X / refX, Y / refY, Z / refZ].map((value) =>
-    value > 0.008856 ? Math.pow(value, 1 / 3) : 7.787 * value + 16 / 116,
-  );
-  const [fx, fy, fz] = xyz;
-  return { L: 116 * fy - 16, a: 500 * (fx - fy), b: 200 * (fy - fz) };
-}
-
-function hexToLab(hex: string): Lab {
-  const [r, g, b] = hex
-    .replace("#", "")
-    .match(/.{1,2}/g)!
-    .map((part) => parseInt(part, 16));
-  return rgbToLab(r, g, b);
 }
 
 function valueSaturation(r: number, g: number, b: number): { value: number; saturation: number } {
@@ -202,55 +180,4 @@ export function snapToDofusPalette(
   return result;
 }
 
-/**
- * Compute the ΔE2000 difference between two Lab colours.
- * Implementation adapted from the CIEDE2000 reference formula.
- */
-export function deltaE2000(a: Lab, b: Lab): number {
-  const rad2deg = (rad: number) => (180 * rad) / Math.PI;
-  const deg2rad = (deg: number) => (Math.PI * deg) / 180;
-
-  const C1 = Math.sqrt(a.a * a.a + a.b * a.b);
-  const C2 = Math.sqrt(b.a * b.a + b.b * b.b);
-  const avgC = (C1 + C2) / 2;
-  const avgC7 = Math.pow(avgC, 7);
-  const twentyFive7 = Math.pow(25, 7);
-  const G = 0.5 * (1 - Math.sqrt(avgC7 / (avgC7 + twentyFive7)));
-  const a1p = (1 + G) * a.a;
-  const a2p = (1 + G) * b.a;
-  const C1p = Math.sqrt(a1p * a1p + a.b * a.b);
-  const C2p = Math.sqrt(a2p * a2p + b.b * b.b);
-  const avgCp = (C1p + C2p) / 2;
-  const h1p = Math.atan2(a.b, a1p) % (2 * Math.PI);
-  const h2p = Math.atan2(b.b, a2p) % (2 * Math.PI);
-  const h1 = h1p >= 0 ? h1p : h1p + 2 * Math.PI;
-  const h2 = h2p >= 0 ? h2p : h2p + 2 * Math.PI;
-  let deltahp = h2 - h1;
-  if (Math.abs(deltahp) > Math.PI) {
-    deltahp -= Math.sign(deltahp) * 2 * Math.PI;
-  }
-  const deltaLp = b.L - a.L;
-  const deltaCp = C2p - C1p;
-  const deltaHp = 2 * Math.sqrt(C1p * C2p) * Math.sin(deltahp / 2);
-  const avgLp = (a.L + b.L) / 2;
-  const avgHp = Math.abs(h1 - h2) > Math.PI ? (h1 + h2 + 2 * Math.PI) / 2 : (h1 + h2) / 2;
-  const T =
-    1 -
-    0.17 * Math.cos(avgHp - deg2rad(30)) +
-    0.24 * Math.cos(2 * avgHp) +
-    0.32 * Math.cos(3 * avgHp + deg2rad(6)) -
-    0.2 * Math.cos(4 * avgHp - deg2rad(63));
-  const deltaTheta = deg2rad(30) * Math.exp(-Math.pow((rad2deg(avgHp) - 275) / 25, 2));
-  const avgCp7 = Math.pow(avgCp, 7);
-  const Rc = 2 * Math.sqrt(avgCp7 / (avgCp7 + twentyFive7));
-  const Sl = 1 + (0.015 * Math.pow(avgLp - 50, 2)) / Math.sqrt(20 + Math.pow(avgLp - 50, 2));
-  const Sc = 1 + 0.045 * avgCp;
-  const Sh = 1 + 0.015 * avgCp * T;
-  const Rt = -Math.sin(2 * deltaTheta) * Rc;
-  return Math.sqrt(
-    Math.pow(deltaLp / Sl, 2) +
-      Math.pow(deltaCp / Sc, 2) +
-      Math.pow(deltaHp / Sh, 2) +
-      Rt * (deltaCp / Sc) * (deltaHp / Sh),
-  );
-}
+export { deltaE2000 } from "./colorEngine";
