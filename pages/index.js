@@ -203,6 +203,108 @@ function normalizeColorToHex(color) {
   return null;
 }
 
+function normalizeSelection(indexes, limit, poolLength) {
+  if (!Number.isFinite(limit) || limit <= 0 || !Number.isFinite(poolLength) || poolLength <= 0) {
+    return { indexes: [], changed: Array.isArray(indexes) && indexes.length > 0 };
+  }
+
+  const previous = Array.isArray(indexes) ? indexes : [];
+  const used = new Set();
+  const normalized = Array.from({ length: limit }, (_, slotIndex) => {
+    let candidate = previous[slotIndex];
+    if (!Number.isFinite(candidate) || candidate < 0 || candidate >= poolLength) {
+      candidate = slotIndex;
+    }
+
+    let safety = 0;
+    while (used.has(candidate) && safety < poolLength) {
+      candidate = (candidate + 1) % poolLength;
+      safety += 1;
+    }
+
+    used.add(candidate);
+    return candidate;
+  });
+
+  const changed =
+    normalized.length !== previous.length ||
+    normalized.some((value, index) => value !== previous[index]);
+
+  return { indexes: normalized, changed };
+}
+
+function cycleItemSelection(indexes, limit, poolLength, targetSlot, options = {}) {
+  const normalizedResult = normalizeSelection(indexes, limit, poolLength);
+  const normalized = normalizedResult.indexes;
+  let changed = normalizedResult.changed;
+
+  if (!Number.isFinite(limit) || limit <= 0 || !Number.isFinite(poolLength) || poolLength <= 0) {
+    return { indexes: normalized, selection: null, changed };
+  }
+
+  if (!Number.isFinite(targetSlot) || targetSlot < 0 || targetSlot >= limit) {
+    return { indexes: normalized, selection: null, changed };
+  }
+
+  if (Number.isFinite(options.forcedSelection)) {
+    const desired = Math.min(poolLength - 1, Math.max(0, Math.trunc(options.forcedSelection)));
+    const used = new Set([desired]);
+    const updated = Array.from({ length: limit }, (_, slotIndex) => {
+      if (slotIndex === targetSlot) {
+        return desired;
+      }
+
+      let candidate = normalized[slotIndex];
+      if (!Number.isFinite(candidate) || candidate < 0 || candidate >= poolLength) {
+        candidate = slotIndex >= targetSlot ? slotIndex + 1 : slotIndex;
+      }
+
+      let safety = 0;
+      while (used.has(candidate) && safety < poolLength) {
+        candidate = (candidate + 1) % poolLength;
+        safety += 1;
+      }
+
+      used.add(candidate);
+      return candidate;
+    });
+
+    const updatedChanged =
+      changed ||
+      updated.length !== normalized.length ||
+      updated.some((value, index) => value !== normalized[index]);
+
+    return { indexes: updated, selection: desired, changed: updatedChanged };
+  }
+
+  const activeIndex = normalized[targetSlot];
+  if (!Number.isFinite(activeIndex)) {
+    return { indexes: normalized, selection: null, changed };
+  }
+
+  if (poolLength <= 1) {
+    return { indexes: normalized, selection: activeIndex, changed };
+  }
+
+  const forbidden = new Set(normalized.filter((_, index) => index !== targetSlot));
+  let nextIndex = activeIndex;
+  let safety = 0;
+
+  do {
+    nextIndex = (nextIndex + 1) % poolLength;
+    safety += 1;
+  } while (forbidden.has(nextIndex) && safety < poolLength * 2);
+
+  if (nextIndex === activeIndex || forbidden.has(nextIndex)) {
+    return { indexes: normalized, selection: activeIndex, changed };
+  }
+
+  const updated = [...normalized];
+  updated[targetSlot] = nextIndex;
+
+  return { indexes: updated, selection: nextIndex, changed: true };
+}
+
 function extractPaletteFromItemData(item) {
   const palette = [];
   const seen = new Set();
@@ -2207,6 +2309,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   const [itemsLoading, setItemsLoading] = useState(false);
   const [itemsError, setItemsError] = useState(null);
   const [panelItemIndexes, setPanelItemIndexes] = useState({});
+  const [proposalItemIndexes, setProposalItemIndexes] = useState({});
   const [familierFilters, setFamilierFilters] = useState(() =>
     FAMILIER_FILTERS.reduce((accumulator, filter) => {
       const isDefaultEnabled = filter.key === "pet" || filter.key === "mount";
@@ -2614,6 +2717,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   useEffect(() => {
     if (!recommendations) {
       setPanelItemIndexes({});
+      setProposalItemIndexes({});
       return;
     }
 
@@ -2623,7 +2727,6 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
 
       ITEM_TYPES.forEach((type) => {
         const pool = recommendations[type] ?? [];
-
         if (!pool.length) {
           next[type] = [];
           if (Array.isArray(previous?.[type]) && previous[type].length) {
@@ -2633,30 +2736,48 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         }
 
         const limit = Math.min(PANEL_ITEMS_LIMIT, pool.length);
-        const used = new Set();
-        const prevIndexes = Array.isArray(previous?.[type]) ? previous[type] : [];
-        const normalized = Array.from({ length: limit }, (_, slotIndex) => {
-          let candidate = prevIndexes[slotIndex];
-          if (!Number.isFinite(candidate) || candidate < 0 || candidate >= pool.length) {
-            candidate = slotIndex;
+        const { indexes, changed: normalizedChanged } = normalizeSelection(previous?.[type], limit, pool.length);
+        next[type] = indexes;
+        if (normalizedChanged) {
+          changed = true;
+        }
+      });
+
+      const previousKeys = previous ? Object.keys(previous) : [];
+      const nextKeys = Object.keys(next);
+
+      if (
+        previousKeys.length !== nextKeys.length ||
+        previousKeys.some((key) => !(key in next))
+      ) {
+        changed = true;
+      }
+
+      if (!changed) {
+        return previous;
+      }
+
+      return next;
+    });
+
+    setProposalItemIndexes((previous) => {
+      const next = {};
+      let changed = false;
+
+      ITEM_TYPES.forEach((type) => {
+        const pool = recommendations[type] ?? [];
+        if (!pool.length) {
+          next[type] = [];
+          if (Array.isArray(previous?.[type]) && previous[type].length) {
+            changed = true;
           }
+          return;
+        }
 
-          let safety = 0;
-          while (used.has(candidate) && safety < pool.length) {
-            candidate = (candidate + 1) % pool.length;
-            safety += 1;
-          }
-
-          used.add(candidate);
-          return candidate;
-        });
-
-        next[type] = normalized;
-
-        if (
-          normalized.length !== prevIndexes.length ||
-          normalized.some((value, index) => value !== prevIndexes[index])
-        ) {
+        const limit = Math.min(PROPOSAL_COUNT, pool.length);
+        const { indexes, changed: normalizedChanged } = normalizeSelection(previous?.[type], limit, pool.length);
+        next[type] = indexes;
+        if (normalizedChanged) {
           changed = true;
         }
       });
@@ -2703,7 +2824,16 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     for (let index = 0; index < total; index += 1) {
       const items = ITEM_TYPES.map((type) => {
         const pool = recommendations[type] ?? [];
-        const pick = pool[index] ?? pool[0];
+        if (!pool.length) {
+          return null;
+        }
+        const selections = Array.isArray(proposalItemIndexes?.[type]) ? proposalItemIndexes[type] : [];
+        const selectionIndex = selections[index];
+        const poolIndex =
+          Number.isFinite(selectionIndex) && selectionIndex >= 0 && selectionIndex < pool.length
+            ? selectionIndex
+            : index;
+        const pick = pool[poolIndex] ?? pool[0];
         if (!pick) {
           return null;
         }
@@ -2834,6 +2964,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     activeGenderLabel,
     activeGenderValue,
     fallbackColorValues,
+    proposalItemIndexes,
     recommendations,
     useCustomSkinTone,
   ]);
@@ -3155,7 +3286,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   }, []);
 
   const handleRerollItem = useCallback(
-    (type, slotIndex) => {
+    (type, options = {}) => {
       if (!recommendations) {
         return;
       }
@@ -3165,65 +3296,47 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         return;
       }
 
-      const limit = Math.min(PANEL_ITEMS_LIMIT, pool.length);
-      if (slotIndex < 0 || slotIndex >= limit) {
-        return;
+      const { proposalIndex = null, panelSlotIndex = null } =
+        typeof options === "number" ? { panelSlotIndex: options } : options;
+
+      let nextSelection = null;
+
+      if (Number.isFinite(proposalIndex)) {
+        const limit = Math.min(PROPOSAL_COUNT, pool.length);
+        if (proposalIndex >= 0 && proposalIndex < limit) {
+          setProposalItemIndexes((previous = {}) => {
+            const prevIndexes = Array.isArray(previous[type]) ? previous[type] : [];
+            const result = cycleItemSelection(prevIndexes, limit, pool.length, proposalIndex);
+            nextSelection = result.selection;
+            if (!result.changed) {
+              return previous;
+            }
+            return { ...previous, [type]: result.indexes };
+          });
+        }
       }
 
-      if (pool.length <= limit) {
-        return;
+      const targetSlot = Number.isFinite(panelSlotIndex)
+        ? panelSlotIndex
+        : Number.isFinite(proposalIndex)
+        ? 0
+        : null;
+
+      if (Number.isFinite(targetSlot)) {
+        const limit = Math.min(PANEL_ITEMS_LIMIT, pool.length);
+        if (targetSlot >= 0 && targetSlot < limit) {
+          setPanelItemIndexes((previous = {}) => {
+            const prevIndexes = Array.isArray(previous[type]) ? previous[type] : [];
+            const result = cycleItemSelection(prevIndexes, limit, pool.length, targetSlot, {
+              forcedSelection: Number.isFinite(nextSelection) ? nextSelection : undefined,
+            });
+            if (!result.changed) {
+              return previous;
+            }
+            return { ...previous, [type]: result.indexes };
+          });
+        }
       }
-
-      setPanelItemIndexes((previous) => {
-        const nextState = { ...(previous ?? {}) };
-        const prevIndexes = Array.isArray(nextState[type]) ? nextState[type] : [];
-        const used = new Set();
-        const normalized = Array.from({ length: limit }, (_, index) => {
-          let candidate = prevIndexes[index];
-          if (!Number.isFinite(candidate) || candidate < 0 || candidate >= pool.length) {
-            candidate = index;
-          }
-
-          let safety = 0;
-          while (used.has(candidate) && safety < pool.length) {
-            candidate = (candidate + 1) % pool.length;
-            safety += 1;
-          }
-
-          used.add(candidate);
-          return candidate;
-        });
-
-        const activeIndex = normalized[slotIndex];
-        if (!Number.isFinite(activeIndex)) {
-          nextState[type] = normalized;
-          return nextState;
-        }
-
-        if (pool.length <= 1) {
-          nextState[type] = normalized;
-          return nextState;
-        }
-
-        const forbidden = new Set(normalized.filter((_, idx) => idx !== slotIndex));
-        let nextIndex = activeIndex;
-        let safety = 0;
-
-        do {
-          nextIndex = (nextIndex + 1) % pool.length;
-          safety += 1;
-        } while (forbidden.has(nextIndex) && safety < pool.length * 2);
-
-        if (nextIndex === activeIndex || forbidden.has(nextIndex)) {
-          nextState[type] = normalized;
-          return nextState;
-        }
-
-        const updated = [...normalized];
-        updated[slotIndex] = nextIndex;
-        nextState[type] = updated;
-        return nextState;
-      });
     },
     [recommendations]
   );
@@ -4204,6 +4317,8 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                         const altText = t("suggestions.render.itemAlt", {
                                           name: item.name ?? slotLabel,
                                         });
+                                        const rerollDisabled =
+                                          (recommendations?.[item.slotType]?.length ?? 0) <= 1;
 
                                         return (
                                           <li key={`${proposal.id}-${item.id}`} className="skin-card__equipment-slot">
@@ -4230,6 +4345,23 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                                 </div>
                                               </div>
                                             </div>
+                                            <button
+                                              type="button"
+                                              className="skin-card__reroll"
+                                              onClick={() =>
+                                                handleRerollItem(item.slotType, {
+                                                  proposalIndex: proposal.index,
+                                                })
+                                              }
+                                              title={t("suggestions.render.reroll")}
+                                              aria-label={t("aria.itemReroll", {
+                                                type: slotLabel,
+                                                item: itemName,
+                                              })}
+                                              disabled={rerollDisabled}
+                                            >
+                                              <span aria-hidden="true">↻</span>
+                                            </button>
                                           </li>
                                         );
                                       })}
@@ -4261,22 +4393,43 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                         const slotLabelKey = ITEM_TYPE_LABEL_KEYS[item.slotType];
                                         const slotLabel = slotLabelKey ? t(slotLabelKey) : item.slotType;
                                         const itemName = item.name ?? slotLabel;
+                                        const rerollDisabled =
+                                          (recommendations?.[item.slotType]?.length ?? 0) <= 1;
                                         return (
                                           <li key={`${proposal.id}-${item.id}-entry`} className="skin-card__list-item">
                                             <span className="skin-card__list-type">{slotLabel}</span>
-                                            <a
-                                              href={item.url}
-                                              target="_blank"
-                                              rel="noreferrer"
-                                              className="skin-card__list-link"
-                                            >
-                                              {item.imageUrl ? (
-                                                <span className="skin-card__list-thumb" aria-hidden="true">
-                                                  <img src={item.imageUrl} alt="" loading="lazy" />
-                                                </span>
-                                              ) : null}
-                                              <span className="skin-card__list-text">{itemName}</span>
-                                            </a>
+                                            <div className="skin-card__list-actions">
+                                              <a
+                                                href={item.url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="skin-card__list-link"
+                                              >
+                                                {item.imageUrl ? (
+                                                  <span className="skin-card__list-thumb" aria-hidden="true">
+                                                    <img src={item.imageUrl} alt="" loading="lazy" />
+                                                  </span>
+                                                ) : null}
+                                                <span className="skin-card__list-text">{itemName}</span>
+                                              </a>
+                                              <button
+                                                type="button"
+                                                className="skin-card__reroll skin-card__reroll--inline"
+                                                onClick={() =>
+                                                  handleRerollItem(item.slotType, {
+                                                    proposalIndex: proposal.index,
+                                                  })
+                                                }
+                                                title={t("suggestions.render.reroll")}
+                                                aria-label={t("aria.itemReroll", {
+                                                  type: slotLabel,
+                                                  item: itemName,
+                                                })}
+                                                disabled={rerollDisabled}
+                                              >
+                                                <span aria-hidden="true">↻</span>
+                                              </button>
+                                            </div>
                                           </li>
                                         );
                                       })}
@@ -4401,7 +4554,6 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
 
                           return { item: pool[poolIndex], slotIndex };
                         }).filter(Boolean);
-                        const canTypeReroll = pool.length > items.length;
                         return (
                           <section key={type} className="suggestions__group">
                             <header className="suggestions__group-header">
@@ -4460,20 +4612,6 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                                           >
                                             {item.name}
                                           </a>
-                                          {canTypeReroll ? (
-                                            <button
-                                              type="button"
-                                              className="suggestions__reroll"
-                                              onClick={() => handleRerollItem(type, slotIndex)}
-                                              title={t("suggestions.panel.reroll")}
-                                              aria-label={t("aria.itemReroll", {
-                                                type: typeLabelForAria,
-                                                item: item.name ?? type,
-                                              })}
-                                            >
-                                              <span aria-hidden="true">↻</span>
-                                            </button>
-                                          ) : null}
                                         </div>
                                         <div
                                           className={`suggestions__swatches${hasPalette ? "" : " suggestions__swatches--empty"}`}

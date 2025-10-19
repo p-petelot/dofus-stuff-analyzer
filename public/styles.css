@@ -1646,6 +1646,61 @@ a {
   text-transform: uppercase;
 }
 
+.skin-card__reroll {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: rgba(15, 23, 42, 0.78);
+  color: rgba(226, 232, 240, 0.88);
+  font-size: 0.9rem;
+  line-height: 1;
+  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease,
+    transform 0.2s ease;
+  cursor: pointer;
+}
+
+.skin-card__reroll:hover,
+.skin-card__reroll:focus-visible {
+  color: var(--highlight);
+  border-color: rgba(139, 92, 246, 0.5);
+  background: rgba(30, 41, 59, 0.9);
+  transform: rotate(-10deg);
+}
+
+.skin-card__reroll:focus-visible {
+  outline: 2px solid rgba(139, 92, 246, 0.55);
+  outline-offset: 2px;
+}
+
+.skin-card__reroll:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.skin-card__reroll span {
+  display: inline-block;
+}
+
+.skin-card__equipment-slot > .skin-card__reroll {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 28px;
+  height: 28px;
+  backdrop-filter: blur(8px);
+}
+
+.skin-card__reroll--inline {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+}
+
 .skin-card__tooltip {
   position: absolute;
   bottom: calc(100% + 12px);
@@ -1818,6 +1873,15 @@ a {
   letter-spacing: 0.1em;
   color: rgba(226, 232, 240, 0.65);
   flex-shrink: 0;
+}
+
+.skin-card__list-actions {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .skin-card__list-link {
@@ -2276,6 +2340,7 @@ a {
   gap: 4px;
 }
 
+
 .suggestions__card-header {
   display: flex;
   align-items: center;
@@ -2284,40 +2349,6 @@ a {
 
 .suggestions__card-header .suggestions__title {
   flex: 1 1 auto;
-}
-
-.suggestions__reroll {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  background: rgba(15, 23, 42, 0.6);
-  color: var(--text-muted);
-  font-size: 0.9rem;
-  line-height: 1;
-  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease,
-    transform 0.2s ease;
-}
-
-.suggestions__reroll:hover,
-.suggestions__reroll:focus-visible {
-  color: var(--highlight);
-  border-color: rgba(139, 92, 246, 0.6);
-  background: rgba(30, 41, 59, 0.8);
-  transform: rotate(-8deg);
-}
-
-.suggestions__reroll:focus-visible {
-  outline: 2px solid rgba(139, 92, 246, 0.55);
-  outline-offset: 2px;
-}
-
-.suggestions__reroll span {
-  display: inline-block;
 }
 
 .suggestions__swatches {
