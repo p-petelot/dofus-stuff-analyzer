@@ -134,6 +134,10 @@ const TRANSLATIONS = {
     "errors.paletteEstimated": "Palette estimée à partir des données DofusDB.",
     "suggestions.header.updating": "Mise à jour…",
     "suggestions.empty.start": "Lance une analyse pour découvrir des correspondances Dofus adaptées.",
+    "suggestions.empty.identity":
+      "Sélectionne une classe et une référence couleur pour afficher des suggestions.",
+    "suggestions.empty.results":
+      "Aucune combinaison exploitable n'a été trouvée pour cette palette.",
     "suggestions.loading.items": "Chargement des objets Dofus…",
     "suggestions.empty.catalog": "Aucun objet n'a pu être récupéré pour le moment.",
     "suggestions.carousel.skinCount": "Skin {current} / {total}",
@@ -261,6 +265,8 @@ const TRANSLATIONS = {
     "errors.paletteEstimated": "Palette estimated from DofusDB data.",
     "suggestions.header.updating": "Updating…",
     "suggestions.empty.start": "Start an analysis to discover matching Dofus equipment.",
+    "suggestions.empty.identity": "Pick a class and a reference color to see tailored suggestions.",
+    "suggestions.empty.results": "No usable combinations were found for this palette.",
     "suggestions.loading.items": "Loading Dofus items…",
     "suggestions.empty.catalog": "No items could be retrieved yet.",
     "suggestions.carousel.skinCount": "Skin {current} / {total}",
@@ -388,6 +394,8 @@ const TRANSLATIONS = {
     "errors.paletteEstimated": "Paleta estimada a partir de los datos de DofusDB.",
     "suggestions.header.updating": "Actualizando…",
     "suggestions.empty.start": "Inicia un análisis para descubrir combinaciones de Dofus adecuadas.",
+    "suggestions.empty.identity": "Selecciona una clase y un color de referencia para ver sugerencias adaptadas.",
+    "suggestions.empty.results": "No se encontraron combinaciones utilizables para esta paleta.",
     "suggestions.loading.items": "Cargando objetos de Dofus…",
     "suggestions.empty.catalog": "Todavía no se han podido recuperar objetos.",
     "suggestions.carousel.skinCount": "Skin {current} / {total}",
@@ -515,6 +523,9 @@ const TRANSLATIONS = {
     "errors.paletteEstimated": "Palette aus DofusDB-Daten geschätzt.",
     "suggestions.header.updating": "Aktualisierung…",
     "suggestions.empty.start": "Starte eine Analyse, um passende Dofus-Gegenstände zu entdecken.",
+    "suggestions.empty.identity":
+      "Wähle eine Klasse und eine Referenzfarbe, um passende Vorschläge zu erhalten.",
+    "suggestions.empty.results": "Für diese Palette wurden keine passenden Kombinationen gefunden.",
     "suggestions.loading.items": "Dofus-Gegenstände werden geladen…",
     "suggestions.empty.catalog": "Es konnten noch keine Gegenstände abgerufen werden.",
     "suggestions.carousel.skinCount": "Skin {current} / {total}",
@@ -642,6 +653,9 @@ const TRANSLATIONS = {
     "errors.paletteEstimated": "Paleta estimada a partir dos dados do DofusDB.",
     "suggestions.header.updating": "Atualizando…",
     "suggestions.empty.start": "Inicie uma análise para descobrir combinações adequadas de Dofus.",
+    "suggestions.empty.identity":
+      "Escolha uma classe e uma cor de referência para ver sugestões personalizadas.",
+    "suggestions.empty.results": "Nenhuma combinação utilizável foi encontrada para esta paleta.",
     "suggestions.loading.items": "Carregando itens de Dofus…",
     "suggestions.empty.catalog": "Nenhum item pôde ser recuperado por enquanto.",
     "suggestions.carousel.skinCount": "Skin {current} / {total}",

@@ -962,11 +962,15 @@ function buildBarbofusLink(
 
   const {
     useCustomSkinTone = true,
-    classId = BARBOFUS_DEFAULTS.classId,
+    classId = null,
     gender = BARBOFUS_DEFAULTS.gender,
     faceId = BARBOFUS_DEFAULTS.faceId,
     classDefaults = [],
   } = options;
+
+  if (!Number.isFinite(classId)) {
+    return null;
+  }
 
   const paletteValues = Array.isArray(paletteHexes)
     ? paletteHexes
@@ -1057,7 +1061,7 @@ function buildBarbofusLink(
 
   const payload = {
     1: Number.isFinite(gender) ? gender : BARBOFUS_DEFAULTS.gender,
-    2: Number.isFinite(classId) ? classId : BARBOFUS_DEFAULTS.classId,
+    2: classId,
     4: resolvedColors,
     5: equipment,
   };
@@ -1190,9 +1194,13 @@ function adjustHexLightness(hex, deltaL, deltaS = 0) {
 }
 
 function buildGradientFromHex(hex) {
-  const darker = adjustHexLightness(hex, -0.2, -0.08);
-  const lighter = adjustHexLightness(hex, 0.18, -0.12);
-  return `linear-gradient(135deg, ${darker}, ${hex}, ${lighter})`;
+  const normalized = normalizeColorToHex(hex);
+  if (!normalized) {
+    return "linear-gradient(135deg, #1F2937, #111827)";
+  }
+  const darker = adjustHexLightness(normalized, -0.2, -0.08);
+  const lighter = adjustHexLightness(normalized, 0.18, -0.12);
+  return `linear-gradient(135deg, ${darker}, ${normalized}, ${lighter})`;
 }
 
 function getImageDimensions(image) {
@@ -2221,7 +2229,7 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
   return enriched;
 }
 
-export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
+export default function Home({ initialBreeds = [] }) {
   const router = useRouter();
   const routerLang = router?.query?.lang;
   const { language, languages: languageOptions, setLanguage, t } = useLanguage();
@@ -2319,7 +2327,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   );
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [inputMode, setInputMode] = useState("image");
-  const [selectedColor, setSelectedColor] = useState("#8B5CF6");
+  const [selectedColor, setSelectedColor] = useState(null);
   const [activeProposal, setActiveProposal] = useState(0);
   const [lookPreviews, setLookPreviews] = useState({});
   const lookPreviewsRef = useRef({});
@@ -2327,26 +2335,14 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   const [useCustomSkinTone, setUseCustomSkinTone] = useState(false);
   const [showDetailedMatches, setShowDetailedMatches] = useState(false);
   const [breeds, setBreeds] = useState(() =>
-    Array.isArray(initialBreeds) && initialBreeds.length
-      ? initialBreeds
-      : [BARBOFUS_DEFAULT_BREED]
+    Array.isArray(initialBreeds) && initialBreeds.length ? initialBreeds : []
   );
   const [breedsLoading, setBreedsLoading] = useState(false);
   const [breedsError, setBreedsError] = useState(null);
-  const [selectedBreedId, setSelectedBreedId] = useState(() => {
-    if (Array.isArray(initialBreeds) && initialBreeds.length) {
-      const fallbackEntry =
-        initialBreeds.find((entry) => entry.id === BARBOFUS_DEFAULTS.classId) ?? initialBreeds[0];
-      if (fallbackEntry && Number.isFinite(fallbackEntry.id)) {
-        return fallbackEntry.id;
-      }
-    }
-    return BARBOFUS_DEFAULTS.classId;
-  });
+  const [selectedBreedId, setSelectedBreedId] = useState(null);
   const [selectedGender, setSelectedGender] = useState(BARBOFUS_DEFAULT_GENDER_KEY);
   const progressHandles = useRef({ frame: null, timeout: null, value: 0 });
   const breedsRequestRef = useRef(null);
-  const hasInitializedDefaultPaletteRef = useRef(false);
 
   const handleLanguageSelect = useCallback(
     (nextLanguage) => {
@@ -2391,24 +2387,27 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
 
   const activeBreed = useMemo(() => {
     if (!Array.isArray(breeds) || breeds.length === 0) {
-      return BARBOFUS_DEFAULT_BREED;
+      return null;
+    }
+    if (!Number.isFinite(selectedBreedId)) {
+      return null;
     }
     const found = breeds.find((entry) => entry.id === selectedBreedId);
-    return found ?? breeds[0] ?? BARBOFUS_DEFAULT_BREED;
+    return found ?? null;
   }, [breeds, selectedBreedId]);
 
   const activeGenderConfig = useMemo(() => {
-    const fallback = selectedGender === "male" ? BARBOFUS_DEFAULT_BREED.male : BARBOFUS_DEFAULT_BREED.female;
     if (!activeBreed) {
-      return fallback;
+      return null;
     }
+    const fallback = selectedGender === "male" ? BARBOFUS_DEFAULT_BREED.male : BARBOFUS_DEFAULT_BREED.female;
     return selectedGender === "male" ? activeBreed.male ?? fallback : activeBreed.female ?? fallback;
   }, [activeBreed, selectedGender]);
 
-  const activeClassId = typeof activeBreed?.id === "number" ? activeBreed.id : BARBOFUS_DEFAULTS.classId;
+  const activeClassId = Number.isFinite(activeBreed?.id) ? activeBreed.id : null;
   const activeGenderValue = BARBOFUS_GENDER_VALUES[selectedGender] ?? BARBOFUS_DEFAULTS.gender;
   const activeGenderLabel = selectedGender === "male" ? t("identity.gender.male") : t("identity.gender.female");
-  const activeClassDefaults = activeGenderConfig?.colors?.numeric ?? [];
+  const activeClassDefaults = activeBreed ? activeGenderConfig?.colors?.numeric ?? [] : [];
   const fallbackFaceId = Number.isFinite(activeGenderConfig?.faceId)
     ? activeGenderConfig.faceId
     : Number.isFinite(activeGenderConfig?.lookId)
@@ -2487,9 +2486,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
         if (previous != null && dataset.some((entry) => entry.id === previous)) {
           return previous;
         }
-        const fallbackEntry =
-          dataset.find((entry) => entry.id === BARBOFUS_DEFAULTS.classId) ?? dataset[0] ?? null;
-        return fallbackEntry?.id ?? previous ?? BARBOFUS_DEFAULTS.classId;
+        return null;
       });
     } catch (err) {
       if (controller?.signal?.aborted) {
@@ -2498,7 +2495,9 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       console.error(err);
       setBreedsError(t("errors.breeds"));
       setBreeds([BARBOFUS_DEFAULT_BREED]);
-      setSelectedBreedId(BARBOFUS_DEFAULT_BREED.id);
+      setSelectedBreedId((previous) =>
+        Number.isFinite(previous) && previous === BARBOFUS_DEFAULT_BREED.id ? previous : null
+      );
     } finally {
       if (controller && breedsRequestRef.current === controller) {
         setBreedsLoading(false);
@@ -2531,9 +2530,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       if (initialBreeds.some((entry) => entry.id === previous)) {
         return previous;
       }
-      const fallbackEntry =
-        initialBreeds.find((entry) => entry.id === BARBOFUS_DEFAULTS.classId) ?? initialBreeds[0];
-      return fallbackEntry?.id ?? BARBOFUS_DEFAULTS.classId;
+      return null;
     });
   }, [initialBreeds]);
 
@@ -2557,6 +2554,21 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
 
   const applyColorSeed = useCallback(
     (seedHex) => {
+      if (!seedHex) {
+        setColors([]);
+        setImageSignature(null);
+        setImageShape(null);
+        setImageTones(null);
+        setImageHash(null);
+        setImageEdges(null);
+        setIsProcessing(false);
+        setAnalysisProgress(0);
+        setCopiedCode(null);
+        setToast(null);
+        setError(null);
+        return;
+      }
+
       const palette = generatePaletteFromSeed(seedHex);
       setColors(palette);
       setImageSignature(null);
@@ -2582,23 +2594,13 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       return;
     }
 
+    if (!selectedColor) {
+      return;
+    }
+
     applyColorSeed(selectedColor);
     setImageSrc(null);
   }, [applyColorSeed, inputMode, selectedColor]);
-
-  useEffect(() => {
-    if (hasInitializedDefaultPaletteRef.current) {
-      return;
-    }
-
-    if (colorsCount > 0) {
-      hasInitializedDefaultPaletteRef.current = true;
-      return;
-    }
-
-    hasInitializedDefaultPaletteRef.current = true;
-    applyColorSeed(selectedColor);
-  }, [applyColorSeed, colorsCount, selectedColor]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -2656,7 +2658,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   }, [colorsCount, imageSrc, isProcessing]);
 
   const recommendations = useMemo(() => {
-    if (!colors.length) {
+    if (!colors.length || !Number.isFinite(activeClassId)) {
       return null;
     }
 
@@ -2719,6 +2721,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
       return accumulator;
     }, {});
   }, [
+    activeClassId,
     colors,
     imageSignature,
     imageShape,
@@ -2816,7 +2819,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   }, [recommendations]);
 
   const proposals = useMemo(() => {
-    if (!recommendations) {
+    if (!recommendations || !Number.isFinite(activeClassId)) {
       return [];
     }
 
@@ -3916,7 +3919,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                   className="color-picker__preview"
                   style={{ backgroundImage: buildGradientFromHex(selectedColor) }}
                 >
-                  <span className="color-picker__preview-value">{selectedColor}</span>
+                  <span className="color-picker__preview-value">{selectedColor ?? "—"}</span>
                 </div>
                 <div className="color-picker__controls">
                   <label className="color-picker__label sr-only" htmlFor="seed-color">
@@ -3927,7 +3930,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                       id="seed-color"
                       className="color-picker__input"
                       type="color"
-                      value={selectedColor}
+                      value={selectedColor ?? "#8B5CF6"}
                       onChange={handleColorInput}
                     />
                     <button type="button" className="color-picker__random" onClick={handleRandomizeColor}>
@@ -4209,6 +4212,10 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
           {colors.length === 0 ? (
             <div className="suggestions__empty">
               <p>{t("suggestions.empty.start")}</p>
+            </div>
+          ) : !Number.isFinite(activeClassId) ? (
+            <div className="suggestions__status suggestions__status--empty">
+              <p>{t("suggestions.empty.identity")}</p>
             </div>
           ) : !hasCatalogData && itemsLoading ? (
             <div className="suggestions__status suggestions__status--loading">
@@ -4700,7 +4707,11 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
                   </button>
                 ) : null}
                 </div>
-              ) : null}
+              ) : (
+                <div className="suggestions__status suggestions__status--empty">
+                  <p>{t("suggestions.empty.results")}</p>
+                </div>
+              )}
             </>
           )}
         </section>
