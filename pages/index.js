@@ -3074,7 +3074,7 @@ export default function Home({ initialBreeds = [] }) {
       if (
         existing &&
         existing.lookKey === proposal.lookKey &&
-        (existing.status === "loaded" || existing.status === "loading")
+        existing.status === "loaded"
       ) {
         return;
       }
