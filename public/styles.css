@@ -2400,17 +2400,13 @@ a {
 
 .item-flags--overlay {
   position: absolute;
-  top: -6px;
-  right: -6px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
+  inset: 0;
   z-index: 2;
   pointer-events: none;
 }
 
 .item-flag--overlay {
+  position: absolute;
   width: auto;
   height: auto;
   padding: 0;
@@ -2425,9 +2421,19 @@ a {
   filter: drop-shadow(0 4px 6px rgba(5, 8, 22, 0.35));
 }
 
+.item-flag--overlay.item-flag--cosmetic {
+  top: -10px;
+  left: -12px;
+}
+
 .item-flag--overlay.item-flag--cosmetic img {
   transform: rotate(-18deg);
-  transform-origin: 90% 10%;
+  transform-origin: 85% 15%;
+}
+
+.item-flag--overlay.item-flag--colorable {
+  bottom: -12px;
+  right: -10px;
 }
 
 .item-flag--overlay.item-flag--colorable img {
