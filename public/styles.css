@@ -1646,6 +1646,27 @@ a {
   text-transform: uppercase;
 }
 
+.skin-card__equipment-trigger--colorable {
+  background:
+    radial-gradient(circle at 18% 20%, rgba(248, 113, 113, 0.6), transparent 52%),
+    radial-gradient(circle at 78% 18%, rgba(250, 204, 21, 0.48), transparent 50%),
+    radial-gradient(circle at 26% 84%, rgba(34, 197, 94, 0.46), transparent 55%),
+    radial-gradient(circle at 84% 76%, rgba(14, 165, 233, 0.52), transparent 54%),
+    radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.38), transparent 68%),
+    rgba(17, 24, 39, 0.85);
+  border-color: rgba(148, 163, 184, 0.4);
+  box-shadow:
+    inset 0 0 0 1px rgba(15, 23, 42, 0.45),
+    0 16px 32px -28px rgba(14, 165, 233, 0.6);
+}
+
+.skin-card__equipment-trigger--colorable:hover,
+.skin-card__equipment-trigger--colorable:focus-visible {
+  box-shadow:
+    inset 0 0 0 1px rgba(15, 23, 42, 0.45),
+    0 22px 36px -24px rgba(14, 165, 233, 0.75);
+}
+
 .skin-card__reroll {
   display: inline-flex;
   align-items: center;
@@ -2314,10 +2335,22 @@ a {
   background: rgba(15, 23, 42, 0.45);
   display: grid;
   place-items: center;
-  overflow: hidden;
+  overflow: visible;
   width: clamp(46px, 5.6vw, 66px);
   height: clamp(46px, 5.6vw, 66px);
   margin: 0 auto;
+}
+
+.suggestions__thumb--colorable {
+  background:
+    radial-gradient(circle at 18% 20%, rgba(248, 113, 113, 0.52), transparent 52%),
+    radial-gradient(circle at 78% 16%, rgba(250, 204, 21, 0.44), transparent 50%),
+    radial-gradient(circle at 28% 84%, rgba(34, 197, 94, 0.42), transparent 55%),
+    radial-gradient(circle at 86% 78%, rgba(14, 165, 233, 0.48), transparent 54%),
+    radial-gradient(circle at 52% 54%, rgba(168, 85, 247, 0.32), transparent 64%),
+    rgba(30, 41, 59, 0.76);
+  border-color: rgba(148, 163, 184, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.42);
 }
 
 .suggestions__thumb img {
@@ -2349,6 +2382,101 @@ a {
 
 .suggestions__card-header .suggestions__title {
   flex: 1 1 auto;
+}
+
+.item-flags {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.item-flag {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(5, 8, 22, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 18px -16px rgba(15, 23, 42, 0.95);
+}
+
+.item-flag.item-flag--cosmetic {
+  background: linear-gradient(145deg, rgba(245, 158, 11, 0.32), rgba(250, 204, 21, 0.18));
+  border-color: rgba(234, 179, 8, 0.48);
+}
+
+.item-flag.item-flag--colorable {
+  background: radial-gradient(circle at 30% 30%, rgba(248, 113, 113, 0.28), rgba(14, 165, 233, 0.12));
+  border-color: rgba(59, 130, 246, 0.42);
+}
+
+.item-flag img {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.item-flags--compact .item-flag {
+  width: 18px;
+  height: 18px;
+}
+
+.item-flags--compact .item-flag img {
+  width: 12px;
+  height: 12px;
+}
+
+.item-flags--overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  display: block;
+}
+
+.item-flag--overlay {
+  position: absolute;
+  width: auto;
+  height: auto;
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+
+.item-flag--overlay img {
+  width: 20px;
+  height: 20px;
+  filter: drop-shadow(0 4px 6px rgba(5, 8, 22, 0.35));
+}
+
+.item-flag--overlay.item-flag--cosmetic {
+  left: 4px;
+  bottom: 2px;
+}
+
+.item-flag--overlay.item-flag--cosmetic img {
+  width: 18px;
+  height: 18px;
+  transform: rotate(-18deg);
+  transform-origin: 58% 92%;
+}
+
+.skin-card__list-link .item-flags {
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+
+.skin-card__tooltip-flags {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: rgba(226, 232, 240, 0.72);
 }
 
 .suggestions__swatches {

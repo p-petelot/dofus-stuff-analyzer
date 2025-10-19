@@ -1,0 +1,41 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="cosmeticCrownBody" x1="6" y1="26" x2="26" y2="6" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F59E0B" />
+      <stop offset="0.45" stop-color="#FACC15" />
+      <stop offset="1" stop-color="#FDE68A" />
+    </linearGradient>
+    <linearGradient id="cosmeticCrownBase" x1="8" y1="24" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EA580C" />
+      <stop offset="1" stop-color="#F97316" />
+    </linearGradient>
+    <radialGradient id="cosmeticGem" cx="0" cy="0" r="1" gradientTransform="translate(16 18) scale(5)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FACC15" />
+      <stop offset="0.55" stop-color="#F97316" />
+      <stop offset="1" stop-color="#DC2626" />
+    </radialGradient>
+  </defs>
+  <path
+    d="M7.5 11.2L11.16 16.68L14.24 9.18C14.74 7.94 17.26 7.94 17.76 9.18L20.84 16.68L24.5 11.2C25.28 10.06 26.94 10.34 27.44 11.68L29.24 16.62C30.02 18.74 28.44 21 26.18 21H5.82C3.56 21 1.98 18.74 2.76 16.62L4.56 11.68C5.02 10.34 6.68 10.04 7.5 11.2Z"
+    fill="url(#cosmeticCrownBody)"
+    stroke="#F97316"
+    stroke-width="1.1"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M6 22.5H26C27.1 22.5 28 23.4 28 24.5V25.6C28 26.7 27.1 27.6 26 27.6H6C4.9 27.6 4 26.7 4 25.6V24.5C4 23.4 4.9 22.5 6 22.5Z"
+    fill="url(#cosmeticCrownBase)"
+  />
+  <path
+    d="M16 14.6L13.9 17.5H18.1L16 14.6Z"
+    fill="url(#cosmeticGem)"
+    stroke="#BE123C"
+    stroke-width="0.8"
+    stroke-linejoin="round"
+  />
+  <circle cx="9.2" cy="14.3" r="1.25" fill="#FCD34D" stroke="#F59E0B" stroke-width="0.6" />
+  <circle cx="22.8" cy="14.3" r="1.25" fill="#FCD34D" stroke="#F59E0B" stroke-width="0.6" />
+  <circle cx="8.6" cy="9.4" r="2.1" fill="#FACC15" stroke="#F59E0B" stroke-width="0.8" />
+  <circle cx="23.4" cy="9.4" r="2.1" fill="#FACC15" stroke="#F59E0B" stroke-width="0.8" />
+  <circle cx="16" cy="7.4" r="2.4" fill="#FACC15" stroke="#F97316" stroke-width="0.9" />
+</svg>

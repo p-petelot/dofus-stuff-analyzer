@@ -62,6 +62,11 @@ FAMILIER_FILTERS.forEach((filter) => {
   });
 });
 
+const ITEM_FLAG_FILTERS = Object.freeze([
+  { key: "colorable", labelKey: "items.filters.colorable", flagKey: "isColorable" },
+  { key: "cosmetic", labelKey: "items.filters.cosmetic", flagKey: "isCosmetic" },
+]);
+
 const ITEM_TYPE_CONFIG = {
   coiffe: {
     requests: [
@@ -655,6 +660,96 @@ function buildEncyclopediaUrl(item, fallbackId, language = DEFAULT_LANGUAGE) {
   return `https://dofusdb.fr/${normalized}/database/object/${ankamaId}`;
 }
 
+function normalizeBooleanFlag(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined) {
+      continue;
+    }
+
+    if (typeof value === "boolean") {
+      return value;
+    }
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+      if (value > 0) {
+        return true;
+      }
+      if (value === 0) {
+        return false;
+      }
+      continue;
+    }
+
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (!normalized) {
+        continue;
+      }
+      if (["true", "1", "yes", "y", "oui", "vrai", "si", "sí", "sim", "ja", "verdadeiro"].includes(normalized)) {
+        return true;
+      }
+      if (["false", "0", "no", "n", "non", "faux", "nao", "não", "nein"].includes(normalized)) {
+        return false;
+      }
+    }
+  }
+
+  return false;
+}
+
+const ITEM_FLAG_CONFIG = {
+  cosmetic: {
+    icon: "/icons/cosmetic.svg",
+    labelKey: "items.flags.cosmetic",
+    fallback: "Cosmetic item",
+    className: "item-flag--cosmetic",
+  },
+  colorable: {
+    icon: "/icons/colorable.svg",
+    labelKey: "items.flags.colorable",
+    fallback: "Matches character colors",
+    className: "item-flag--colorable",
+  },
+};
+
+function buildItemFlags(item, translator) {
+  if (!item) {
+    return [];
+  }
+
+  const keys = [];
+
+  if (item.isCosmetic === true) {
+    keys.push("cosmetic");
+  }
+
+  if (item.isColorable === true) {
+    keys.push("colorable");
+  }
+
+  return keys
+    .map((key) => {
+      const config = ITEM_FLAG_CONFIG[key];
+      if (!config) {
+        return null;
+      }
+      const label =
+        typeof translator === "function"
+          ? translator(config.labelKey, undefined, config.fallback ?? key)
+          : config.fallback ?? key;
+      if (!label || !config.icon) {
+        return null;
+      }
+      return {
+        key,
+        icon: config.icon,
+        label,
+        className: config.className ?? null,
+      };
+    })
+    .filter(Boolean);
+}
+
 function normalizeDofusItem(rawItem, type, options = {}) {
   const {
     language = DEFAULT_LANGUAGE,
@@ -687,6 +782,31 @@ function normalizeDofusItem(rawItem, type, options = {}) {
     type === "familier" && rawTypeId != null
       ? FAMILIER_TYPE_ID_TO_FILTER_KEY.get(rawTypeId) ?? null
       : null;
+  const superTypeId = Number.isFinite(Number(rawItem?.type?.superTypeId))
+    ? Number(rawItem.type.superTypeId)
+    : null;
+  const superTypeNameFr =
+    typeof rawItem?.type?.superType?.name?.fr === "string"
+      ? rawItem.type.superType.name.fr.trim().toLowerCase()
+      : null;
+  const superTypeNameEn =
+    typeof rawItem?.type?.superType?.name?.en === "string"
+      ? rawItem.type.superType.name.en.trim().toLowerCase()
+      : null;
+  const isCosmetic = normalizeBooleanFlag(
+    rawItem?.isCosmetic,
+    rawItem?.itemSet?.isCosmetic,
+    superTypeId === 22 ? true : null,
+    superTypeNameFr === "cosmétiques" ? true : null,
+    superTypeNameEn === "cosmetics" ? true : null
+  );
+  const isColorable = normalizeBooleanFlag(
+    rawItem?.isColorable,
+    rawItem?.appearance?.isColorable,
+    rawItem?.type?.isColorable,
+    rawItem?.isDyeable,
+    rawItem?.dyeable
+  );
 
   return {
     id: `${type}-${identifierString}`,
@@ -699,6 +819,8 @@ function normalizeDofusItem(rawItem, type, options = {}) {
     ankamaId,
     typeId: rawTypeId,
     familierCategory,
+    isCosmetic,
+    isColorable,
     signature: null,
     shape: null,
     tones: null,
@@ -2325,6 +2447,12 @@ export default function Home({ initialBreeds = [] }) {
       return accumulator;
     }, {})
   );
+  const [itemFlagFilters, setItemFlagFilters] = useState(() =>
+    ITEM_FLAG_FILTERS.reduce((accumulator, filter) => {
+      accumulator[filter.key] = true;
+      return accumulator;
+    }, {})
+  );
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [inputMode, setInputMode] = useState("image");
   const [selectedColor, setSelectedColor] = useState(null);
@@ -2380,6 +2508,17 @@ export default function Home({ initialBreeds = [] }) {
     }
 
     setFamilierFilters((previous) => ({
+      ...previous,
+      [key]: !previous[key],
+    }));
+  }, []);
+
+  const handleItemFlagFilterToggle = useCallback((key) => {
+    if (!ITEM_FLAG_FILTERS.some((filter) => filter.key === key)) {
+      return;
+    }
+
+    setItemFlagFilters((previous) => ({
       ...previous,
       [key]: !previous[key],
     }));
@@ -2665,6 +2804,24 @@ export default function Home({ initialBreeds = [] }) {
     return ITEM_TYPES.reduce((accumulator, type) => {
       let catalogItems = itemsCatalog[type] ?? [];
 
+      if (catalogItems.length) {
+        catalogItems = catalogItems.filter((item) => {
+          if (!item) {
+            return false;
+          }
+
+          if (itemFlagFilters.colorable === false && item.isColorable === true) {
+            return false;
+          }
+
+          if (itemFlagFilters.cosmetic === false && item.isCosmetic === true) {
+            return false;
+          }
+
+          return true;
+        });
+      }
+
       if (type === "familier") {
         const activeFilters = FAMILIER_FILTERS.filter((filter) => familierFilters[filter.key]);
         if (!activeFilters.length) {
@@ -2730,6 +2887,7 @@ export default function Home({ initialBreeds = [] }) {
     imageEdges,
     itemsCatalog,
     familierFilters,
+    itemFlagFilters,
   ]);
 
   useEffect(() => {
@@ -4193,6 +4351,54 @@ export default function Home({ initialBreeds = [] }) {
                 <p className="companion-toggle__empty" role="status">{t("identity.companion.empty")}</p>
               ) : null}
             </div>
+            <div
+              className="identity-card__section"
+              role="group"
+              aria-label={t("aria.itemFlagSection")}
+            >
+              <span className="identity-card__section-title">{t("identity.filters.sectionTitle")}</span>
+              <div
+                className="companion-toggle companion-toggle--item-flags"
+                role="group"
+                aria-label={t("aria.itemFlagFilter")}
+              >
+                {ITEM_FLAG_FILTERS.map((filter) => {
+                  const isActive = itemFlagFilters[filter.key] !== false;
+                  const label = t(filter.labelKey);
+                  const title = isActive
+                    ? t("companions.toggle.hide", { label: label.toLowerCase() })
+                    : t("companions.toggle.show", { label: label.toLowerCase() });
+
+                  return (
+                    <button
+                      key={filter.key}
+                      type="button"
+                      className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
+                      onClick={() => handleItemFlagFilterToggle(filter.key)}
+                      aria-pressed={isActive}
+                      title={title}
+                    >
+                      <span className="companion-toggle__indicator" aria-hidden="true">
+                        {isActive ? (
+                          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                              d="M5 10.5 8.2 13.7 15 6.5"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        ) : (
+                          <span className="companion-toggle__dot" />
+                        )}
+                      </span>
+                      <span className="companion-toggle__label">{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -4366,10 +4572,19 @@ export default function Home({ initialBreeds = [] }) {
                                         });
                                         const rerollDisabled =
                                           (recommendations?.[item.slotType]?.length ?? 0) <= 1;
+                                        const flagEntries = buildItemFlags(item, t);
+                                        const overlayFlags = flagEntries.filter((flag) => flag.key !== "colorable");
+                                        const flagSummary = flagEntries.map((flag) => flag.label).join(", ");
+                                        const overlaySummary = overlayFlags.map((flag) => flag.label).join(", ");
+                                        const isColorable = item.isColorable === true;
+                                        const triggerClasses = ["skin-card__equipment-trigger"];
+                                        if (isColorable) {
+                                          triggerClasses.push("skin-card__equipment-trigger--colorable");
+                                        }
 
                                         return (
                                           <li key={`${proposal.id}-${item.id}`} className="skin-card__equipment-slot">
-                                            <div className="skin-card__equipment-trigger" tabIndex={0}>
+                                            <div className={triggerClasses.join(" ")} tabIndex={0}>
                                               {item.imageUrl ? (
                                                 <img
                                                   src={item.imageUrl}
@@ -4380,6 +4595,29 @@ export default function Home({ initialBreeds = [] }) {
                                               ) : (
                                                 <span className="skin-card__equipment-fallback">{slotLabel}</span>
                                               )}
+                                              {overlayFlags.length ? (
+                                                <span
+                                                  className="item-flags item-flags--overlay"
+                                                  role="img"
+                                                  aria-label={overlaySummary || undefined}
+                                                  title={overlaySummary || undefined}
+                                                >
+                                                  {overlayFlags.map((flag) => {
+                                                    const classes = ["item-flag", "item-flag--overlay"];
+                                                    if (flag.className) {
+                                                      classes.push(flag.className);
+                                                    }
+                                                    return (
+                                                      <span
+                                                        key={`${proposal.id}-${item.id}-${flag.key}-equip`}
+                                                        className={classes.join(" ")}
+                                                      >
+                                                        <img src={flag.icon} alt="" aria-hidden="true" />
+                                                      </span>
+                                                    );
+                                                  })}
+                                                </span>
+                                              ) : null}
                                               <div className="skin-card__tooltip" role="tooltip">
                                                 {item.imageUrl ? (
                                                   <span className="skin-card__tooltip-thumb" aria-hidden="true">
@@ -4389,6 +4627,9 @@ export default function Home({ initialBreeds = [] }) {
                                                 <div className="skin-card__tooltip-body">
                                                   <span className="skin-card__tooltip-title">{itemName}</span>
                                                   <span className="skin-card__tooltip-subtitle">{slotLabel}</span>
+                                                  {flagEntries.length ? (
+                                                    <span className="skin-card__tooltip-flags">{flagSummary}</span>
+                                                  ) : null}
                                                 </div>
                                               </div>
                                             </div>
@@ -4442,6 +4683,8 @@ export default function Home({ initialBreeds = [] }) {
                                         const itemName = item.name ?? slotLabel;
                                         const rerollDisabled =
                                           (recommendations?.[item.slotType]?.length ?? 0) <= 1;
+                                        const flagEntries = buildItemFlags(item, t);
+                                        const flagSummary = flagEntries.map((flag) => flag.label).join(", ");
                                         return (
                                           <li key={`${proposal.id}-${item.id}-entry`} className="skin-card__list-item">
                                             <span className="skin-card__list-type">{slotLabel}</span>
@@ -4458,6 +4701,29 @@ export default function Home({ initialBreeds = [] }) {
                                                   </span>
                                                 ) : null}
                                                 <span className="skin-card__list-text">{itemName}</span>
+                                                {flagEntries.length ? (
+                                                  <span
+                                                    className="item-flags item-flags--compact"
+                                                    role="img"
+                                                    aria-label={flagSummary}
+                                                    title={flagSummary}
+                                                  >
+                                                    {flagEntries.map((flag) => {
+                                                      const classes = ["item-flag"];
+                                                      if (flag.className) {
+                                                        classes.push(flag.className);
+                                                      }
+                                                      return (
+                                                        <span
+                                                          key={`${proposal.id}-${item.id}-${flag.key}-list`}
+                                                          className={classes.join(" ")}
+                                                        >
+                                                          <img src={flag.icon} alt="" aria-hidden="true" />
+                                                        </span>
+                                                      );
+                                                    })}
+                                                  </span>
+                                                ) : null}
                                               </a>
                                               <button
                                                 type="button"
@@ -4621,10 +4887,11 @@ export default function Home({ initialBreeds = [] }) {
                                   const notes = [];
                                   const typeLabel =
                                     ITEM_TYPE_LABEL_KEYS[type] ? t(ITEM_TYPE_LABEL_KEYS[type]) : type;
-                                  const typeLabelForAria =
-                                    typeof typeLabel === "string"
-                                      ? typeLabel.toLowerCase()
-                                      : String(typeLabel ?? type);
+                                  const isColorable = item.isColorable === true;
+                                  const thumbClasses = ["suggestions__thumb"];
+                                  if (isColorable) {
+                                    thumbClasses.push("suggestions__thumb--colorable");
+                                  }
                                   if (!hasPalette) {
                                     notes.push(t("errors.paletteMissing"));
                                   } else if (!paletteFromImage) {
@@ -4636,7 +4903,7 @@ export default function Home({ initialBreeds = [] }) {
 
                                   return (
                                     <li key={item.id} className="suggestions__card">
-                                      <div className="suggestions__thumb">
+                                      <div className={thumbClasses.join(" ")}>
                                         {item.imageUrl ? (
                                           <img
                                             src={item.imageUrl}
