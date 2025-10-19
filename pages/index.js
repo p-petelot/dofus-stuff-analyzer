@@ -697,11 +697,13 @@ const ITEM_FLAG_CONFIG = {
     icon: "/icons/cosmetic.svg",
     labelKey: "items.flags.cosmetic",
     fallback: "Cosmetic item",
+    className: "item-flag--cosmetic",
   },
   colorable: {
     icon: "/icons/colorable.svg",
     labelKey: "items.flags.colorable",
     fallback: "Matches character colors",
+    className: "item-flag--colorable",
   },
 };
 
@@ -733,7 +735,12 @@ function buildItemFlags(item, translator) {
       if (!label || !config.icon) {
         return null;
       }
-      return { key, icon: config.icon, label };
+      return {
+        key,
+        icon: config.icon,
+        label,
+        className: config.className ?? null,
+      };
     })
     .filter(Boolean);
 }
@@ -4499,14 +4506,20 @@ export default function Home({ initialBreeds = [] }) {
                                                   aria-label={flagSummary}
                                                   title={flagSummary}
                                                 >
-                                                  {flagEntries.map((flag) => (
-                                                    <span
-                                                      key={`${proposal.id}-${item.id}-${flag.key}-equip`}
-                                                      className="item-flag item-flag--overlay"
-                                                    >
-                                                      <img src={flag.icon} alt="" aria-hidden="true" />
-                                                    </span>
-                                                  ))}
+                                                  {flagEntries.map((flag) => {
+                                                    const classes = ["item-flag", "item-flag--overlay"];
+                                                    if (flag.className) {
+                                                      classes.push(flag.className);
+                                                    }
+                                                    return (
+                                                      <span
+                                                        key={`${proposal.id}-${item.id}-${flag.key}-equip`}
+                                                        className={classes.join(" ")}
+                                                      >
+                                                        <img src={flag.icon} alt="" aria-hidden="true" />
+                                                      </span>
+                                                    );
+                                                  })}
                                                 </span>
                                               ) : null}
                                               <div className="skin-card__tooltip" role="tooltip">
@@ -4599,14 +4612,20 @@ export default function Home({ initialBreeds = [] }) {
                                                     aria-label={flagSummary}
                                                     title={flagSummary}
                                                   >
-                                                    {flagEntries.map((flag) => (
-                                                      <span
-                                                        key={`${proposal.id}-${item.id}-${flag.key}-list`}
-                                                        className="item-flag"
-                                                      >
-                                                        <img src={flag.icon} alt="" aria-hidden="true" />
-                                                      </span>
-                                                    ))}
+                                                    {flagEntries.map((flag) => {
+                                                      const classes = ["item-flag"];
+                                                      if (flag.className) {
+                                                        classes.push(flag.className);
+                                                      }
+                                                      return (
+                                                        <span
+                                                          key={`${proposal.id}-${item.id}-${flag.key}-list`}
+                                                          className={classes.join(" ")}
+                                                        >
+                                                          <img src={flag.icon} alt="" aria-hidden="true" />
+                                                        </span>
+                                                      );
+                                                    })}
                                                   </span>
                                                 ) : null}
                                               </a>
@@ -4799,15 +4818,21 @@ export default function Home({ initialBreeds = [] }) {
                                         )}
                                         {flagEntries.length ? (
                                           <span className="item-flags item-flags--overlay" aria-hidden="true">
-                                            {flagEntries.map((flag) => (
-                                              <span
-                                                key={`${item.id}-${flag.key}-overlay`}
-                                                className="item-flag item-flag--overlay"
-                                                aria-hidden="true"
-                                              >
-                                                <img src={flag.icon} alt="" aria-hidden="true" />
-                                              </span>
-                                            ))}
+                                            {flagEntries.map((flag) => {
+                                              const classes = ["item-flag", "item-flag--overlay"];
+                                              if (flag.className) {
+                                                classes.push(flag.className);
+                                              }
+                                              return (
+                                                <span
+                                                  key={`${item.id}-${flag.key}-overlay`}
+                                                  className={classes.join(" ")}
+                                                  aria-hidden="true"
+                                                >
+                                                  <img src={flag.icon} alt="" aria-hidden="true" />
+                                                </span>
+                                              );
+                                            })}
                                           </span>
                                         ) : null}
                                       </div>
@@ -4828,11 +4853,20 @@ export default function Home({ initialBreeds = [] }) {
                                               aria-label={flagSummary}
                                               title={flagSummary}
                                             >
-                                              {flagEntries.map((flag) => (
-                                                <span key={`${item.id}-${flag.key}-inline`} className="item-flag">
-                                                  <img src={flag.icon} alt="" aria-hidden="true" />
-                                                </span>
-                                              ))}
+                                              {flagEntries.map((flag) => {
+                                                const classes = ["item-flag"];
+                                                if (flag.className) {
+                                                  classes.push(flag.className);
+                                                }
+                                                return (
+                                                  <span
+                                                    key={`${item.id}-${flag.key}-inline`}
+                                                    className={classes.join(" ")}
+                                                  >
+                                                    <img src={flag.icon} alt="" aria-hidden="true" />
+                                                  </span>
+                                                );
+                                              })}
                                             </span>
                                           ) : null}
                                         </div>

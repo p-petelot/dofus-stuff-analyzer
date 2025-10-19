@@ -1,18 +1,41 @@
-<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="crownBody" x1="4" y1="20" x2="20" y2="4" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FDE68A"/>
-      <stop offset="0.5" stop-color="#F59E0B"/>
-      <stop offset="1" stop-color="#FBBF24"/>
+    <linearGradient id="cosmeticCrownBody" x1="6" y1="26" x2="26" y2="6" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F59E0B" />
+      <stop offset="0.45" stop-color="#FACC15" />
+      <stop offset="1" stop-color="#FDE68A" />
     </linearGradient>
-    <linearGradient id="crownBase" x1="4" y1="18" x2="20" y2="18" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#F59E0B"/>
-      <stop offset="1" stop-color="#FB923C"/>
+    <linearGradient id="cosmeticCrownBase" x1="8" y1="24" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EA580C" />
+      <stop offset="1" stop-color="#F97316" />
     </linearGradient>
+    <radialGradient id="cosmeticGem" cx="0" cy="0" r="1" gradientTransform="translate(16 18) scale(5)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FACC15" />
+      <stop offset="0.55" stop-color="#F97316" />
+      <stop offset="1" stop-color="#DC2626" />
+    </radialGradient>
   </defs>
-  <path d="M4.2 8.3L7.18 12.52L9.84 6.44C10.24 5.44 11.76 5.44 12.16 6.44L14.82 12.52L17.8 8.3C18.4 7.52 19.6 7.72 20 8.64L21.46 12.08C21.98 13.36 21.06 14.8 19.74 14.8H4.26C2.94 14.8 2.02 13.36 2.54 12.08L4 8.64C4.36 7.76 5.56 7.5 6.16 8.3Z" fill="url(#crownBody)" stroke="#F59E0B" stroke-width="0.8" stroke-linejoin="round"/>
-  <path d="M4 16H20C20.6 16 21 16.4 21 17V18C21 18.6 20.6 19 20 19H4C3.4 19 3 18.6 3 18V17C3 16.4 3.4 16 4 16Z" fill="url(#crownBase)"/>
-  <path d="M12 9.75L10.75 11.5H13.25L12 9.75Z" fill="#FDE68A" stroke="#FBBF24" stroke-width="0.6" stroke-linejoin="round"/>
-  <circle cx="6.5" cy="10.3" r="0.85" fill="#FBBF24" stroke="#FDE68A" stroke-width="0.4"/>
-  <circle cx="17.5" cy="10.3" r="0.85" fill="#FBBF24" stroke="#FDE68A" stroke-width="0.4"/>
+  <path
+    d="M7.5 11.2L11.16 16.68L14.24 9.18C14.74 7.94 17.26 7.94 17.76 9.18L20.84 16.68L24.5 11.2C25.28 10.06 26.94 10.34 27.44 11.68L29.24 16.62C30.02 18.74 28.44 21 26.18 21H5.82C3.56 21 1.98 18.74 2.76 16.62L4.56 11.68C5.02 10.34 6.68 10.04 7.5 11.2Z"
+    fill="url(#cosmeticCrownBody)"
+    stroke="#F97316"
+    stroke-width="1.1"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M6 22.5H26C27.1 22.5 28 23.4 28 24.5V25.6C28 26.7 27.1 27.6 26 27.6H6C4.9 27.6 4 26.7 4 25.6V24.5C4 23.4 4.9 22.5 6 22.5Z"
+    fill="url(#cosmeticCrownBase)"
+  />
+  <path
+    d="M16 14.6L13.9 17.5H18.1L16 14.6Z"
+    fill="url(#cosmeticGem)"
+    stroke="#BE123C"
+    stroke-width="0.8"
+    stroke-linejoin="round"
+  />
+  <circle cx="9.2" cy="14.3" r="1.25" fill="#FCD34D" stroke="#F59E0B" stroke-width="0.6" />
+  <circle cx="22.8" cy="14.3" r="1.25" fill="#FCD34D" stroke="#F59E0B" stroke-width="0.6" />
+  <circle cx="8.6" cy="9.4" r="2.1" fill="#FACC15" stroke="#F59E0B" stroke-width="0.8" />
+  <circle cx="23.4" cy="9.4" r="2.1" fill="#FACC15" stroke="#F59E0B" stroke-width="0.8" />
+  <circle cx="16" cy="7.4" r="2.4" fill="#FACC15" stroke="#F97316" stroke-width="0.9" />
 </svg>

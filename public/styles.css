@@ -2314,7 +2314,7 @@ a {
   background: rgba(15, 23, 42, 0.45);
   display: grid;
   place-items: center;
-  overflow: hidden;
+  overflow: visible;
   width: clamp(46px, 5.6vw, 66px);
   height: clamp(46px, 5.6vw, 66px);
   margin: 0 auto;
@@ -2372,6 +2372,16 @@ a {
   box-shadow: 0 10px 18px -16px rgba(15, 23, 42, 0.95);
 }
 
+.item-flag.item-flag--cosmetic {
+  background: linear-gradient(145deg, rgba(245, 158, 11, 0.32), rgba(250, 204, 21, 0.18));
+  border-color: rgba(234, 179, 8, 0.48);
+}
+
+.item-flag.item-flag--colorable {
+  background: radial-gradient(circle at 30% 30%, rgba(248, 113, 113, 0.28), rgba(14, 165, 233, 0.12));
+  border-color: rgba(59, 130, 246, 0.42);
+}
+
 .item-flag img {
   width: 14px;
   height: 14px;
@@ -2390,19 +2400,39 @@ a {
 
 .item-flags--overlay {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  gap: 3px;
+  top: -6px;
+  right: -6px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
   z-index: 2;
   pointer-events: none;
 }
 
 .item-flag--overlay {
-  width: 18px;
-  height: 18px;
-  background: rgba(5, 8, 22, 0.82);
-  border-color: rgba(148, 163, 184, 0.4);
-  box-shadow: 0 10px 18px -16px rgba(15, 23, 42, 0.95);
+  width: auto;
+  height: auto;
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+
+.item-flag--overlay img {
+  width: 26px;
+  height: 26px;
+  filter: drop-shadow(0 4px 6px rgba(5, 8, 22, 0.35));
+}
+
+.item-flag--overlay.item-flag--cosmetic img {
+  transform: rotate(-18deg);
+  transform-origin: 90% 10%;
+}
+
+.item-flag--overlay.item-flag--colorable img {
+  width: 24px;
+  height: 24px;
 }
 
 .skin-card__list-link .item-flags {
