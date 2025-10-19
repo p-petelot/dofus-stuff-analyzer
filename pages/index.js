@@ -740,7 +740,7 @@ const TONE_CONFIDENCE_DISTANCE = 0.72;
 const TONE_CONFIDENCE_WEIGHT = 0.18;
 const MIN_ALPHA_WEIGHT = 0.05;
 const MAX_RECOMMENDATIONS = 12;
-const PANEL_ITEMS_LIMIT = 3;
+const PANEL_ITEMS_LIMIT = 5;
 const PROPOSAL_COUNT = 5;
 const HASH_CONFIDENCE_DISTANCE = 0.32;
 const HASH_CONFIDENCE_WEIGHT = 0.18;
@@ -2346,6 +2346,7 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
   const [selectedGender, setSelectedGender] = useState(BARBOFUS_DEFAULT_GENDER_KEY);
   const progressHandles = useRef({ frame: null, timeout: null, value: 0 });
   const breedsRequestRef = useRef(null);
+  const hasInitializedDefaultPaletteRef = useRef(false);
 
   const handleLanguageSelect = useCallback(
     (nextLanguage) => {
@@ -2584,6 +2585,20 @@ export default function Home({ initialBreeds = [BARBOFUS_DEFAULT_BREED] }) {
     applyColorSeed(selectedColor);
     setImageSrc(null);
   }, [applyColorSeed, inputMode, selectedColor]);
+
+  useEffect(() => {
+    if (hasInitializedDefaultPaletteRef.current) {
+      return;
+    }
+
+    if (colorsCount > 0) {
+      hasInitializedDefaultPaletteRef.current = true;
+      return;
+    }
+
+    hasInitializedDefaultPaletteRef.current = true;
+    applyColorSeed(selectedColor);
+  }, [applyColorSeed, colorsCount, selectedColor]);
 
   useEffect(() => {
     if (typeof window === "undefined") {

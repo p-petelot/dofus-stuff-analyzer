@@ -2284,15 +2284,15 @@ a {
   padding: 0;
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
 }
 
 .suggestions__card {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 5px;
+  padding: 4px;
   border-radius: var(--radius-sm);
   border: 1px solid rgba(148, 163, 184, 0.16);
   background: rgba(15, 23, 42, 0.58);
@@ -2315,8 +2315,8 @@ a {
   display: grid;
   place-items: center;
   overflow: hidden;
-  width: clamp(56px, 7.4vw, 78px);
-  height: clamp(56px, 7.4vw, 78px);
+  width: clamp(46px, 5.6vw, 66px);
+  height: clamp(46px, 5.6vw, 66px);
   margin: 0 auto;
 }
 
@@ -2437,12 +2437,12 @@ a {
 
 @media (max-width: 520px) {
   .suggestions__deck {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 4px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 3px;
   }
 
   .suggestions__card {
-    padding: 10px;
+    padding: 4px;
   }
 
   .suggestions__swatches {
