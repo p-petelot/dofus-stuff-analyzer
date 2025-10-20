@@ -17,6 +17,7 @@ import {
   SLOT_REQUEST_SOURCES,
   getDefaultDofusItemParams,
 } from "../lib/items/dofusSources";
+import { getFallbackBreeds } from "../lib/data/breedsFallback";
 
 const ITEM_TYPES = ["coiffe", "cape", "bouclier", "familier", "epauliere", "costume", "ailes"];
 
@@ -529,6 +530,25 @@ function normalizeBreedsDataset(entries, options = {}) {
       const bIndex = Number.isFinite(b.sortIndex) ? b.sortIndex : b.id;
       return aIndex - bIndex;
     });
+}
+
+function buildFallbackBreedsDataset(language = DEFAULT_LANGUAGE) {
+  try {
+    const fallbackEntries = getFallbackBreeds();
+    if (!Array.isArray(fallbackEntries) || fallbackEntries.length === 0) {
+      return [BARBOFUS_DEFAULT_BREED];
+    }
+
+    const normalized = normalizeBreedsDataset(fallbackEntries, {
+      language,
+      languagePriority: getLanguagePriority(language),
+    });
+
+    return normalized.length ? normalized : [BARBOFUS_DEFAULT_BREED];
+  } catch (error) {
+    console.warn("Unable to build fallback breeds dataset", error);
+    return [BARBOFUS_DEFAULT_BREED];
+  }
 }
 
 function flattenImageReference(reference) {
@@ -2317,7 +2337,7 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
   return enriched;
 }
 
-export default function Home({ initialBreeds = [] }) {
+export default function Home({ initialBreeds = [], initialBreedsSource = "fallback" }) {
   const router = useRouter();
   const routerLang = router?.query?.lang;
   const { language, languages: languageOptions, setLanguage, t } = useLanguage();
@@ -2639,7 +2659,8 @@ export default function Home({ initialBreeds = [] }) {
     });
   }, [initialBreeds]);
 
-  const shouldPreloadBreeds = !Array.isArray(initialBreeds) || initialBreeds.length <= 1;
+  const shouldPreloadBreeds =
+    initialBreedsSource !== "remote" || !Array.isArray(initialBreeds) || initialBreeds.length <= 1;
 
   useEffect(() => {
     if (shouldPreloadBreeds) {
@@ -4961,14 +4982,21 @@ export default function Home({ initialBreeds = [] }) {
 }
 
 export async function getStaticProps() {
-  try {
-    if (typeof fetch !== "function") {
-      return {
-        props: { initialBreeds: [BARBOFUS_DEFAULT_BREED] },
-        revalidate: 3600,
-      };
-    }
+  const fallbackBreeds = buildFallbackBreedsDataset(DEFAULT_LANGUAGE);
+  const revalidateSeconds = 3600;
+  const shouldSkipRemotePrefetch =
+    process.env.SKIP_REMOTE_BREEDS_PREFETCH === "1" ||
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    typeof fetch !== "function";
 
+  if (shouldSkipRemotePrefetch) {
+    return {
+      props: { initialBreeds: fallbackBreeds, initialBreedsSource: "fallback" },
+      revalidate: revalidateSeconds,
+    };
+  }
+
+  try {
     const response = await fetch(buildBreedsUrl(DEFAULT_LANGUAGE), {
       headers: { Accept: "application/json" },
     });
@@ -4983,17 +5011,18 @@ export async function getStaticProps() {
       languagePriority: getLanguagePriority(DEFAULT_LANGUAGE),
     });
 
-    return {
-      props: {
-        initialBreeds: dataset.length ? dataset : [BARBOFUS_DEFAULT_BREED],
-      },
-      revalidate: 3600,
-    };
+    if (dataset.length) {
+      return {
+        props: { initialBreeds: dataset, initialBreedsSource: "remote" },
+        revalidate: revalidateSeconds,
+      };
+    }
   } catch (error) {
-    console.error("Unable to prefetch Dofus breeds:", error);
-    return {
-      props: { initialBreeds: [BARBOFUS_DEFAULT_BREED] },
-      revalidate: 3600,
-    };
+    console.warn("Unable to prefetch Dofus breeds:", error);
   }
+
+  return {
+    props: { initialBreeds: fallbackBreeds, initialBreedsSource: "fallback" },
+    revalidate: revalidateSeconds,
+  };
 }
