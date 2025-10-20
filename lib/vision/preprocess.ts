@@ -23,12 +23,7 @@ function decodeInput(image: Buffer | string): Buffer {
   return Buffer.from(trimmed);
 }
 
-/**
- * Build a deterministic synthetic 512×512 RGBA image that still produces
- * stable colours and alpha values for downstream heuristics. This avoids the
- * need for native image tooling in the evaluation environment.
- */
-function buildSyntheticImage(buffer: Buffer): ImageDataLike {
+function clampToImageData(buffer: Buffer): ImageDataLike {
   const width = DEFAULT_IMAGE_SIZE;
   const height = DEFAULT_IMAGE_SIZE;
   const digest = crypto.createHash("sha1").update(buffer).digest();
@@ -52,6 +47,36 @@ function buildSyntheticImage(buffer: Buffer): ImageDataLike {
   return { width, height, data };
 }
 
+async function decodeWithSharp(buffer: Buffer): Promise<ImageDataLike | null> {
+  const sharp = await getSharp();
+  if (!sharp) {
+    return null;
+  }
+  try {
+    const instance = sharp(buffer, { failOn: "none" }).ensureAlpha();
+    const { data, info } = await instance
+      .resize(DEFAULT_IMAGE_SIZE, DEFAULT_IMAGE_SIZE, {
+        fit: "contain",
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    if (!info.width || !info.height || info.channels < 4) {
+      return null;
+    }
+    return {
+      width: info.width,
+      height: info.height,
+      data: new Uint8ClampedArray(data),
+    };
+  } catch (error) {
+    if (process.env.NODE_ENV !== "test") {
+      console.warn("sharp decode failed, falling back to synthetic buffer", error);
+    }
+    return null;
+  }
+}
+
 /**
  * Extract a single-channel mask based on the synthetic alpha band.
  */
@@ -68,7 +93,8 @@ function buildMask(img: ImageDataLike): Mask {
  */
 export async function normalizeInput(image: Buffer | string): Promise<{ img512: ImageDataLike; mask: Mask }> {
   const buffer = decodeInput(image);
-  const img512 = buildSyntheticImage(buffer);
+  const decoded = await decodeWithSharp(buffer);
+  const img512 = decoded ?? clampToImageData(buffer);
   const mask = buildMask(img512);
   return { img512, mask };
 }
@@ -176,4 +202,34 @@ export function crop(img: ImageDataLike, box: BoundingBox): ImageDataLike {
     }
   }
   return { width, height, data };
+}
+type SharpModule = typeof import("sharp");
+
+let sharpModulePromise: Promise<SharpModule | null> | null = null;
+let sharpUnavailable = false;
+
+async function getSharp(): Promise<SharpModule | null> {
+  if (sharpUnavailable) {
+    return null;
+  }
+  if (!sharpModulePromise) {
+    sharpModulePromise = (async () => {
+      try {
+        const imported = (await import("sharp")) as unknown as SharpModule | { default: SharpModule };
+        const module = (imported as { default?: SharpModule }).default ?? (imported as SharpModule);
+        if (!module) {
+          sharpUnavailable = true;
+          return null;
+        }
+        return module;
+      } catch (error) {
+        sharpUnavailable = true;
+        if (process.env.NODE_ENV !== "test") {
+          console.warn("sharp module unavailable, falling back to synthetic preprocessing", error);
+        }
+        return null;
+      }
+    })();
+  }
+  return sharpModulePromise;
 }
