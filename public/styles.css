@@ -2764,7 +2764,7 @@ a {
 }
 
 .lab-grid {
-  width: min(1400px, calc(100% - 8px));
+  width: min(1360px, calc(100% - 32px));
   margin: 0 auto 56px;
   display: grid;
   gap: 28px;
@@ -2810,11 +2810,11 @@ a {
 .lab-upload {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 16px;
+  gap: 8px;
+  padding: 6px 14px;
   border-radius: 999px;
-  background: rgba(139, 92, 246, 0.18);
-  border: 1px solid rgba(139, 92, 246, 0.35);
+  background: rgba(139, 92, 246, 0.14);
+  border: 1px solid rgba(139, 92, 246, 0.28);
   color: var(--text);
   font-weight: 500;
   cursor: pointer;
@@ -2824,17 +2824,42 @@ a {
   display: none;
 }
 
+.lab-upload__icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(79, 70, 229, 0.2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+}
+
+.lab-upload__text {
+  font-size: 0.9rem;
+}
+
 .lab-preview {
   width: 100%;
   border-radius: var(--radius-md);
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.14);
   background: rgba(15, 23, 42, 0.6);
+  min-height: 220px;
+  max-height: 340px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
 }
 
 .lab-preview img {
-  width: 100%;
+  max-width: 100%;
+  max-height: 300px;
+  width: auto;
+  height: auto;
   display: block;
+  object-fit: contain;
 }
 
 .lab-matches {
@@ -2867,14 +2892,15 @@ a {
 }
 
 .lab-match__colors {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 6px;
   margin-bottom: 12px;
 }
 
 .lab-match__colors span {
-  width: 28px;
-  height: 28px;
+  width: 100%;
+  aspect-ratio: 1 / 1;
   border-radius: 8px;
   border: 1px solid rgba(15, 23, 42, 0.4);
 }
@@ -3009,25 +3035,30 @@ a {
   color: var(--text-soft);
 }
 
+
 .lab-class-selector {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 10px;
+  gap: 10px;
+  margin: 10px -6px 0;
+  padding: 0 6px 6px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
 }
 
 .lab-class-chip {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 14px;
-  border-radius: 12px;
+  padding: 8px 12px;
+  border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.16);
   background: rgba(15, 23, 42, 0.48);
   color: var(--text);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   cursor: pointer;
   transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+  scroll-snap-align: start;
 }
 
 .lab-class-chip:hover,
@@ -3041,10 +3072,11 @@ a {
   background: rgba(99, 102, 241, 0.18);
 }
 
+
 .lab-class-chip__icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
   background: rgba(15, 23, 42, 0.8);
   display: inline-flex;
   align-items: center;
@@ -3299,8 +3331,7 @@ a {
   font-size: 1.2rem;
 }
 
-.lab-classes ul,
-.lab-recent ul {
+.lab-classes ul {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -3309,8 +3340,7 @@ a {
   gap: 10px;
 }
 
-.lab-classes li,
-.lab-recent li {
+.lab-classes li {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -3326,17 +3356,6 @@ a {
   gap: 8px;
 }
 
-.lab-recent__colors {
-  display: flex;
-  gap: 6px;
-}
-
-.lab-recent__info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .lab-class-inline-icon {
   width: 26px;
   height: 26px;
@@ -3348,11 +3367,145 @@ a {
   padding: 2px;
 }
 
+.lab-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lab-recent__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.lab-recent__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.lab-recent-card {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.lab-recent-card__preview {
+  position: relative;
+  background: rgba(15, 23, 42, 0.8);
+  min-height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lab-recent-card__preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.lab-recent-card__placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.lab-recent-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+}
+
+.lab-recent-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.lab-recent-card__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lab-recent-card__title strong {
+  display: block;
+  font-size: 0.95rem;
+}
+
+.lab-recent-card__title span {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-soft);
+}
+
+.lab-recent-card__timestamp {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.lab-recent__colors {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+
 .lab-recent__colors span {
-  width: 22px;
-  height: 22px;
+  width: 100%;
+  aspect-ratio: 1 / 1;
   border-radius: 6px;
   border: 1px solid rgba(15, 23, 42, 0.4);
+}
+
+.lab-recent-card__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lab-recent-card__items li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--text-soft);
+}
+
+.lab-recent-card__items img {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.lab-recent-card__item-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  font-size: 0.7rem;
+  color: var(--text-muted);
 }
 
 .lab-reports {

@@ -17,7 +17,27 @@ const DEFAULT_HEADERS: Record<string, string> = {
   Accept: "application/json",
 };
 
-const BREED_FALLBACK_ORDER = ["iop", "cra", "eniripsa", "sram", "sacrieur", "feca"];
+export const BREED_FALLBACK_ORDER = [
+  "feca",
+  "osamodas",
+  "enutrof",
+  "sram",
+  "xelor",
+  "ecaflip",
+  "eniripsa",
+  "iop",
+  "cra",
+  "sadida",
+  "sacrieur",
+  "pandawa",
+  "roublard",
+  "zobal",
+  "steamer",
+  "eliotrope",
+  "huppermage",
+  "ouginak",
+  "forgelance",
+];
 
 function slugify(value: string): string {
   return value

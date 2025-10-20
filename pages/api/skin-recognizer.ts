@@ -14,7 +14,7 @@ import {
   evaluateSkinRecognizer,
   SkinEvaluationReport,
 } from "../../lib/vision/skinRecognizer";
-import { fetchDofusBreeds, fetchItemsForIndex } from "../../lib/items/dofusFetcher";
+import { BREED_FALLBACK_ORDER, fetchDofusBreeds, fetchItemsForIndex } from "../../lib/items/dofusFetcher";
 import type { BreedOption } from "../../lib/items/dofusFetcher";
 
 interface TrainRequestBody {
@@ -27,6 +27,7 @@ interface TrainRequestBody {
   sexes?: Array<"male" | "female">;
   includeLabeled?: boolean;
   evaluationSamples?: number;
+  language?: string;
 }
 
 interface PredictRequestBody {
@@ -56,6 +57,7 @@ interface LabelRequestBody {
   trainAfter?: boolean;
   evaluationSamples?: number;
   includeLabeled?: boolean;
+  language?: string;
 }
 
 interface AutoTrainRequestBody {
@@ -69,6 +71,7 @@ interface AutoTrainRequestBody {
   classes?: string[];
   paletteSeeds?: string[];
   includeLabeled?: boolean;
+  language?: string;
 }
 
 type RecognizerRequest =
@@ -105,12 +108,41 @@ function groupItemsBySlot(items: CandidateRef[]): Record<SlotKey, CandidateRef[]
   return grouped;
 }
 
-function defaultClassesFromTags(items: CandidateRef[]): string[] {
-  const derived = deriveClassesFromItems(items);
-  if (derived.length) {
-    return derived;
+async function fetchFallbackClasses(language?: string): Promise<string[]> {
+  try {
+    const breeds = await fetchDofusBreeds(language);
+    if (breeds.length) {
+      return breeds.map((breed) => breed.slug);
+    }
+  } catch (error) {
+    console.warn("Failed to load Dofus breeds for recognizer fallback", error);
   }
-  return ["iop", "cra", "eniripsa", "sram"];
+  return BREED_FALLBACK_ORDER;
+}
+
+async function resolveClasses({
+  requested,
+  items,
+  language,
+  extra = [],
+}: {
+  requested?: string[];
+  items: CandidateRef[];
+  language?: string;
+  extra?: Array<string | undefined>;
+}): Promise<string[]> {
+  if (requested?.length) {
+    return Array.from(new Set(requested.map((value) => value.toLowerCase())));
+  }
+  const derived = deriveClassesFromItems(items);
+  const base = derived.length ? derived : await fetchFallbackClasses(language);
+  const unique = new Set(base.map((value) => value.toLowerCase()));
+  extra.forEach((value) => {
+    if (value) {
+      unique.add(value.toLowerCase());
+    }
+  });
+  return Array.from(unique);
 }
 
 function buildItemLookup(items: CandidateRef[]): Map<number, CandidateRef> {
@@ -284,9 +316,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return;
     }
     try {
-      const items = await ensureIndexedItems();
+      const items = await ensureIndexedItems(body.language);
       if (!items.length) {
-        res.status(400).json({ error: "No items available for labelling" });
+        res.status(400).json({ error: "No items available for labeling" });
         return;
       }
       const lookup = buildItemLookup(items);
@@ -298,7 +330,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         items: descriptorItems,
       };
       const { sample, summary } = await recordLabeledSkinSample(body.image, descriptor, { storeImage: true });
-      const classes = Array.from(new Set([...defaultClassesFromTags(items), descriptor.classId]));
+      const classes = await resolveClasses({
+        items,
+        language: body.language,
+        extra: [descriptor.classId],
+      });
       let retrained: null | {
         trainedAt: number;
         metadata: SkinRecognizerModel["metadata"];
@@ -340,25 +376,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (body.action === "train") {
-    const items = await ensureIndexedItems();
+    const items = await ensureIndexedItems(body.language);
     if (!items.length) {
       res.status(400).json({ error: "No items available for training" });
       return;
     }
-    const classes = body.classes?.length ? body.classes : defaultClassesFromTags(items);
+    const classes = await resolveClasses({
+      requested: body.classes,
+      items,
+      language: body.language,
+    });
     try {
       const persist = body.persist ?? true;
-        const model = await trainSkinRecognizer({
-          items,
-          classes,
-          paletteSeeds: body.paletteSeeds,
-          samplesPerClass: body.samplesPerClass,
-          randomSeed: body.randomSeed,
-          persist,
-          includeLabeled: body.includeLabeled ?? true,
-          updateDataset: true,
-          sexes: body.sexes,
-        });
+      const model = await trainSkinRecognizer({
+        items,
+        classes,
+        paletteSeeds: body.paletteSeeds,
+        samplesPerClass: body.samplesPerClass,
+        randomSeed: body.randomSeed,
+        persist,
+        includeLabeled: body.includeLabeled ?? true,
+        updateDataset: true,
+        sexes: body.sexes,
+      });
       const evaluation = body.evaluationSamples
         ? await evaluateSkinRecognizer({
             model,
@@ -385,12 +425,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (body.action === "autoTrain") {
-    const items = await ensureIndexedItems();
+    const items = await ensureIndexedItems(body.language);
     if (!items.length) {
       res.status(400).json({ error: "No items available for auto training" });
       return;
     }
-    const classes = body.classes?.length ? body.classes : defaultClassesFromTags(items);
+    const classes = await resolveClasses({
+      requested: body.classes,
+      items,
+      language: body.language,
+    });
     const iterations = Math.max(1, Math.min(body.iterations ?? 1, 5));
     try {
       const reports: Array<{

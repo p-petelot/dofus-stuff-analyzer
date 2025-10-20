@@ -18,7 +18,35 @@ const SLOT_LABELS = {
   ailes: "Ailes",
 };
 
-const DEFAULT_COLORS = ["#6B7280", "#475569", "#0EA5E9"];
+const MAX_COLORS = 6;
+const DEFAULT_COLORS = ["#6B7280", "#475569", "#0EA5E9", "#1D4ED8", "#F59E0B", "#10B981"];
+
+function normalizePalette(input, fallback = DEFAULT_COLORS) {
+  const source = Array.isArray(input) && input.length ? input : fallback;
+  const sanitized = source
+    .map((value) => {
+      if (typeof value === "string") {
+        return ensureHex(value);
+      }
+      if (value && typeof value === "object") {
+        if (typeof value.hex === "string") {
+          return ensureHex(value.hex);
+        }
+        if (typeof value.value === "string") {
+          return ensureHex(value.value);
+        }
+      }
+      return null;
+    })
+    .filter((hex) => typeof hex === "string");
+  const base = sanitized.length ? sanitized : fallback.map((hex) => ensureHex(hex));
+  const palette = base.slice(0, MAX_COLORS);
+  while (palette.length < MAX_COLORS) {
+    const next = DEFAULT_COLORS[palette.length] ?? DEFAULT_COLORS[DEFAULT_COLORS.length - 1];
+    palette.push(ensureHex(next));
+  }
+  return palette.slice(0, MAX_COLORS);
+}
 
 function normalizeSlotOptions(items) {
   const normalized = (items ?? []).map((entry) => ({
@@ -61,7 +89,7 @@ function toFormDescriptor(match, fallbackPalette = DEFAULT_COLORS) {
     return {
       classId: "",
       sex: "male",
-      colors: [...fallbackPalette],
+      colors: normalizePalette(fallbackPalette),
       items: toItemsState(),
       trainAfter: true,
       evaluationSamples: 2,
@@ -70,7 +98,7 @@ function toFormDescriptor(match, fallbackPalette = DEFAULT_COLORS) {
   return {
     classId: match.classId ?? "",
     sex: match.sex ?? "male",
-    colors: (match.colors && match.colors.length ? match.colors : fallbackPalette).map(ensureHex).slice(0, 5),
+    colors: normalizePalette(match.colors && match.colors.length ? match.colors : fallbackPalette),
     items: toItemsState(match.items),
     trainAfter: true,
     evaluationSamples: 2,
@@ -396,8 +424,9 @@ export default function SkinLabPage() {
   const handleAddColor = useCallback(() => {
     setDescriptorForm((prev) => {
       const colors = [...(prev?.colors ?? [])];
-      if (colors.length >= 6) return prev;
-      colors.push("#FFFFFF");
+      if (colors.length >= MAX_COLORS) return prev;
+      const next = DEFAULT_COLORS[colors.length] ?? DEFAULT_COLORS[DEFAULT_COLORS.length - 1];
+      colors.push(ensureHex(next));
       return { ...prev, colors };
     });
   }, []);
@@ -595,8 +624,9 @@ export default function SkinLabPage() {
               <h2>1. Analyse d'une image</h2>
               <p>Chargez une capture de skin pour obtenir les meilleures correspondances actuelles.</p>
             </div>
-            <label className="lab-upload">
-              <span>{predicting ? "Analyse…" : "Importer une image"}</span>
+            <label className="lab-upload" title="Importer une image">
+              <span className="lab-upload__icon" aria-hidden="true">⬆</span>
+              <span className="lab-upload__text">{predicting ? "Analyse…" : "Importer"}</span>
               <input type="file" accept="image/*" onChange={handleFileChange} disabled={predicting} />
             </label>
           </header>
@@ -628,7 +658,7 @@ export default function SkinLabPage() {
                         <span>{formatPercent(match.score)}</span>
                       </div>
                       <div className="lab-match__colors" aria-hidden="true">
-                        {(match.descriptor.colors ?? []).slice(0, 4).map((hex) => (
+                        {(match.descriptor.colors ?? []).slice(0, MAX_COLORS).map((hex) => (
                           <span key={hex} style={{ backgroundColor: hex }} />
                         ))}
                       </div>
@@ -707,7 +737,12 @@ export default function SkinLabPage() {
               <div className="lab-field">
                 <div className="lab-field__label">
                   <span>Couleurs principales</span>
-                  <button type="button" className="lab-inline" onClick={handleAddColor} disabled={(descriptorForm.colors ?? []).length >= 6}>
+                  <button
+                    type="button"
+                    className="lab-inline"
+                    onClick={handleAddColor}
+                    disabled={(descriptorForm.colors ?? []).length >= MAX_COLORS}
+                  >
                     Ajouter
                   </button>
                 </div>
@@ -836,27 +871,62 @@ export default function SkinLabPage() {
             ) : null}
             {recentSamples?.length ? (
               <div className="lab-recent">
-                <h3>Ajouts récents</h3>
-                <ul>
+                <div className="lab-recent__header">
+                  <h3>Ajouts récents</h3>
+                  <span className="lab-muted">Derniers exemples ajoutés au dataset</span>
+                </div>
+                <div className="lab-recent__grid">
                   {recentSamples.map((sample) => {
                     const label = getClassLabel(sample.descriptor.classId);
                     const icon = getClassIcon(sample.descriptor.classId);
+                    const items = Array.isArray(sample.descriptor.items) ? sample.descriptor.items : [];
+                    const timestamp = new Date(sample.createdAt).toLocaleString("fr-FR");
                     return (
-                      <li key={sample.id}>
-                        <div className="lab-recent__info">
-                          {icon ? <img src={icon} alt="" loading="lazy" className="lab-class-inline-icon" /> : null}
-                          <strong>{label}</strong> • {sample.descriptor.sex === "female" ? "F" : "M"}
-                          <span className="lab-muted"> {new Date(sample.createdAt).toLocaleString("fr-FR")}</span>
+                      <article key={sample.id} className="lab-recent-card">
+                        <div className="lab-recent-card__preview">
+                          {sample.image ? (
+                            <img src={sample.image} alt={`Skin ${label}`} loading="lazy" />
+                          ) : (
+                            <div className="lab-recent-card__placeholder" aria-hidden="true">
+                              {icon ? <img src={icon} alt="" loading="lazy" /> : label?.charAt(0)?.toUpperCase() ?? "?"}
+                            </div>
+                          )}
                         </div>
-                      <div className="lab-recent__colors" aria-hidden="true">
-                        {sample.descriptor.colors.slice(0, 4).map((hex) => (
-                          <span key={hex} style={{ backgroundColor: hex }} />
-                        ))}
-                      </div>
-                      </li>
+                        <div className="lab-recent-card__body">
+                          <header className="lab-recent-card__header">
+                            <div className="lab-recent-card__title">
+                              {icon ? <img src={icon} alt="" loading="lazy" className="lab-class-inline-icon" /> : null}
+                              <div>
+                                <strong>{label}</strong>
+                                <span>{sample.descriptor.sex === "female" ? "Féminin" : "Masculin"}</span>
+                              </div>
+                            </div>
+                            <time className="lab-recent-card__timestamp">{timestamp}</time>
+                          </header>
+                          <div className="lab-recent__colors" aria-hidden="true">
+                            {sample.descriptor.colors.slice(0, MAX_COLORS).map((hex) => (
+                              <span key={hex} style={{ backgroundColor: hex }} />
+                            ))}
+                          </div>
+                          {items.length ? (
+                            <ul className="lab-recent-card__items">
+                              {items.slice(0, 4).map((item) => (
+                                <li key={`${sample.id}-${item.slot}-${item.itemId}`}>
+                                  {item.thumb ? (
+                                    <img src={item.thumb} alt="" loading="lazy" />
+                                  ) : (
+                                    <span className="lab-recent-card__item-fallback">#{item.itemId}</span>
+                                  )}
+                                  <span>{item.label}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      </article>
                     );
                   })}
-                </ul>
+                </div>
               </div>
             ) : null}
           </div>

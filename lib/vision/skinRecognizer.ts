@@ -332,10 +332,11 @@ function jitterHex(hex: string, rng: () => number): string {
 
 function buildTrainingPalette(seed: string, rng: () => number): string[] {
   const harmonies = buildPalettes([seed]);
-  const merged = mergePalettes(harmonies, { maxSize: 5, deltaThreshold: 8 });
+  const merged = mergePalettes(harmonies, { maxSize: 8, deltaThreshold: 8 });
   const base = merged.length ? merged : [seed];
-  const palette = base.slice(0, 3).map((hex) => jitterHex(hex, rng));
-  while (palette.length < 3) {
+  const targetSize = 6;
+  const palette = base.slice(0, targetSize).map((hex) => jitterHex(hex, rng));
+  while (palette.length < targetSize) {
     palette.push(jitterHex(seed, rng));
   }
   return palette;
