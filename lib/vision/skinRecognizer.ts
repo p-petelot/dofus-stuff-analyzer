@@ -23,6 +23,9 @@ export interface SkinSampleFeatures {
   averageLab: Lab;
   visibility: Record<SlotKey, "ok" | "low">;
   syntheticSeed: string;
+  source: "synthetic" | "labeled";
+  createdAt: number;
+  image?: string;
 }
 
 export interface SkinRecognizerModel {
@@ -36,6 +39,7 @@ export interface SkinRecognizerModel {
     itemsUsed: number;
     samples: number;
     randomSeed: string;
+    labeledSamples: number;
   };
 }
 
@@ -47,6 +51,7 @@ export interface SkinTrainingConfig {
   samplesPerClass?: number;
   randomSeed?: string;
   persist?: boolean;
+  includeLabeled?: boolean;
 }
 
 export interface RecognizeOptions {
@@ -72,10 +77,62 @@ export interface RecognizeResult {
   };
 }
 
+export interface SkinEvaluationMetrics {
+  samples: number;
+  classAccuracy: number;
+  sexAccuracy: number;
+  exactMatch: number;
+  averageScore: number;
+}
+
+export interface SkinEvaluationSample {
+  id: string;
+  target: SkinDescriptor;
+  prediction: RecognizeCandidate | null;
+}
+
+export interface SkinEvaluationReport {
+  metrics: SkinEvaluationMetrics;
+  samples: SkinEvaluationSample[];
+}
+
+export interface SkinEvaluationConfig {
+  model: SkinRecognizerModel;
+  items: CandidateRef[];
+  classes: string[];
+  sexes?: Array<"male" | "female">;
+  paletteSeeds?: string[];
+  samplesPerClass?: number;
+  randomSeed?: string;
+  topK?: number;
+}
+
+export interface SkinDatasetSummary {
+  total: number;
+  labeled: number;
+  synthetic: number;
+  classes: Record<string, number>;
+  sexes: Record<"male" | "female", number>;
+  recent: Array<Pick<SkinSampleFeatures, "id" | "descriptor" | "createdAt" | "source">>;
+}
+
+interface SkinDatasetFile {
+  version: number;
+  createdAt: number;
+  updatedAt: number;
+  samples: SkinSampleFeatures[];
+}
+
+interface RecordLabeledSampleOptions {
+  storeImage?: boolean;
+}
+
 const MODEL_CACHE = path.join(process.cwd(), ".cache", "skin-recognizer.json");
+const DATASET_CACHE = path.join(process.cwd(), ".cache", "skin-recognizer-dataset.json");
 const DEFAULT_SEXES: Array<"male" | "female"> = ["male", "female"];
 const DEFAULT_PALETTE_SEEDS = ["#FF7043", "#36A4F4", "#C7E8FF", "#7EA04D", "#2A243D", "#F4EFCB", "#B9B3A5"];
-const MODEL_VERSION = 1;
+const MODEL_VERSION = 2;
+const DATASET_VERSION = 1;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -86,6 +143,117 @@ function ensureCacheDir(): void {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
+}
+
+function sanitizeHexColor(hex: string): string {
+  if (!hex) {
+    return "#000000";
+  }
+  const trimmed = hex.trim().replace(/^#/, "");
+  if (/^[0-9a-fA-F]{6}$/.test(trimmed)) {
+    return `#${trimmed.toUpperCase()}`;
+  }
+  const numeric = parseInt(trimmed.slice(0, 6) || "0", 16);
+  return `#${numeric.toString(16).padStart(6, "0").toUpperCase()}`;
+}
+
+function sanitizeDescriptor(descriptor: SkinDescriptor): SkinDescriptor {
+  const classId = descriptor.classId.trim().toLowerCase();
+  const sex: "male" | "female" = descriptor.sex === "female" ? "female" : "male";
+  const colors = descriptor.colors.map((color) => sanitizeHexColor(color)).slice(0, 6);
+  const items = Object.fromEntries(
+    Object.entries(descriptor.items ?? {}).map(([slot, value]) => [slot as SlotKey, value]),
+  ) as Record<SlotKey, CandidateRef>;
+  return { classId, sex, colors, items };
+}
+
+async function loadDatasetFile(): Promise<SkinDatasetFile> {
+  try {
+    const raw = await fs.promises.readFile(DATASET_CACHE, "utf8");
+    const parsed = JSON.parse(raw) as SkinDatasetFile;
+    if (parsed.version === DATASET_VERSION && Array.isArray(parsed.samples)) {
+      const samples = parsed.samples.map((sample) => ({
+        ...sample,
+        source: sample.source ?? "labeled",
+        createdAt: sample.createdAt ?? parsed.updatedAt ?? Date.now(),
+      }));
+      return { ...parsed, samples };
+    }
+  } catch (error) {
+    // ignore missing dataset
+  }
+  return {
+    version: DATASET_VERSION,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    samples: [],
+  };
+}
+
+async function saveDatasetFile(dataset: SkinDatasetFile): Promise<void> {
+  ensureCacheDir();
+  const payload: SkinDatasetFile = {
+    ...dataset,
+    version: DATASET_VERSION,
+    updatedAt: Date.now(),
+  };
+  await fs.promises.writeFile(DATASET_CACHE, JSON.stringify(payload));
+}
+
+async function getDatasetSamples(): Promise<SkinSampleFeatures[]> {
+  const dataset = await loadDatasetFile();
+  return dataset.samples;
+}
+
+function stripImage(sample: SkinSampleFeatures): SkinSampleFeatures {
+  return { ...sample, image: undefined, source: sample.source ?? "labeled" };
+}
+
+function hashImageData(img512: ImageDataLike): string {
+  return crypto.createHash("sha1").update(Buffer.from(img512.data.buffer)).digest("hex");
+}
+
+function buildDatasetSummary(samples: SkinSampleFeatures[]): SkinDatasetSummary {
+  const summary: SkinDatasetSummary = {
+    total: samples.length,
+    labeled: 0,
+    synthetic: 0,
+    classes: {},
+    sexes: { male: 0, female: 0 },
+    recent: [],
+  };
+  for (const sample of samples) {
+    if (sample.source === "labeled") {
+      summary.labeled += 1;
+    } else {
+      summary.synthetic += 1;
+    }
+    const classKey = sample.descriptor.classId;
+    summary.classes[classKey] = (summary.classes[classKey] ?? 0) + 1;
+    summary.sexes[sample.descriptor.sex] = (summary.sexes[sample.descriptor.sex] ?? 0) + 1;
+  }
+  const recent = [...samples]
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, 8)
+    .map((sample) => {
+      const { image: _image, ...rest } = sample;
+      return { ...rest };
+    });
+  summary.recent = recent;
+  return summary;
+}
+
+export async function getSkinRecognizerDatasetSummary(): Promise<SkinDatasetSummary> {
+  const samples = await getDatasetSamples();
+  return buildDatasetSummary(samples);
+}
+
+export async function listSkinRecognizerDataset(limit = 20): Promise<SkinSampleFeatures[]> {
+  const samples = await getDatasetSamples();
+  return [...samples]
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, limit)
+    .map((sample) => ({ ...sample }));
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -207,6 +375,17 @@ async function computeFeatures(
   syntheticSeed: string,
 ): Promise<SkinSampleFeatures> {
   const { img512, mask } = await synthesiseSkinImage(descriptor, syntheticSeed);
+  return computeFeaturesFromImageData(img512, mask, descriptor, syntheticSeed, "synthetic");
+}
+
+async function computeFeaturesFromImageData(
+  img512: ImageDataLike,
+  mask: Mask,
+  descriptor: SkinDescriptor,
+  syntheticSeed: string,
+  source: "synthetic" | "labeled",
+  image?: string,
+): Promise<SkinSampleFeatures> {
   const { boxes, visibility } = await locateSlots(img512, mask);
   const embedding = await clipEmbedding(img512);
   const slotEmbeddings = {} as Record<SlotKey, number[]>;
@@ -218,7 +397,42 @@ async function computeFeatures(
   const paletteLab = descriptor.colors.map((hex) => hexToLab(hex));
   const average = averageLab(paletteLab);
   const id = crypto.createHash("sha1").update(descriptorToBuffer(descriptor, syntheticSeed)).digest("hex");
-  return { id, descriptor, embedding, slotEmbeddings, paletteLab, averageLab: average, visibility, syntheticSeed };
+  return {
+    id,
+    descriptor,
+    embedding,
+    slotEmbeddings,
+    paletteLab,
+    averageLab: average,
+    visibility,
+    syntheticSeed,
+    source,
+    createdAt: Date.now(),
+    image,
+  };
+}
+
+export async function recordLabeledSkinSample(
+  image: Buffer | string,
+  descriptor: SkinDescriptor,
+  options: RecordLabeledSampleOptions = {},
+): Promise<{ sample: SkinSampleFeatures; summary: SkinDatasetSummary }> {
+  const sanitized = sanitizeDescriptor(descriptor);
+  const { img512, mask } = await normalizeInput(image);
+  const fingerprint = hashImageData(img512);
+  const seed = `human-${fingerprint}`;
+  const storeImage = typeof image === "string" && options.storeImage !== false ? image : undefined;
+  const features = await computeFeaturesFromImageData(img512, mask, sanitized, seed, "labeled", storeImage);
+  const dataset = await loadDatasetFile();
+  const index = dataset.samples.findIndex((sample) => sample.id === features.id);
+  if (index >= 0) {
+    dataset.samples[index] = features;
+  } else {
+    dataset.samples.push(features);
+  }
+  await saveDatasetFile(dataset);
+  const summary = buildDatasetSummary(dataset.samples);
+  return { sample: features, summary };
 }
 
 export async function trainSkinRecognizer(config: SkinTrainingConfig): Promise<SkinRecognizerModel> {
@@ -235,7 +449,15 @@ export async function trainSkinRecognizer(config: SkinTrainingConfig): Promise<S
   const rng = createRng(config.randomSeed);
   const grouped = groupItemsBySlot(items);
 
+  const includeLabeled = config.includeLabeled !== false;
+  const dataset = includeLabeled ? await loadDatasetFile() : null;
   const samples: SkinSampleFeatures[] = [];
+  const labeledSamples = dataset?.samples ?? [];
+  if (includeLabeled) {
+    for (const sample of labeledSamples) {
+      samples.push(stripImage(sample));
+    }
+  }
   for (const classId of classes) {
     for (const sex of sexes) {
       for (let i = 0; i < samplesPerClass; i += 1) {
@@ -256,7 +478,7 @@ export async function trainSkinRecognizer(config: SkinTrainingConfig): Promise<S
         };
         const syntheticSeed = `${classId}-${sex}-${i}-${Math.floor(rng() * 1_000_000)}`;
         const features = await computeFeatures(descriptor, syntheticSeed);
-        samples.push(features);
+        samples.push({ ...features, source: "synthetic" });
       }
     }
   }
@@ -272,6 +494,7 @@ export async function trainSkinRecognizer(config: SkinTrainingConfig): Promise<S
       itemsUsed: items.length,
       samples: samples.length,
       randomSeed: config.randomSeed ?? "dynamic",
+      labeledSamples: includeLabeled ? labeledSamples.length : 0,
     },
   };
 
@@ -280,6 +503,91 @@ export async function trainSkinRecognizer(config: SkinTrainingConfig): Promise<S
   }
 
   return model;
+}
+
+export async function evaluateSkinRecognizer(config: SkinEvaluationConfig): Promise<SkinEvaluationReport> {
+  const { model, items, classes } = config;
+  if (!model.samples.length) {
+    throw new Error("Skin recognizer model not trained");
+  }
+  if (!items.length) {
+    throw new Error("No items provided for evaluation");
+  }
+  if (!classes.length) {
+    throw new Error("No classes provided for evaluation");
+  }
+
+  const sexes = config.sexes?.length ? config.sexes : DEFAULT_SEXES;
+  const paletteSeeds = config.paletteSeeds?.length ? config.paletteSeeds : DEFAULT_PALETTE_SEEDS;
+  const samplesPerClass = clamp(config.samplesPerClass ?? 2, 1, 8);
+  const rng = createRng(config.randomSeed ?? `${model.metadata.randomSeed}-eval`);
+  const grouped = groupItemsBySlot(items);
+
+  const evaluationSamples: SkinEvaluationSample[] = [];
+  let classHits = 0;
+  let sexHits = 0;
+  let exactHits = 0;
+  let scoreTotal = 0;
+
+  for (const classId of classes) {
+    for (const sex of sexes) {
+      for (let i = 0; i < samplesPerClass; i += 1) {
+        const seedIndex = Math.floor(rng() * paletteSeeds.length);
+        const palette = buildTrainingPalette(paletteSeeds[seedIndex], rng);
+        const descriptorItems: Partial<Record<SlotKey, CandidateRef>> = {};
+        for (const slot of SLOTS) {
+          const pick = pickItemForSlot(grouped, slot, classId, rng);
+          if (pick) {
+            descriptorItems[slot] = pick;
+          }
+        }
+        const descriptor: SkinDescriptor = {
+          classId,
+          sex,
+          colors: palette,
+          items: descriptorItems as Record<SlotKey, CandidateRef>,
+        };
+        const syntheticSeed = `${classId}-${sex}-eval-${i}-${Math.floor(rng() * 1_000_000)}`;
+        const buffer = await synthesiseDescriptorImage(descriptor, syntheticSeed);
+        const result = await recognizeSkin(buffer, model, { topK: config.topK ?? 3 });
+        const prediction = result.prediction ?? null;
+        if (prediction) {
+          scoreTotal += prediction.score;
+          if (prediction.descriptor.classId === descriptor.classId) {
+            classHits += 1;
+          }
+          if (prediction.descriptor.sex === descriptor.sex) {
+            sexHits += 1;
+          }
+          const predictedItems = prediction.descriptor.items ?? {};
+          const targetItems = descriptor.items ?? {};
+          const sameItems = SLOTS.every((slot) => {
+            const target = targetItems[slot];
+            const predicted = predictedItems[slot];
+            if (!target && !predicted) return true;
+            if (!target || !predicted) return false;
+            return target.itemId === predicted.itemId;
+          });
+          const samePalette = descriptor.colors.every((color, index) => prediction.descriptor.colors[index] === color);
+          if (sameItems && samePalette && prediction.descriptor.classId === descriptor.classId && prediction.descriptor.sex === descriptor.sex) {
+            exactHits += 1;
+          }
+        }
+        evaluationSamples.push({ id: syntheticSeed, target: descriptor, prediction });
+      }
+    }
+  }
+
+  const totalSamples = evaluationSamples.length || 1;
+  const metrics: SkinEvaluationMetrics = {
+    samples: evaluationSamples.length,
+    classAccuracy: classHits / totalSamples,
+    sexAccuracy: sexHits / totalSamples,
+    exactMatch: exactHits / totalSamples,
+    averageScore: evaluationSamples.length ? scoreTotal / evaluationSamples.length : 0,
+  };
+
+  return { metrics, samples: evaluationSamples };
 }
 
 function paletteDelta(sample: Lab[], observed: Lab[]): number {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
+import Link from "next/link";
 import { useRouter } from "next/router";
 import {
   DEFAULT_LANGUAGE,
@@ -3976,6 +3977,13 @@ export default function Home({ initialBreeds = [] }) {
         </div>
         <header className="hero">
           <h1>{BRAND_NAME}</h1>
+          <p className="hero__subtitle">
+            Boostez l'apprentissage de notre IA via le{" "}
+            <Link href="/skin-lab" className="hero__cta">
+              Laboratoire d'entraînement
+            </Link>
+            .
+          </p>
         </header>
         <div className="language-switcher" role="group" aria-label={t("language.selectorAria")}>
           {languageOptions.map((option) => {

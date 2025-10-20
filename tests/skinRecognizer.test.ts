@@ -1,13 +1,22 @@
-import { describe, expect, it } from "vitest";
+import fs from "fs";
+import path from "path";
+import { beforeEach, describe, expect, it } from "vitest";
 import { SLOTS } from "../lib/config/suggestions";
 import type { CandidateRef } from "../lib/types";
 import {
+  evaluateSkinRecognizer,
+  getSkinRecognizerDatasetSummary,
+  recordLabeledSkinSample,
   recognizeSkin,
   synthesiseDescriptorImage,
   trainSkinRecognizer,
 } from "../lib/vision/skinRecognizer";
 
 const BASE_EMBEDDING = Array.from({ length: 16 }, (_, index) => (index + 1) / 16);
+
+const CACHE_DIR = path.join(process.cwd(), ".cache");
+const MODEL_CACHE = path.join(CACHE_DIR, "skin-recognizer.json");
+const DATASET_CACHE = path.join(CACHE_DIR, "skin-recognizer-dataset.json");
 
 function makeItem(slot: CandidateRef["slot"], id: number, extraTags: string[] = []): CandidateRef {
   return {
@@ -24,6 +33,11 @@ function makeItem(slot: CandidateRef["slot"], id: number, extraTags: string[] = 
 }
 
 describe("skinRecognizer", () => {
+  beforeEach(async () => {
+    await fs.promises.rm(MODEL_CACHE, { force: true }).catch(() => undefined);
+    await fs.promises.rm(DATASET_CACHE, { force: true }).catch(() => undefined);
+  });
+
   it("generates a synthetic model from indexed items", async () => {
     const items: CandidateRef[] = [];
     let id = 1;
@@ -42,6 +56,7 @@ describe("skinRecognizer", () => {
     expect(model.samples).toHaveLength(2 * 2 * 2);
     expect(model.metadata.classes).toEqual(["iop", "cra"]);
     expect(model.metadata.samples).toBe(model.samples.length);
+    expect(model.metadata.labeledSamples).toBe(0);
   });
 
   it("recognises a matching synthetic skin image", async () => {
@@ -69,6 +84,44 @@ describe("skinRecognizer", () => {
       sample.descriptor.items.costume.itemId,
     );
     expect(result.prediction?.score ?? 0).toBeGreaterThan(0.85);
+  });
+
+  it("records labeled samples and includes them in training", async () => {
+    const items: CandidateRef[] = [];
+    let id = 200;
+    for (const slot of SLOTS) {
+      items.push(makeItem(slot, id++, [`class:feca`]));
+    }
+    const descriptor = {
+      classId: "feca",
+      sex: "female" as const,
+      colors: ["#FFAA33", "#2244AA", "#88CCEE"],
+      items: Object.fromEntries(items.map((item) => [item.slot, item])) as Record<
+        CandidateRef["slot"],
+        CandidateRef
+      >,
+    };
+    const image = `data:image/png;base64,${Buffer.from("fixture-labeled").toString("base64")}`;
+    const { sample } = await recordLabeledSkinSample(image, descriptor);
+    expect(sample.source).toBe("labeled");
+    const summary = await getSkinRecognizerDatasetSummary();
+    expect(summary.labeled).toBe(1);
+
+    const model = await trainSkinRecognizer({
+      items,
+      classes: ["feca"],
+      samplesPerClass: 1,
+      persist: false,
+    });
+    expect(model.metadata.labeledSamples).toBe(1);
+    const evaluation = await evaluateSkinRecognizer({
+      model,
+      items,
+      classes: ["feca"],
+      samplesPerClass: 1,
+    });
+    expect(evaluation.metrics.samples).toBeGreaterThan(0);
+    expect(evaluation.metrics.classAccuracy).toBeGreaterThan(0);
   });
 });
 
