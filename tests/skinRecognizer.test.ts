@@ -1,8 +1,8 @@
 import fs from "fs";
-import path from "path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { SLOTS } from "../lib/config/suggestions";
 import type { CandidateRef } from "../lib/types";
+import { resolveCachePath } from "../lib/utils/cache";
 import {
   evaluateSkinRecognizer,
   getSkinRecognizerDatasetSummary,
@@ -14,9 +14,8 @@ import {
 
 const BASE_EMBEDDING = Array.from({ length: 16 }, (_, index) => (index + 1) / 16);
 
-const CACHE_DIR = path.join(process.cwd(), ".cache");
-const MODEL_CACHE = path.join(CACHE_DIR, "skin-recognizer.json");
-const DATASET_CACHE = path.join(CACHE_DIR, "skin-recognizer-dataset.json");
+const MODEL_CACHE = resolveCachePath("skin-recognizer.json");
+const DATASET_CACHE = resolveCachePath("skin-recognizer-dataset.json");
 
 function makeItem(slot: CandidateRef["slot"], id: number, extraTags: string[] = []): CandidateRef {
   return {

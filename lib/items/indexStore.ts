@@ -2,8 +2,9 @@ import fs from "fs";
 import path from "path";
 import { DEFAULT_IMAGE_SIZE, SLOTS } from "../config/suggestions";
 import type { CandidateRef, ItemIndex, ItemMeta, SlotKey } from "../types";
+import { resolveCachePath } from "../utils/cache";
 
-const CACHE_PATH = path.join(process.cwd(), ".cache", "items-index.json");
+const CACHE_PATH = resolveCachePath("items-index.json");
 
 let indexCache: ItemIndex | null = null;
 

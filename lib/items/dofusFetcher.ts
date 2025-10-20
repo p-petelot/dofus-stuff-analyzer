@@ -16,6 +16,7 @@ interface SlotRequestConfig {
   typeIds: number[];
   skip?: number;
   limit?: number;
+  maxPages?: number;
 }
 
 const SLOT_REQUESTS: Record<SlotKey, SlotRequestConfig[]> = {
@@ -240,22 +241,36 @@ async function fetchItemsForSlot(slot: SlotKey, language = DEFAULT_LANGUAGE): Pr
   const results = new Map<number, ItemMeta>();
 
   for (const config of configs) {
-    const params = new URLSearchParams();
-    params.set("lang", language);
-    params.set("$skip", String(config.skip ?? 0));
-    params.set("$limit", String(config.limit ?? 800));
-    for (const typeId of config.typeIds) {
-      params.append("typeId[$in][]", String(typeId));
-    }
+    const baseSkip = config.skip ?? 0;
+    const pageSize = Math.max(1, Math.min(config.limit ?? 800, 2000));
+    const maxPages = Math.max(1, config.maxPages ?? 25);
+    let skip = baseSkip;
 
-    const url = `${DOFUS_API_HOST}/items?${params.toString()}`;
-    const payload = await fetchJson(url);
-    const entries = extractArray<Record<string, unknown>>(payload);
-    for (const entry of entries) {
-      const meta = buildItemMeta(entry, slot);
-      if (meta) {
-        results.set(meta.id, meta);
+    for (let page = 0; page < maxPages; page += 1) {
+      const params = new URLSearchParams();
+      params.set("lang", language);
+      params.set("$skip", String(skip));
+      params.set("$limit", String(pageSize));
+      for (const typeId of config.typeIds) {
+        params.append("typeId[$in][]", String(typeId));
       }
+
+      const url = `${DOFUS_API_HOST}/items?${params.toString()}`;
+      const payload = await fetchJson(url);
+      const entries = extractArray<Record<string, unknown>>(payload);
+      if (!entries.length) {
+        break;
+      }
+      for (const entry of entries) {
+        const meta = buildItemMeta(entry, slot);
+        if (meta) {
+          results.set(meta.id, meta);
+        }
+      }
+      if (entries.length < pageSize) {
+        break;
+      }
+      skip += pageSize;
     }
   }
 

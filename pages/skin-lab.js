@@ -21,12 +21,17 @@ const SLOT_LABELS = {
 const DEFAULT_COLORS = ["#6B7280", "#475569", "#0EA5E9"];
 
 function normalizeSlotOptions(items) {
-  return (items ?? []).map((entry) => ({
+  const normalized = (items ?? []).map((entry) => ({
     ...entry,
     itemId: entry.itemId,
     label: entry.label,
     thumb: entry.thumb ?? null,
   }));
+  return normalized.sort((a, b) => {
+    const left = (a.label ?? "").toString();
+    const right = (b.label ?? "").toString();
+    return left.localeCompare(right, "fr", { sensitivity: "base" });
+  });
 }
 
 function ensureHex(value) {
@@ -108,14 +113,12 @@ function ItemPicker({ slot, label, value, options, onSelect, loading }) {
   const filteredOptions = useMemo(() => {
     const term = query.trim().toLowerCase();
     if (!term) {
-      return normalizedOptions.slice(0, 30);
+      return normalizedOptions;
     }
-    return normalizedOptions
-      .filter((option) => {
-        const labelValue = option.label?.toLowerCase() ?? "";
-        return labelValue.includes(term) || String(option.itemId).includes(term);
-      })
-      .slice(0, 30);
+    return normalizedOptions.filter((option) => {
+      const labelValue = option.label?.toLowerCase() ?? "";
+      return labelValue.includes(term) || String(option.itemId).includes(term);
+    });
   }, [normalizedOptions, query]);
 
   useEffect(() => {
@@ -247,6 +250,24 @@ export default function SkinLabPage() {
   const classLookup = useMemo(() => {
     return new Map(classOptions.map((option) => [option.code, option]));
   }, [classOptions]);
+
+  const getClassLabel = useCallback(
+    (code) => {
+      if (!code) return "";
+      const option = classLookup.get(code);
+      return option?.name ?? code;
+    },
+    [classLookup],
+  );
+
+  const getClassIcon = useCallback(
+    (code) => {
+      if (!code) return null;
+      const option = classLookup.get(code);
+      return option?.icon ?? null;
+    },
+    [classLookup],
+  );
 
   const fetchStatus = useCallback(async () => {
     setLoadingStatus(true);
@@ -587,6 +608,7 @@ export default function SkinLabPage() {
               <div className="lab-matches">
                 {predictResult.topMatches.map((match, index) => {
                   const active = descriptorForm.classId === match.descriptor.classId && descriptorForm.sex === match.descriptor.sex;
+                  const classLabel = getClassLabel(match.descriptor.classId);
                   return (
                     <button
                       key={match.descriptor.classId + match.score + index}
@@ -596,7 +618,7 @@ export default function SkinLabPage() {
                     >
                       <div className="lab-match__header">
                         <strong>
-                          {match.descriptor.classId} • {match.descriptor.sex === "female" ? "F" : "M"}
+                          {classLabel} • {match.descriptor.sex === "female" ? "F" : "M"}
                         </strong>
                         <span>{formatPercent(match.score)}</span>
                       </div>
@@ -791,12 +813,19 @@ export default function SkinLabPage() {
                   {Object.entries(datasetSummary.classes)
                     .sort((a, b) => b[1] - a[1])
                     .slice(0, 6)
-                    .map(([key, value]) => (
-                      <li key={key}>
-                        <span>{key}</span>
-                        <strong>{formatNumber(value)}</strong>
-                      </li>
-                    ))}
+                    .map(([key, value]) => {
+                      const label = getClassLabel(key);
+                      const icon = getClassIcon(key);
+                      return (
+                        <li key={key}>
+                          <span>
+                            {icon ? <img src={icon} alt="" loading="lazy" className="lab-class-inline-icon" /> : null}
+                            {label}
+                          </span>
+                          <strong>{formatNumber(value)}</strong>
+                        </li>
+                      );
+                    })}
                 </ul>
               </div>
             ) : null}
@@ -804,19 +833,24 @@ export default function SkinLabPage() {
               <div className="lab-recent">
                 <h3>Ajouts récents</h3>
                 <ul>
-                  {recentSamples.map((sample) => (
-                    <li key={sample.id}>
-                      <div>
-                        <strong>{sample.descriptor.classId}</strong> • {sample.descriptor.sex === "female" ? "F" : "M"}
-                        <span className="lab-muted"> {new Date(sample.createdAt).toLocaleString("fr-FR")}</span>
-                      </div>
+                  {recentSamples.map((sample) => {
+                    const label = getClassLabel(sample.descriptor.classId);
+                    const icon = getClassIcon(sample.descriptor.classId);
+                    return (
+                      <li key={sample.id}>
+                        <div className="lab-recent__info">
+                          {icon ? <img src={icon} alt="" loading="lazy" className="lab-class-inline-icon" /> : null}
+                          <strong>{label}</strong> • {sample.descriptor.sex === "female" ? "F" : "M"}
+                          <span className="lab-muted"> {new Date(sample.createdAt).toLocaleString("fr-FR")}</span>
+                        </div>
                       <div className="lab-recent__colors" aria-hidden="true">
                         {sample.descriptor.colors.slice(0, 4).map((hex) => (
                           <span key={hex} style={{ backgroundColor: hex }} />
                         ))}
                       </div>
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ) : null}
@@ -883,7 +917,9 @@ export default function SkinLabPage() {
                     </header>
                     {report.metadata ? (
                       <ul>
-                        <li>Classes : {report.metadata.classes.join(", ")}</li>
+                        <li>
+                          Classes : {report.metadata.classes.map((code) => getClassLabel(code)).join(", ")}
+                        </li>
                         <li>Sexes : {report.metadata.sexes.join(" / ")}</li>
                         <li>Items utilisés : {formatNumber(report.metadata.itemsUsed)}</li>
                       </ul>

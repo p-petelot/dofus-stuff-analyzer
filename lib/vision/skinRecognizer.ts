@@ -6,6 +6,7 @@ import { SLOTS } from "../config/suggestions";
 import type { CandidateRef, ImageDataLike, Lab, Mask, SlotKey } from "../types";
 import { clipEmbedding } from "./features";
 import { crop, locateSlots, normalizeInput } from "./preprocess";
+import { resolveCachePath } from "../utils/cache";
 
 export interface SkinDescriptor {
   classId: string;
@@ -127,8 +128,8 @@ interface RecordLabeledSampleOptions {
   storeImage?: boolean;
 }
 
-const MODEL_CACHE = path.join(process.cwd(), ".cache", "skin-recognizer.json");
-const DATASET_CACHE = path.join(process.cwd(), ".cache", "skin-recognizer-dataset.json");
+const MODEL_CACHE = resolveCachePath("skin-recognizer.json");
+const DATASET_CACHE = resolveCachePath("skin-recognizer-dataset.json");
 const DEFAULT_SEXES: Array<"male" | "female"> = ["male", "female"];
 const DEFAULT_PALETTE_SEEDS = ["#FF7043", "#36A4F4", "#C7E8FF", "#7EA04D", "#2A243D", "#F4EFCB", "#B9B3A5"];
 const MODEL_VERSION = 2;

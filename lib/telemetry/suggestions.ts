@@ -1,8 +1,9 @@
 import fs from "fs";
 import path from "path";
 import type { Candidate, SlotKey } from "../types";
+import { resolveCachePath } from "../utils/cache";
 
-const LOG_PATH = path.join(process.cwd(), ".cache", "suggestions-log.jsonl");
+const LOG_PATH = resolveCachePath("suggestions-log.jsonl");
 
 function ensureDir(): void {
   const dir = path.dirname(LOG_PATH);
