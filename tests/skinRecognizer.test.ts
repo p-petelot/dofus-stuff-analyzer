@@ -12,6 +12,8 @@ import {
   trainSkinRecognizer,
 } from "../lib/vision/skinRecognizer";
 
+process.env.SKIN_RECOGNIZER_DISABLE_VISION = "1";
+
 const BASE_EMBEDDING = Array.from({ length: 16 }, (_, index) => (index + 1) / 16);
 
 const MODEL_CACHE = resolveCachePath("skin-recognizer.json");

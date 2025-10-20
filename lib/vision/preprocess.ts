@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { DEFAULT_IMAGE_SIZE, ROI, SLOTS, VIS_THRESH } from "../config/suggestions";
 import type { BoundingBox, ImageDataLike, Mask, SlotKey } from "../types";
+import { decodeImageData } from "./backend";
 
 /**
  * Decode a Buffer or base64 encoded string into raw bytes.
@@ -68,7 +69,8 @@ function buildMask(img: ImageDataLike): Mask {
  */
 export async function normalizeInput(image: Buffer | string): Promise<{ img512: ImageDataLike; mask: Mask }> {
   const buffer = decodeInput(image);
-  const img512 = buildSyntheticImage(buffer);
+  const decoded = await decodeImageData(buffer, DEFAULT_IMAGE_SIZE);
+  const img512 = decoded ?? buildSyntheticImage(buffer);
   const mask = buildMask(img512);
   return { img512, mask };
 }

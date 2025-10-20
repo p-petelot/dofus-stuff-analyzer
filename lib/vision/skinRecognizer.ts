@@ -109,13 +109,22 @@ export interface SkinEvaluationConfig {
   topK?: number;
 }
 
+export interface SkinDatasetSummaryRecentEntry {
+  id: string;
+  descriptor: SkinDescriptor;
+  createdAt: number;
+  source: SkinSampleFeatures["source"];
+  syntheticSeed: string;
+  image?: string;
+}
+
 export interface SkinDatasetSummary {
   total: number;
   labeled: number;
   synthetic: number;
   classes: Record<string, number>;
   sexes: Record<"male" | "female", number>;
-  recent: Array<Pick<SkinSampleFeatures, "id" | "descriptor" | "createdAt" | "source">>;
+  recent: SkinDatasetSummaryRecentEntry[];
 }
 
 interface SkinDatasetFile {
@@ -202,12 +211,27 @@ async function saveDatasetFile(dataset: SkinDatasetFile): Promise<void> {
   await fs.promises.writeFile(DATASET_CACHE, JSON.stringify(payload));
 }
 
+function buildPalettePreview(colors: string[]): string {
+  const palette = colors.length ? colors.slice(0, 6) : DEFAULT_PALETTE_SEEDS.slice(0, 6);
+  const width = 240;
+  const height = 160;
+  const step = Math.ceil(width / Math.max(1, palette.length));
+  const rects = palette
+    .map((hex, index) => {
+      const sanitized = sanitizeHexColor(hex);
+      return `<rect x="${index * step}" y="0" width="${step}" height="${height}" fill="${sanitized}" />`;
+    })
+    .join("");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${rects}</svg>`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+}
+
 async function getDatasetSamples(): Promise<SkinSampleFeatures[]> {
   const dataset = await loadDatasetFile();
   return dataset.samples;
 }
 
-function stripImage(sample: SkinSampleFeatures): SkinSampleFeatures {
+function cloneForTraining(sample: SkinSampleFeatures): SkinSampleFeatures {
   return { ...sample, image: undefined, source: sample.source ?? "labeled" };
 }
 
@@ -218,7 +242,11 @@ async function persistSyntheticSamples(samples: SkinSampleFeatures[]): Promise<v
   const dataset = await loadDatasetFile();
   const merged = new Map(dataset.samples.map((sample) => [sample.id, sample]));
   for (const sample of samples) {
-    const entry = { ...stripImage(sample), source: "synthetic" as const };
+    const entry = {
+      ...sample,
+      image: sample.image ?? buildPalettePreview(sample.descriptor.colors),
+      source: "synthetic" as const,
+    };
     merged.set(entry.id, entry);
   }
   dataset.samples = Array.from(merged.values());
@@ -250,11 +278,15 @@ function buildDatasetSummary(samples: SkinSampleFeatures[]): SkinDatasetSummary 
   }
   const recent = [...samples]
     .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, 8)
-    .map((sample) => {
-      const { image: _image, ...rest } = sample;
-      return { ...rest };
-    });
+    .slice(0, 12)
+    .map((sample) => ({
+      id: sample.id,
+      descriptor: sample.descriptor,
+      createdAt: sample.createdAt,
+      source: sample.source,
+      syntheticSeed: sample.syntheticSeed,
+      image: sample.image ?? buildPalettePreview(sample.descriptor.colors),
+    }));
   summary.recent = recent;
   return summary;
 }
@@ -392,7 +424,8 @@ async function computeFeatures(
   syntheticSeed: string,
 ): Promise<SkinSampleFeatures> {
   const { img512, mask } = await synthesiseSkinImage(descriptor, syntheticSeed);
-  return computeFeaturesFromImageData(img512, mask, descriptor, syntheticSeed, "synthetic");
+  const preview = buildPalettePreview(descriptor.colors);
+  return computeFeaturesFromImageData(img512, mask, descriptor, syntheticSeed, "synthetic", preview);
 }
 
 async function computeFeaturesFromImageData(
@@ -472,7 +505,7 @@ export async function trainSkinRecognizer(config: SkinTrainingConfig): Promise<S
   const labeledSamples = dataset?.samples ?? [];
   if (includeLabeled) {
     for (const sample of labeledSamples) {
-      samples.push(stripImage(sample));
+      samples.push(cloneForTraining(sample));
     }
   }
   for (const classId of classes) {

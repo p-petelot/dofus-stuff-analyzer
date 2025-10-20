@@ -624,7 +624,7 @@ export default function SkinLabPage() {
               <h2>1. Analyse d'une image</h2>
               <p>Chargez une capture de skin pour obtenir les meilleures correspondances actuelles.</p>
             </div>
-            <label className="lab-upload" title="Importer une image">
+            <label className="lab-upload lab-upload--compact" title="Importer une image">
               <span className="lab-upload__icon" aria-hidden="true">⬆</span>
               <span className="lab-upload__text">{predicting ? "Analyse…" : "Importer"}</span>
               <input type="file" accept="image/*" onChange={handleFileChange} disabled={predicting} />
@@ -700,24 +700,26 @@ export default function SkinLabPage() {
                 </div>
                 {optionsError ? <p className="lab-error">{optionsError}</p> : null}
                 <div className="lab-class-selector">
-                  {classOptions.map((option) => {
-                    const isActive = descriptorForm.classId === option.slug;
-                    const fallback = option.name?.charAt(0)?.toUpperCase() ?? option.slug?.charAt(0)?.toUpperCase() ?? "?";
-                    return (
-                      <button
-                        key={option.slug}
-                        type="button"
-                        className={`lab-class-chip${isActive ? " is-active" : ""}`}
-                        onClick={() => setDescriptorForm((prev) => ({ ...prev, classId: option.slug }))}
-                        aria-pressed={isActive}
-                      >
-                        <span className="lab-class-chip__icon" aria-hidden="true">
-                          {option.icon ? <img src={option.icon} alt="" loading="lazy" /> : fallback}
-                        </span>
-                        <span className="lab-class-chip__label">{option.name}</span>
-                      </button>
-                    );
-                  })}
+                  <div className="lab-class-selector__scroller">
+                    {classOptions.map((option) => {
+                      const isActive = descriptorForm.classId === option.slug;
+                      const fallback = option.name?.charAt(0)?.toUpperCase() ?? option.slug?.charAt(0)?.toUpperCase() ?? "?";
+                      return (
+                        <button
+                          key={option.slug}
+                          type="button"
+                          className={`lab-class-chip${isActive ? " is-active" : ""}`}
+                          onClick={() => setDescriptorForm((prev) => ({ ...prev, classId: option.slug }))}
+                          aria-pressed={isActive}
+                        >
+                          <span className="lab-class-chip__icon" aria-hidden="true">
+                            {option.icon ? <img src={option.icon} alt="" loading="lazy" /> : fallback}
+                          </span>
+                          <span className="lab-class-chip__label">{option.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
                 {!optionsLoading && classOptions.length === 0 ? (
                   <p className="lab-muted">Aucune classe disponible pour le moment.</p>
@@ -875,58 +877,68 @@ export default function SkinLabPage() {
               </div>
             ) : null}
             {recentSamples?.length ? (
-              <div className="lab-recent">
-                <div className="lab-recent__header">
-                  <h3>Ajouts récents</h3>
-                  <span className="lab-muted">Derniers exemples ajoutés au dataset</span>
+              <div className="lab-skinsouff">
+                <div className="lab-skinsouff__header">
+                  <div>
+                    <h3>Skinsouff</h3>
+                    <span className="lab-muted">Dernières images générées ou annotées pour l'entraînement</span>
+                  </div>
+                  <span className="lab-skinsouff__count">{recentSamples.length} suivis</span>
                 </div>
-                <div className="lab-recent__grid">
+                <div className="lab-skinsouff__grid">
                   {recentSamples.map((sample) => {
                     const label = getClassLabel(sample.descriptor.classId);
                     const icon = getClassIcon(sample.descriptor.classId);
-                    const items = Array.isArray(sample.descriptor.items) ? sample.descriptor.items : [];
+                    const items = Object.values(sample.descriptor.items ?? {});
                     const timestamp = new Date(sample.createdAt).toLocaleString("fr-FR");
+                    const gradient = normalizePalette(sample.descriptor.colors)
+                      .map((hex, index, array) => `${hex} ${(index / Math.max(1, array.length - 1)) * 100}%`)
+                      .join(", ");
+                    const chipLabel = sample.source === "synthetic" ? "Synthétique" : "Vérité terrain";
                     return (
-                      <article key={sample.id} className="lab-recent-card">
-                        <div className="lab-recent-card__preview">
-                          {sample.image ? (
-                            <img src={sample.image} alt={`Skin ${label}`} loading="lazy" />
-                          ) : (
-                            <div className="lab-recent-card__placeholder" aria-hidden="true">
-                              {icon ? <img src={icon} alt="" loading="lazy" /> : label?.charAt(0)?.toUpperCase() ?? "?"}
-                            </div>
-                          )}
+                      <article key={sample.id} className="lab-skinsouff-card">
+                        <div
+                          className="lab-skinsouff-card__preview"
+                          style={{ backgroundImage: gradient ? `linear-gradient(135deg, ${gradient})` : undefined }}
+                        >
+                          {sample.image ? <img src={sample.image} alt={label || sample.syntheticSeed} loading="lazy" /> : null}
                         </div>
-                        <div className="lab-recent-card__body">
-                          <header className="lab-recent-card__header">
-                            <div className="lab-recent-card__title">
-                              {icon ? <img src={icon} alt="" loading="lazy" className="lab-class-inline-icon" /> : null}
-                              <div>
-                                <strong>{label}</strong>
-                                <span>{sample.descriptor.sex === "female" ? "Féminin" : "Masculin"}</span>
-                              </div>
+                        <div className="lab-skinsouff-card__body">
+                          <header className="lab-skinsouff-card__header">
+                            <div className="lab-skinsouff-card__tags">
+                              <span className={`lab-chip lab-chip--${sample.source}`}>{chipLabel}</span>
+                              <span className="lab-chip lab-chip--seed">{sample.syntheticSeed}</span>
                             </div>
-                            <time className="lab-recent-card__timestamp">{timestamp}</time>
+                            <time className="lab-skinsouff-card__timestamp">{timestamp}</time>
                           </header>
-                          <div className="lab-recent__colors" aria-hidden="true">
-                            {sample.descriptor.colors.slice(0, MAX_COLORS).map((hex) => (
-                              <span key={hex} style={{ backgroundColor: hex }} />
+                          <div className="lab-skinsouff-card__identity">
+                            {icon ? <img src={icon} alt="" loading="lazy" className="lab-class-inline-icon" /> : null}
+                            <div>
+                              <strong>{label}</strong>
+                              <span>{sample.descriptor.sex === "female" ? "Féminin" : "Masculin"}</span>
+                            </div>
+                          </div>
+                          <div className="lab-skinsouff-card__colors" aria-hidden="true">
+                            {normalizePalette(sample.descriptor.colors).map((hex) => (
+                              <span key={`${sample.id}-${hex}`} style={{ backgroundColor: hex }} />
                             ))}
                           </div>
                           {items.length ? (
-                            <ul className="lab-recent-card__items">
-                              {items.slice(0, 4).map((item) => (
+                            <ul className="lab-skinsouff-card__items">
+                              {items.slice(0, 5).map((item) => (
                                 <li key={`${sample.id}-${item.slot}-${item.itemId}`}>
                                   {item.thumb ? (
                                     <img src={item.thumb} alt="" loading="lazy" />
                                   ) : (
-                                    <span className="lab-recent-card__item-fallback">#{item.itemId}</span>
+                                    <span className="lab-skinsouff-card__item-fallback">#{item.itemId}</span>
                                   )}
                                   <span>{item.label}</span>
                                 </li>
                               ))}
                             </ul>
-                          ) : null}
+                          ) : (
+                            <p className="lab-muted">Aucun item renseigné pour cet exemple.</p>
+                          )}
                         </div>
                       </article>
                     );

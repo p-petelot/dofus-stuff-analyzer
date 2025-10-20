@@ -1,12 +1,13 @@
 import crypto from "crypto";
 import type { ImageDataLike } from "../types";
+import { loadClipPipeline, shouldUseModernVision } from "./backend";
 
 /**
  * Generate a deterministic pseudo-embedding for an image patch.
  * The embedding is derived from the SHA-1 digest of the pixel buffer,
  * ensuring stable retrieval behaviour without external ML dependencies.
  */
-export async function clipEmbedding(patch: ImageDataLike): Promise<number[]> {
+function fallbackEmbedding(patch: ImageDataLike): number[] {
   const hash = crypto.createHash("sha1").update(patch.data).digest();
   const vector: number[] = [];
   for (let i = 0; i < hash.length; i += 4) {
@@ -14,6 +15,43 @@ export async function clipEmbedding(patch: ImageDataLike): Promise<number[]> {
     vector.push(chunk / 0xffffffff);
   }
   return vector;
+}
+
+export async function clipEmbedding(patch: ImageDataLike): Promise<number[]> {
+  if (shouldUseModernVision()) {
+    try {
+      const pipeline = await loadClipPipeline();
+      if (pipeline) {
+        const result = await pipeline(patch, { pooling: "mean", normalize: true });
+        if (result && typeof result === "object") {
+          // tensor result
+          const tensorData =
+            (Array.isArray((result as any).data) && (result as any).data) ||
+            (Array.isArray((result as any).tolist?.()) && (result as any).tolist()) ||
+            (result as any).data ||
+            (result as any).tensor?.data;
+          if (tensorData) {
+            const array = Array.isArray(tensorData) ? tensorData.flat(Infinity) : Array.from(tensorData);
+            if (array.length) {
+              return array.map((value) => Number(value));
+            }
+          }
+        }
+        if (Array.isArray(result) && result.length) {
+          const array = result.flat(Infinity).map((value) => Number(value));
+          if (array.length) {
+            return array;
+          }
+        }
+      }
+    } catch (error) {
+      if (process.env.NODE_ENV !== "test") {
+        // eslint-disable-next-line no-console
+        console.warn("[vision-backend] Fallback sur l'empreinte déterministe", error instanceof Error ? error.message : error);
+      }
+    }
+  }
+  return fallbackEmbedding(patch);
 }
 
 /**
