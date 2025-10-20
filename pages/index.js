@@ -622,7 +622,7 @@ function resolveItemImageUrl(item) {
   return null;
 }
 
-function buildDofusApiUrls(type, language = DEFAULT_LANGUAGE) {
+function buildDofusApiRequests(type, language = DEFAULT_LANGUAGE) {
   const config = ITEM_TYPE_CONFIG[type];
   if (!config) {
     throw new Error(`Type d'objet inconnu: ${type}`);
@@ -638,11 +638,8 @@ function buildDofusApiUrls(type, language = DEFAULT_LANGUAGE) {
 
     const limit = source.limit ?? config.limit ?? DEFAULT_LIMIT;
     params.set("$limit", String(limit));
-
-    const skip = source.skip ?? config.skip;
-    if (typeof skip === "number") {
-      params.set("$skip", String(skip));
-    }
+    const initialSkip = typeof source.skip === "number" ? source.skip : typeof config.skip === "number" ? config.skip : 0;
+    params.set("$skip", "0");
 
     const typeIds = source.typeIds ?? config.typeIds;
     if (!typeIds || !typeIds.length) {
@@ -657,7 +654,11 @@ function buildDofusApiUrls(type, language = DEFAULT_LANGUAGE) {
       params.set(key, value);
     });
 
-    return `${DOFUS_API_BASE_URL}?${params.toString()}`;
+    return {
+      url: `${DOFUS_API_BASE_URL}?${params.toString()}`,
+      limit,
+      initialSkip,
+    };
   });
 }
 
@@ -3846,40 +3847,83 @@ export default function Home({ initialBreeds = [] }) {
         const entries = await Promise.all(
           ITEM_TYPES.map(async (type) => {
             try {
-              const urls = buildDofusApiUrls(type, language);
+              const requests = buildDofusApiRequests(type, language);
               const aggregatedItems = [];
 
-              for (const url of urls) {
-                const controller = new AbortController();
-                controllers.push(controller);
+              for (const request of requests) {
+                const { url, limit, initialSkip } = request;
+                let skip = Number.isFinite(initialSkip) ? initialSkip : 0;
+                let expectedTotal = null;
+                let pageLimit = Number.isFinite(limit) && limit > 0 ? limit : DEFAULT_LIMIT;
 
-                try {
-                  const response = await fetch(url, {
-                    signal: controller.signal,
-                    headers: { Accept: "application/json" },
-                  });
-
-                  if (!response.ok) {
-                    throw new Error(`Requête DofusDB échouée (${response.status})`);
+                while (true) {
+                  const pageUrl = new URL(url);
+                  if (Number.isFinite(pageLimit) && pageLimit > 0) {
+                    pageUrl.searchParams.set("$limit", String(pageLimit));
                   }
+                  pageUrl.searchParams.set("$skip", String(skip));
 
-                  const payload = await response.json();
-                  const rawItems = Array.isArray(payload)
-                    ? payload
-                    : Array.isArray(payload?.data)
-                    ? payload.data
-                    : Array.isArray(payload?.items)
-                    ? payload.items
-                    : [];
+                  const controller = new AbortController();
+                  controllers.push(controller);
 
-                  aggregatedItems.push(...rawItems);
-                } catch (err) {
-                  if (err.name === "AbortError") {
-                    continue;
+                  try {
+                    const response = await fetch(pageUrl.toString(), {
+                      signal: controller.signal,
+                      headers: { Accept: "application/json" },
+                    });
+
+                    if (!response.ok) {
+                      throw new Error(`Requête DofusDB échouée (${response.status})`);
+                    }
+
+                    const payload = await response.json();
+                    const rawItems = Array.isArray(payload)
+                      ? payload
+                      : Array.isArray(payload?.data)
+                      ? payload.data
+                      : Array.isArray(payload?.items)
+                      ? payload.items
+                      : [];
+
+                    if (!Array.isArray(rawItems) || rawItems.length === 0) {
+                      break;
+                    }
+
+                    aggregatedItems.push(...rawItems);
+
+                    const payloadTotal = Number(payload?.total);
+                    if (Number.isFinite(payloadTotal) && payloadTotal >= 0) {
+                      expectedTotal = payloadTotal;
+                    }
+
+                    const payloadLimit = Number(payload?.limit);
+                    if (Number.isFinite(payloadLimit) && payloadLimit > 0) {
+                      pageLimit = payloadLimit;
+                    }
+
+                    const step = Number.isFinite(pageLimit) && pageLimit > 0 ? pageLimit : rawItems.length;
+                    if (!Number.isFinite(step) || step <= 0) {
+                      break;
+                    }
+
+                    skip += step;
+
+                    if (expectedTotal !== null && skip >= expectedTotal) {
+                      break;
+                    }
+
+                    if ((expectedTotal === null || !Number.isFinite(expectedTotal)) && rawItems.length < step) {
+                      break;
+                    }
+                  } catch (err) {
+                    if (err.name === "AbortError") {
+                      break;
+                    }
+
+                    console.error(err);
+                    errors.push({ type, error: err });
+                    break;
                   }
-
-                  console.error(err);
-                  errors.push({ type, error: err });
                 }
               }
 
