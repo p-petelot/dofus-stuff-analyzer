@@ -3935,6 +3935,13 @@ export default function Home({ initialBreeds = [] }) {
     return typeof raw === "string" ? raw.trim() : "";
   }, [t]);
 
+  const monitoringLabel = useMemo(() => {
+    const raw = t("hero.monitoringLink", undefined, "");
+    return typeof raw === "string" ? raw.trim() : "";
+  }, [t]);
+
+  const showMonitoringLink = monitoringLabel.length > 0;
+
   const pageTitle = tagline ? `${BRAND_NAME} · ${tagline}` : BRAND_NAME;
 
   return (
@@ -3976,6 +3983,13 @@ export default function Home({ initialBreeds = [] }) {
         </div>
         <header className="hero">
           <h1>{BRAND_NAME}</h1>
+          {showMonitoringLink ? (
+            <p className="hero__actions">
+              <a className="hero__link" href="/vision/progress">
+                {monitoringLabel}
+              </a>
+            </p>
+          ) : null}
         </header>
         <div className="language-switcher" role="group" aria-label={t("language.selectorAria")}>
           {languageOptions.map((option) => {
