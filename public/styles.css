@@ -2697,7 +2697,7 @@ a {
 }
 
 .lab-page__header {
-  width: min(1280px, calc(100% - 32px));
+  width: min(1280px, calc(100% - 16px));
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -2764,7 +2764,7 @@ a {
 }
 
 .lab-grid {
-  width: min(1280px, calc(100% - 32px));
+  width: min(1280px, calc(100% - 16px));
   margin: 0 auto 56px;
   display: grid;
   gap: 28px;
