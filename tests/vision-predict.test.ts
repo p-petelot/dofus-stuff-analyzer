@@ -6,6 +6,7 @@ import { predictLookAttributes } from "../lib/vision/predict";
 
 const datasetDir = path.join(process.cwd(), ".cache", "vision-test-dataset");
 const indexPath = path.join(process.cwd(), ".cache", "vision-test-index.json");
+const progressPath = path.join(process.cwd(), ".cache", "vision-test-progress.json");
 
 function ensureDir(dir: string): void {
   if (!fs.existsSync(dir)) {
@@ -48,13 +49,16 @@ function cleanup(): void {
   if (fs.existsSync(indexPath)) {
     fs.rmSync(indexPath, { force: true });
   }
+  if (fs.existsSync(progressPath)) {
+    fs.rmSync(progressPath, { force: true });
+  }
 }
 
 beforeAll(async () => {
   process.env.VISION_FORCE_STUB = "1";
   cleanup();
   writeDataset();
-  await buildVisionIndexFromGenerations({ datasetPath: datasetDir, indexPath });
+  await buildVisionIndexFromGenerations({ datasetPath: datasetDir, indexPath, progressPath });
 });
 
 afterAll(() => {
