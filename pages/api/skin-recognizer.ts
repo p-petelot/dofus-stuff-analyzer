@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getAllIndexedItems } from "../../lib/items/indexStore";
+import { buildItemIndex, getAllIndexedItems } from "../../lib/items/indexStore";
 import type { CandidateRef, SlotKey } from "../../lib/types";
 import {
   deriveClassesFromItems,
@@ -14,6 +14,8 @@ import {
   evaluateSkinRecognizer,
   SkinEvaluationReport,
 } from "../../lib/vision/skinRecognizer";
+import { fetchDofusBreeds, fetchItemsForIndex } from "../../lib/items/dofusFetcher";
+import type { BreedOption } from "../../lib/items/dofusFetcher";
 
 interface TrainRequestBody {
   action: "train";
@@ -74,9 +76,36 @@ type RecognizerRequest =
   | PredictRequestBody
   | StatusRequestBody
   | LabelRequestBody
-  | AutoTrainRequestBody;
+  | AutoTrainRequestBody
+  | { action: "options"; language?: string };
 
-function defaultClassesFromTags(items: ReturnType<typeof getAllIndexedItems>): string[] {
+async function ensureIndexedItems(language?: string): Promise<CandidateRef[]> {
+  const existing = getAllIndexedItems();
+  if (existing.length) {
+    return existing;
+  }
+  const fetched = await fetchItemsForIndex(language);
+  await buildItemIndex(fetched);
+  return getAllIndexedItems();
+}
+
+function groupItemsBySlot(items: CandidateRef[]): Record<SlotKey, CandidateRef[]> {
+  const grouped: Record<SlotKey, CandidateRef[]> = {
+    coiffe: [],
+    cape: [],
+    bouclier: [],
+    familier: [],
+    epauliere: [],
+    costume: [],
+    ailes: [],
+  };
+  for (const item of items) {
+    grouped[item.slot]?.push(item);
+  }
+  return grouped;
+}
+
+function defaultClassesFromTags(items: CandidateRef[]): string[] {
   const derived = deriveClassesFromItems(items);
   if (derived.length) {
     return derived;
@@ -115,12 +144,22 @@ function resolveDescriptorItems(
   return resolved as Record<SlotKey, CandidateRef>;
 }
 
-function presentItems(items: Record<SlotKey, CandidateRef>): Array<{ slot: SlotKey; itemId: number; label: string }> {
+function presentItems(items: Record<SlotKey, CandidateRef>): Array<{
+  slot: SlotKey;
+  itemId: number;
+  label: string;
+  thumb?: string;
+}> {
   return Object.entries(items ?? {}).map(([slot, item]) => ({
     slot: slot as SlotKey,
     itemId: item.itemId,
     label: item.label,
+    thumb: item.thumb ?? item.sprite,
   }));
+}
+
+function presentBreeds(breeds: BreedOption[]) {
+  return breeds.map((breed) => ({ code: breed.code, name: breed.name, icon: breed.icon ?? null }));
 }
 
 function presentSample(sample: SkinSampleFeatures) {
@@ -179,6 +218,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
 
+  if (body.action === "options") {
+    try {
+      const [items, breeds] = await Promise.all([
+        ensureIndexedItems(body.language),
+        fetchDofusBreeds(body.language),
+      ]);
+      const grouped = groupItemsBySlot(items);
+      const slotOptions = Object.fromEntries(
+        Object.entries(grouped).map(([slot, entries]) => [
+          slot,
+          entries.map((entry) => ({
+            itemId: entry.itemId,
+            label: entry.label,
+            thumb: entry.thumb ?? entry.sprite ?? null,
+            slot: entry.slot,
+          })),
+        ]),
+      );
+      res.status(200).json({
+        action: "options",
+        classes: presentBreeds(breeds),
+        items: slotOptions,
+      });
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+    return;
+  }
+
   if (body.action === "status") {
     try {
       const model = await loadSkinRecognizerModel();
@@ -197,6 +265,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           summary: datasetSummary,
           recent: recentSamples.map((sample) => presentSample(sample)),
         },
+        items: { total: getAllIndexedItems().length },
       });
     } catch (error) {
       res.status(500).json({ error: (error as Error).message });
@@ -210,7 +279,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return;
     }
     try {
-      const items = getAllIndexedItems();
+      const items = await ensureIndexedItems();
       if (!items.length) {
         res.status(400).json({ error: "No items available for labelling" });
         return;
@@ -266,7 +335,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (body.action === "train") {
-    const items = getAllIndexedItems();
+    const items = await ensureIndexedItems();
     if (!items.length) {
       res.status(400).json({ error: "No items available for training" });
       return;
@@ -310,7 +379,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (body.action === "autoTrain") {
-    const items = getAllIndexedItems();
+    const items = await ensureIndexedItems();
     if (!items.length) {
       res.status(400).json({ error: "No items available for auto training" });
       return;

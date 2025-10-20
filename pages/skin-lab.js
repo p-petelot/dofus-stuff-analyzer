@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import { SLOTS } from "../lib/config/suggestions";
@@ -19,6 +19,15 @@ const SLOT_LABELS = {
 };
 
 const DEFAULT_COLORS = ["#6B7280", "#475569", "#0EA5E9"];
+
+function normalizeSlotOptions(items) {
+  return (items ?? []).map((entry) => ({
+    ...entry,
+    itemId: entry.itemId,
+    label: entry.label,
+    thumb: entry.thumb ?? null,
+  }));
+}
 
 function ensureHex(value) {
   if (!value) return "#000000";
@@ -84,6 +93,132 @@ function readFileAsDataUrl(file) {
   });
 }
 
+function ItemPicker({ slot, label, value, options, onSelect, loading }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef(null);
+
+  const normalizedOptions = useMemo(() => (Array.isArray(options) ? options : []), [options]);
+  const selectedId = value?.itemId ? String(value.itemId) : "";
+  const selectedOption = useMemo(
+    () => normalizedOptions.find((option) => String(option.itemId) === selectedId) ?? null,
+    [normalizedOptions, selectedId],
+  );
+
+  const filteredOptions = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) {
+      return normalizedOptions.slice(0, 30);
+    }
+    return normalizedOptions
+      .filter((option) => {
+        const labelValue = option.label?.toLowerCase() ?? "";
+        return labelValue.includes(term) || String(option.itemId).includes(term);
+      })
+      .slice(0, 30);
+  }, [normalizedOptions, query]);
+
+  useEffect(() => {
+    function handleClick(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      setQuery("");
+    }
+  }, [open]);
+
+  const handleSelect = useCallback(
+    (option) => {
+      if (onSelect) {
+        onSelect(slot, option);
+      }
+      setOpen(false);
+      setQuery("");
+    },
+    [onSelect, slot],
+  );
+
+  const handleClear = useCallback(() => {
+    if (onSelect) {
+      onSelect(slot, null);
+    }
+    setOpen(false);
+    setQuery("");
+  }, [onSelect, slot]);
+
+  return (
+    <div className={`lab-picker${open ? " is-open" : ""}`} ref={containerRef}>
+      <button type="button" className="lab-picker__trigger" onClick={() => setOpen((prev) => !prev)}>
+        {selectedOption ? (
+          <span className="lab-picker__selection">
+            {selectedOption.thumb ? (
+              <img src={selectedOption.thumb} alt="" loading="lazy" />
+            ) : (
+              <span className="lab-picker__placeholder" aria-hidden="true">
+                #{selectedOption.itemId}
+              </span>
+            )}
+            <span>{selectedOption.label}</span>
+          </span>
+        ) : (
+          <span className="lab-picker__placeholder">Sélectionner</span>
+        )}
+        <span className="lab-picker__caret" aria-hidden="true">▾</span>
+      </button>
+      {open ? (
+        <div className="lab-picker__panel" role="listbox" aria-label={`Choisir ${label}`}>
+          <div className="lab-picker__controls">
+            <input
+              type="text"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={`Rechercher ${label.toLowerCase()}`}
+              autoFocus
+            />
+            <button type="button" onClick={handleClear} disabled={!selectedOption}>
+              Effacer
+            </button>
+          </div>
+          <div className="lab-picker__list">
+            {loading ? <p className="lab-muted">Chargement…</p> : null}
+            {!loading && filteredOptions.length === 0 ? (
+              <p className="lab-muted">Aucun résultat.</p>
+            ) : null}
+            {!loading
+              ? filteredOptions.map((option) => (
+                  <button
+                    key={`${slot}-${option.itemId}`}
+                    type="button"
+                    className="lab-picker__option"
+                    onClick={() => handleSelect(option)}
+                  >
+                    {option.thumb ? (
+                      <img src={option.thumb} alt="" loading="lazy" />
+                    ) : (
+                      <span className="lab-picker__option-fallback" aria-hidden="true">
+                        #{option.itemId}
+                      </span>
+                    )}
+                    <span>{option.label}</span>
+                  </button>
+                ))
+              : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function SkinLabPage() {
   const [status, setStatus] = useState(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
@@ -104,8 +239,14 @@ export default function SkinLabPage() {
   const [autoTrainLoading, setAutoTrainLoading] = useState(false);
   const [autoTrainReports, setAutoTrainReports] = useState([]);
   const [trainMessage, setTrainMessage] = useState(null);
+  const [classOptions, setClassOptions] = useState([]);
+  const [itemOptions, setItemOptions] = useState({});
+  const [optionsLoading, setOptionsLoading] = useState(false);
+  const [optionsError, setOptionsError] = useState(null);
 
-  const classOptions = useMemo(() => status?.model?.metadata?.classes ?? [], [status]);
+  const classLookup = useMemo(() => {
+    return new Map(classOptions.map((option) => [option.code, option]));
+  }, [classOptions]);
 
   const fetchStatus = useCallback(async () => {
     setLoadingStatus(true);
@@ -131,6 +272,36 @@ export default function SkinLabPage() {
   useEffect(() => {
     fetchStatus();
   }, [fetchStatus]);
+
+  const fetchOptions = useCallback(async () => {
+    setOptionsLoading(true);
+    setOptionsError(null);
+    try {
+      const response = await fetch("/api/skin-recognizer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "options" }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "Options indisponibles");
+      }
+      setClassOptions(Array.isArray(payload?.classes) ? payload.classes : []);
+      const slots = {};
+      Object.entries(payload?.items ?? {}).forEach(([slot, entries]) => {
+        slots[slot] = normalizeSlotOptions(entries);
+      });
+      setItemOptions(slots);
+    } catch (error) {
+      setOptionsError(error.message ?? "Options indisponibles");
+    } finally {
+      setOptionsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchOptions();
+  }, [fetchOptions]);
 
   const handleFileChange = useCallback(
     async (event) => {
@@ -213,10 +384,17 @@ export default function SkinLabPage() {
     });
   }, []);
 
-  const handleItemChange = useCallback((slot, value) => {
+  const handleItemSelect = useCallback((slot, option) => {
     setDescriptorForm((prev) => {
       const items = { ...(prev?.items ?? {}) };
-      items[slot] = { ...(items[slot] ?? {}), itemId: value, label: items[slot]?.label ?? "" };
+      if (!option) {
+        items[slot] = { itemId: "", label: "" };
+      } else {
+        items[slot] = {
+          itemId: String(option.itemId),
+          label: option.label ?? option.itemId,
+        };
+      }
       return { ...prev, items };
     });
   }, []);
@@ -320,6 +498,47 @@ export default function SkinLabPage() {
 
   const datasetSummary = status?.dataset?.summary ?? null;
   const recentSamples = status?.dataset?.recent ?? [];
+  const selectedClass = descriptorForm.classId ? classLookup.get(descriptorForm.classId) : null;
+
+  useEffect(() => {
+    if (descriptorForm?.classId) {
+      return;
+    }
+    if (classOptions.length === 0) {
+      return;
+    }
+    setDescriptorForm((prev) => {
+      if (prev.classId) {
+        return prev;
+      }
+      return { ...prev, classId: classOptions[0].code };
+    });
+  }, [classOptions, descriptorForm?.classId]);
+
+  useEffect(() => {
+    setDescriptorForm((prev) => {
+      if (!prev?.items) {
+        return prev;
+      }
+      let changed = false;
+      const items = { ...prev.items };
+      for (const slot of SLOTS) {
+        const entry = items[slot];
+        if (entry?.itemId && !entry.label) {
+          const candidates = itemOptions[slot] ?? [];
+          const match = candidates.find((candidate) => String(candidate.itemId) === String(entry.itemId));
+          if (match) {
+            items[slot] = { itemId: String(match.itemId), label: match.label };
+            changed = true;
+          }
+        }
+      }
+      if (!changed) {
+        return prev;
+      }
+      return { ...prev, items };
+    });
+  }, [itemOptions]);
 
   return (
     <div className="page lab-page">
@@ -410,19 +629,41 @@ export default function SkinLabPage() {
           </header>
           <div className="lab-card__content">
             <div className="lab-form">
-              <label className="lab-field">
-                <span>Classe</span>
-                <input
-                  list="lab-class-options"
-                  value={descriptorForm.classId}
-                  onChange={(event) => setDescriptorForm((prev) => ({ ...prev, classId: event.target.value }))}
-                />
-                <datalist id="lab-class-options">
-                  {classOptions.map((option) => (
-                    <option key={option} value={option} />
-                  ))}
-                </datalist>
-              </label>
+              <div className="lab-field lab-field--full">
+                <div className="lab-field__label">
+                  <span>Classe</span>
+                  <button type="button" className="lab-inline" onClick={fetchOptions} disabled={optionsLoading}>
+                    {optionsLoading ? "Chargement…" : "Actualiser"}
+                  </button>
+                </div>
+                {optionsError ? <p className="lab-error">{optionsError}</p> : null}
+                <div className="lab-class-selector">
+                  {classOptions.map((option) => {
+                    const isActive = descriptorForm.classId === option.code;
+                    const fallback = option.name?.charAt(0)?.toUpperCase() ?? option.code?.charAt(0)?.toUpperCase() ?? "?";
+                    return (
+                      <button
+                        key={option.code}
+                        type="button"
+                        className={`lab-class-chip${isActive ? " is-active" : ""}`}
+                        onClick={() => setDescriptorForm((prev) => ({ ...prev, classId: option.code }))}
+                        aria-pressed={isActive}
+                      >
+                        <span className="lab-class-chip__icon" aria-hidden="true">
+                          {option.icon ? <img src={option.icon} alt="" loading="lazy" /> : fallback}
+                        </span>
+                        <span className="lab-class-chip__label">{option.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {!optionsLoading && classOptions.length === 0 ? (
+                  <p className="lab-muted">Aucune classe disponible pour le moment.</p>
+                ) : null}
+                {selectedClass ? (
+                  <p className="lab-class-selected">Classe actuelle : {selectedClass.name}</p>
+                ) : null}
+              </div>
               <label className="lab-field">
                 <span>Sexe</span>
                 <select
@@ -465,22 +706,25 @@ export default function SkinLabPage() {
                 </div>
               </div>
               <div className="lab-items">
-                <h3>Items</h3>
+                <div className="lab-field__label">
+                  <h3>Items</h3>
+                </div>
+                {optionsError ? <p className="lab-error">{optionsError}</p> : null}
                 <div className="lab-items__grid">
                   {SLOTS.map((slot) => {
                     const entry = descriptorForm.items?.[slot] ?? { itemId: "", label: "" };
                     return (
-                      <label key={slot} className="lab-field">
-                        <span>{SLOT_LABELS[slot] ?? slot}</span>
-                        <input
-                          type="number"
-                          min="0"
-                          inputMode="numeric"
-                          value={entry.itemId}
-                          onChange={(event) => handleItemChange(slot, event.target.value)}
+                      <div key={slot} className="lab-item-field">
+                        <span className="lab-item-field__label">{SLOT_LABELS[slot] ?? slot}</span>
+                        <ItemPicker
+                          slot={slot}
+                          label={SLOT_LABELS[slot] ?? slot}
+                          value={entry}
+                          options={itemOptions[slot]}
+                          onSelect={handleItemSelect}
+                          loading={optionsLoading}
                         />
-                        {entry.label ? <small className="lab-muted">{entry.label}</small> : null}
-                      </label>
+                      </div>
                     );
                   })}
                 </div>
