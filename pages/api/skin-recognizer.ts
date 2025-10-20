@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { buildItemIndex, getAllIndexedItems } from "../../lib/items/indexStore";
-import type { CandidateRef, SlotKey } from "../../lib/types";
+import { buildItemIndex, getAllIndexedItems, getItemIndex } from "../../lib/items/indexStore";
+import type { CandidateRef, SlotKey, ItemIndex } from "../../lib/types";
 import {
   deriveClassesFromItems,
   recognizeSkin,
@@ -16,6 +16,8 @@ import {
 } from "../../lib/vision/skinRecognizer";
 import { BREED_FALLBACK_ORDER, fetchDofusBreeds, fetchItemsForIndex } from "../../lib/items/dofusFetcher";
 import type { BreedOption } from "../../lib/items/dofusFetcher";
+import { SLOTS } from "../../lib/config/suggestions";
+import { getFallbackBreeds } from "../../lib/data/breedsFallback";
 
 interface TrainRequestBody {
   action: "train";
@@ -74,17 +76,116 @@ interface AutoTrainRequestBody {
   language?: string;
 }
 
+interface OptionsRequestBody {
+  action: "options";
+  language?: string;
+  forceRefresh?: boolean;
+}
+
 type RecognizerRequest =
   | TrainRequestBody
   | PredictRequestBody
   | StatusRequestBody
   | LabelRequestBody
   | AutoTrainRequestBody
-  | { action: "options"; language?: string };
+  | OptionsRequestBody;
 
-async function ensureIndexedItems(language?: string): Promise<CandidateRef[]> {
+const MIN_SLOT_COUNTS: Record<SlotKey, number> = {
+  coiffe: 200,
+  cape: 200,
+  bouclier: 120,
+  familier: 260,
+  epauliere: 80,
+  costume: 180,
+  ailes: 90,
+};
+
+const INDEX_TTL_MS = 1000 * 60 * 60 * 12; // 12 hours
+
+function slugify(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-+/g, "-");
+}
+
+function pickFallbackString(value?: Record<string, string> | string | null): string {
+  if (!value) {
+    return "";
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "object") {
+    for (const key of ["fr", "en"]) {
+      const candidate = value[key];
+      if (typeof candidate === "string" && candidate.trim()) {
+        return candidate;
+      }
+    }
+    const first = Object.values(value).find((entry) => typeof entry === "string" && entry.trim());
+    if (typeof first === "string") {
+      return first;
+    }
+  }
+  return "";
+}
+
+function buildFallbackBreedOptions(): BreedOption[] {
+  const entries = getFallbackBreeds();
+  return entries
+    .map((entry, index) => {
+      const slugSource = pickFallbackString(entry.slug) || pickFallbackString(entry.shortName) || pickFallbackString(entry.name);
+      const name =
+        pickFallbackString(entry.shortName) ||
+        pickFallbackString(entry.name) ||
+        slugSource ||
+        `Classe ${entry.id}`;
+      const rawSlug = slugify(slugSource || name || `${entry.id}`);
+      const iconSource = typeof entry.img === "string" ? entry.img.trim() : "";
+      const normalizedIcon = iconSource.startsWith("http") ? iconSource : undefined;
+      return {
+        id: entry.id,
+        slug: rawSlug || `${entry.id}`,
+        name,
+        icon: normalizedIcon,
+        sortIndex: entry.sortIndex ?? index,
+      };
+    })
+    .sort((a, b) => a.sortIndex - b.sortIndex || a.name.localeCompare(b.name, "fr", { sensitivity: "base" }));
+}
+
+function shouldRefreshIndex(index: ItemIndex, forceRefresh?: boolean): boolean {
+  if (forceRefresh) {
+    return true;
+  }
+  if (!index || !index.items) {
+    return true;
+  }
+  const now = Date.now();
+  if (!Number.isFinite(index.updatedAt) || now - index.updatedAt > INDEX_TTL_MS) {
+    return true;
+  }
+  for (const slot of SLOTS) {
+    const count = index.items?.[slot]?.length ?? 0;
+    if (count < (MIN_SLOT_COUNTS[slot] ?? 0)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function ensureIndexedItems(
+  language?: string,
+  options: { forceRefresh?: boolean } = {},
+): Promise<CandidateRef[]> {
+  const index = getItemIndex();
   const existing = getAllIndexedItems();
-  if (existing.length) {
+  const needsRefresh = shouldRefreshIndex(index, options.forceRefresh) || existing.length === 0;
+  if (!needsRefresh) {
     return existing;
   }
   const fetched = await fetchItemsForIndex(language);
@@ -117,6 +218,12 @@ async function fetchFallbackClasses(language?: string): Promise<string[]> {
   } catch (error) {
     console.warn("Failed to load Dofus breeds for recognizer fallback", error);
   }
+  const fallback = buildFallbackBreedOptions()
+    .map((entry) => entry.slug)
+    .filter(Boolean);
+  if (fallback.length) {
+    return Array.from(new Set([...fallback, ...BREED_FALLBACK_ORDER]));
+  }
   return BREED_FALLBACK_ORDER;
 }
 
@@ -135,8 +242,11 @@ async function resolveClasses({
     return Array.from(new Set(requested.map((value) => value.toLowerCase())));
   }
   const derived = deriveClassesFromItems(items);
-  const base = derived.length ? derived : await fetchFallbackClasses(language);
-  const unique = new Set(base.map((value) => value.toLowerCase()));
+  const fallback = await fetchFallbackClasses(language);
+  const base = derived.length ? derived : fallback;
+  const unique = new Set<string>();
+  fallback.forEach((value) => unique.add(value.toLowerCase()));
+  base.forEach((value) => unique.add(value.toLowerCase()));
   extra.forEach((value) => {
     if (value) {
       unique.add(value.toLowerCase());
@@ -258,8 +368,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (body.action === "options") {
     try {
       const [items, breeds] = await Promise.all([
-        ensureIndexedItems(body.language),
-        fetchDofusBreeds(body.language),
+        ensureIndexedItems(body.language, { forceRefresh: body.forceRefresh }),
+        fetchDofusBreeds(body.language).catch((error) => {
+          console.warn("Failed to load Dofus breeds for options", error);
+          return [] as BreedOption[];
+        }),
       ]);
       const grouped = groupItemsBySlot(items);
       const slotOptions = Object.fromEntries(
@@ -275,7 +388,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       );
       res.status(200).json({
         action: "options",
-        classes: presentBreeds(breeds),
+        classes: presentBreeds(breeds.length ? breeds : buildFallbackBreedOptions()),
         items: slotOptions,
       });
     } catch (error) {

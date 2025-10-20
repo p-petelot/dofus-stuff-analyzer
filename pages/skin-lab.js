@@ -322,14 +322,14 @@ export default function SkinLabPage() {
     fetchStatus();
   }, [fetchStatus]);
 
-  const fetchOptions = useCallback(async () => {
+  const fetchOptions = useCallback(async (forceRefresh = false) => {
     setOptionsLoading(true);
     setOptionsError(null);
     try {
       const response = await fetch("/api/skin-recognizer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "options" }),
+        body: JSON.stringify({ action: "options", forceRefresh }),
       });
       const payload = await response.json();
       if (!response.ok) {
@@ -689,7 +689,12 @@ export default function SkinLabPage() {
               <div className="lab-field lab-field--full">
                 <div className="lab-field__label">
                   <span>Classe</span>
-                  <button type="button" className="lab-inline" onClick={fetchOptions} disabled={optionsLoading}>
+                  <button
+                    type="button"
+                    className="lab-inline"
+                    onClick={() => fetchOptions(true)}
+                    disabled={optionsLoading}
+                  >
                     {optionsLoading ? "Chargement…" : "Actualiser"}
                   </button>
                 </div>

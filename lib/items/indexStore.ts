@@ -5,7 +5,7 @@ import type { CandidateRef, ItemIndex, ItemMeta, SlotKey } from "../types";
 import { resolveCachePath } from "../utils/cache";
 
 const CACHE_PATH = resolveCachePath("items-index.json");
-const ITEM_INDEX_VERSION = 2;
+const ITEM_INDEX_VERSION = 3;
 
 let indexCache: ItemIndex | null = null;
 
@@ -148,6 +148,10 @@ export function getAllIndexedItems(): CandidateRef[] {
     results.push(...entries);
   }
   return results;
+}
+
+export function getItemIndex(): ItemIndex {
+  return requireIndex();
 }
 
 // Warm the index cache immediately when possible.

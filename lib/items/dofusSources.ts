@@ -34,7 +34,7 @@ export const SLOT_REQUEST_SOURCES: Record<SlotKey, SlotRequestSource[]> = {
     { typeIds: [207], skip: 0, limit: 1200 },
   ],
   epauliere: [{ typeIds: [299], skip: 0, limit: 1200 }],
-  costume: [{ typeIds: [199], skip: 0, limit: 1200 }],
+  costume: [{ typeIds: [113, 199], skip: 0, limit: 1200 }],
   ailes: [{ typeIds: [300], skip: 0, limit: 1200 }],
 };
 

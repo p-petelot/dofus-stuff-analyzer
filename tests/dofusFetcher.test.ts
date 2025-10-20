@@ -47,7 +47,7 @@ describe("dofusFetcher", () => {
       expect(requestedTypeIds.has(typeId)).toBe(true);
     });
 
-    const expectedGlobalTypeIds = [16, 246, 17, 247, 82, 248, 299, 199, 300];
+    const expectedGlobalTypeIds = [16, 246, 17, 247, 82, 248, 299, 113, 199, 300];
     expectedGlobalTypeIds.forEach((typeId) => {
       expect(requestedTypeIds.has(typeId)).toBe(true);
     });

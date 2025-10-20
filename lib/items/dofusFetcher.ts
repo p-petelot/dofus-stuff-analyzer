@@ -233,6 +233,8 @@ async function fetchJson(url: string): Promise<unknown> {
   return response.json();
 }
 
+const DEFAULT_MAX_PAGES = 60;
+
 async function fetchItemsForSlot(
   slot: SlotKey,
   language = DEFAULT_LANGUAGE,
@@ -243,13 +245,14 @@ async function fetchItemsForSlot(
   for (const config of configs) {
     const baseSkip = config.skip ?? 0;
     const pageSize = Math.max(1, Math.min(config.limit ?? 1200, 2000));
-    const maxPages = Math.max(1, config.maxPages ?? 25);
+    const maxPages = Math.max(1, config.maxPages ?? DEFAULT_MAX_PAGES);
     let skip = baseSkip;
     const typeIds = config.typeIds ?? [];
     if (!typeIds.length) {
       continue;
     }
 
+    let stagnantPages = 0;
     for (let page = 0; page < maxPages; page += 1) {
       const params = new URLSearchParams();
       const defaults = getDefaultDofusItemParams(language);
@@ -271,13 +274,22 @@ async function fetchItemsForSlot(
       if (!entries.length) {
         break;
       }
+      const beforeSize = results.size;
       for (const entry of entries) {
         const meta = buildItemMeta(entry, slot);
         if (meta) {
           results.set(meta.id, meta);
         }
       }
+      if (results.size === beforeSize) {
+        stagnantPages += 1;
+      } else {
+        stagnantPages = 0;
+      }
       if (entries.length < pageSize) {
+        break;
+      }
+      if (stagnantPages >= 2) {
         break;
       }
       skip += pageSize;

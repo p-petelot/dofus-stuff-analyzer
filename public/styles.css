@@ -2810,8 +2810,8 @@ a {
 .lab-upload {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
+  gap: 6px;
+  padding: 6px 12px;
   border-radius: 999px;
   background: rgba(139, 92, 246, 0.14);
   border: 1px solid rgba(139, 92, 246, 0.28);
@@ -2825,8 +2825,8 @@ a {
 }
 
 .lab-upload__icon {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: rgba(79, 70, 229, 0.2);
   display: inline-flex;
@@ -2845,12 +2845,12 @@ a {
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.14);
   background: rgba(15, 23, 42, 0.6);
-  min-height: 220px;
-  max-height: 340px;
+  min-height: 180px;
+  max-height: 280px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 18px;
+  padding: 14px;
 }
 
 .lab-preview img {
@@ -3037,25 +3037,60 @@ a {
 
 
 .lab-class-selector {
+  position: relative;
   display: flex;
-  gap: 10px;
-  margin: 10px -6px 0;
-  padding: 0 6px 6px;
+  gap: 8px;
+  margin: 8px -6px 0;
+  padding: 4px 6px 10px;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
+  scroll-padding: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    rgba(0, 0, 0, 0.75) 12px,
+    rgba(0, 0, 0, 0.85) calc(100% - 12px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    rgba(0, 0, 0, 0.75) 12px,
+    rgba(0, 0, 0, 0.85) calc(100% - 12px),
+    transparent 100%
+  );
+}
+
+.lab-class-selector::-webkit-scrollbar {
+  height: 8px;
+}
+
+.lab-class-selector::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.lab-class-selector::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 999px;
+}
+
+.lab-class-selector::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.55);
 }
 
 .lab-class-chip {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
+  gap: 8px;
+  padding: 6px 12px;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.16);
   background: rgba(15, 23, 42, 0.48);
   color: var(--text);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   cursor: pointer;
   transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
   scroll-snap-align: start;
@@ -3074,8 +3109,8 @@ a {
 
 
 .lab-class-chip__icon {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: rgba(15, 23, 42, 0.8);
   display: inline-flex;
