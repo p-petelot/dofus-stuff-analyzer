@@ -1,9 +1,14 @@
 import crypto from "crypto";
 import type { ItemMeta, SlotKey } from "../types";
 import { SLOTS } from "../config/suggestions";
+import {
+  DOFUS_API_HOST,
+  DOFUS_DEFAULT_LANGUAGE,
+  SLOT_REQUEST_SOURCES,
+  getDefaultDofusItemParams,
+} from "./dofusSources";
 
-const DOFUS_API_HOST = "https://api.dofusdb.fr";
-const DEFAULT_LANGUAGE = "fr";
+const DEFAULT_LANGUAGE = DOFUS_DEFAULT_LANGUAGE;
 
 const DEFAULT_HEADERS: Record<string, string> = {
   "User-Agent":
@@ -12,97 +17,7 @@ const DEFAULT_HEADERS: Record<string, string> = {
   Accept: "application/json",
 };
 
-interface SlotRequestConfig {
-  typeIds?: number[];
-  typeNames?: string[];
-  typeSlugs?: string[];
-  skip?: number;
-  limit?: number;
-  maxPages?: number;
-}
-
-const SLOT_REQUESTS: Record<SlotKey, SlotRequestConfig[]> = {
-  coiffe: [
-    {
-      typeIds: [16, 246],
-      typeNames: ["Coiffe", "Coiffe d'apparat"],
-      skip: 0,
-      limit: 1600,
-    },
-  ],
-  cape: [
-    {
-      typeIds: [17, 247],
-      typeNames: ["Cape", "Cape d'apparat"],
-      skip: 0,
-      limit: 1600,
-    },
-  ],
-  bouclier: [
-    {
-      typeIds: [82, 248],
-      typeNames: ["Bouclier", "Bouclier d'apparat"],
-      skip: 0,
-      limit: 1600,
-    },
-  ],
-  familier: [
-    {
-      typeIds: [18, 97, 121, 196, 207, 249, 250],
-      typeNames: [
-        "Familier",
-        "Familier d'apparat",
-        "Montilier",
-        "Monture",
-        "Montures",
-        "Dragodinde",
-        "Dragodindes",
-        "Muldo",
-        "Muldos",
-        "Volkorne",
-        "Volkornes",
-      ],
-      skip: 0,
-      limit: 2000,
-    },
-  ],
-  epauliere: [
-    {
-      typeIds: [299],
-      typeNames: ["Épaulière", "Épaulière d'apparat", "Epaulière", "Epaulière d'apparat"],
-      skip: 0,
-      limit: 800,
-    },
-  ],
-  costume: [
-    {
-      typeIds: [199],
-      typeNames: ["Costume", "Costume d'apparat"],
-      skip: 0,
-      limit: 800,
-    },
-  ],
-  ailes: [
-    {
-      typeIds: [300],
-      typeNames: ["Ailes", "Ailes d'apparat"],
-      skip: 0,
-      limit: 800,
-    },
-  ],
-};
-
 const BREED_FALLBACK_ORDER = ["iop", "cra", "eniripsa", "sram", "sacrieur", "feca"];
-
-interface ItemTypeIndexEntry {
-  id: number;
-  aliases: string[];
-}
-
-interface ItemTypeIndex {
-  entries: ItemTypeIndexEntry[];
-  aliasLookup: Map<string, Set<number>>;
-}
 
 function slugify(value: string): string {
   return value
@@ -187,101 +102,6 @@ function ensureNumericId(...values: unknown[]): number | null {
     }
   }
   return null;
-}
-
-function addAlias(target: Set<string>, value: string | null | undefined): void {
-  if (!value) {
-    return;
-  }
-  const normalized = slugify(normalizeWhitespace(value));
-  if (!normalized) {
-    return;
-  }
-  target.add(normalized);
-  if (normalized.endsWith("s")) {
-    target.add(normalized.slice(0, -1));
-  }
-  if (normalized.endsWith("es")) {
-    target.add(normalized.slice(0, -2));
-  }
-}
-
-function buildTypeIndex(rawTypes: Record<string, unknown>[], language = DEFAULT_LANGUAGE): ItemTypeIndex {
-  const entries: ItemTypeIndexEntry[] = [];
-  const aliasLookup = new Map<string, Set<number>>();
-  const languages = Array.from(new Set([language, DEFAULT_LANGUAGE, "en", "fr"])) as string[];
-
-  for (const raw of rawTypes) {
-    const id = ensureNumericId(readField(raw, "id"), readField(raw, "_id"), readField(raw, "ankamaId"));
-    if (id === null) {
-      continue;
-    }
-    const aliases = new Set<string>();
-    for (const lang of languages) {
-      const name = pickLocalized(readField(raw, "name") ?? readField(raw, "title"), lang);
-      addAlias(aliases, name);
-      const slugSource = pickLocalized(readField(raw, "slug"), lang);
-      addAlias(aliases, slugSource);
-    }
-    const slugFallback = readField<unknown>(raw, "slug");
-    if (typeof slugFallback === "string") {
-      addAlias(aliases, slugFallback);
-    }
-    const nameFallback = readField<unknown>(raw, "name");
-    if (typeof nameFallback === "string") {
-      addAlias(aliases, nameFallback);
-    }
-    if (!aliases.size) {
-      continue;
-    }
-    const uniqueAliases = Array.from(aliases);
-    entries.push({ id, aliases: uniqueAliases });
-    for (const alias of uniqueAliases) {
-      if (!aliasLookup.has(alias)) {
-        aliasLookup.set(alias, new Set());
-      }
-      aliasLookup.get(alias)?.add(id);
-    }
-  }
-
-  return { entries, aliasLookup };
-}
-
-function matchTypeIds(
-  config: SlotRequestConfig,
-  typeIndex: ItemTypeIndex | null,
-): number[] {
-  const resolved = new Set<number>();
-  for (const id of config.typeIds ?? []) {
-    if (typeof id === "number" && Number.isFinite(id)) {
-      resolved.add(id);
-    }
-  }
-  if (!typeIndex) {
-    return Array.from(resolved);
-  }
-  const queries = [
-    ...(config.typeNames ?? []),
-    ...(config.typeSlugs ?? []),
-  ];
-  for (const query of queries) {
-    if (!query) continue;
-    const normalized = slugify(normalizeWhitespace(query));
-    if (!normalized) continue;
-    const directMatches = typeIndex.aliasLookup.get(normalized);
-    if (directMatches) {
-      for (const id of directMatches) {
-        resolved.add(id);
-      }
-      continue;
-    }
-    for (const entry of typeIndex.entries) {
-      if (entry.aliases.some((alias) => alias.includes(normalized) || normalized.includes(alias))) {
-        resolved.add(entry.id);
-      }
-    }
-  }
-  return Array.from(resolved);
 }
 
 function normalizeHex(input: unknown): string | null {
@@ -393,64 +213,37 @@ async function fetchJson(url: string): Promise<unknown> {
   return response.json();
 }
 
-async function fetchItemTypes(language = DEFAULT_LANGUAGE): Promise<ItemTypeIndex | null> {
-  try {
-    const results: Record<string, unknown>[] = [];
-    const pageSize = 200;
-    let skip = 0;
-    for (let page = 0; page < 50; page += 1) {
-      const params = new URLSearchParams();
-      params.set("lang", language);
-      params.set("$skip", String(skip));
-      params.set("$limit", String(pageSize));
-      const url = `${DOFUS_API_HOST}/item-types?${params.toString()}`;
-      const payload = await fetchJson(url);
-      const entries = extractArray<Record<string, unknown>>(payload);
-      if (!entries.length) {
-        break;
-      }
-      results.push(...entries);
-      if (entries.length < pageSize) {
-        break;
-      }
-      skip += pageSize;
-    }
-    if (!results.length) {
-      return null;
-    }
-    return buildTypeIndex(results, language);
-  } catch (error) {
-    console.warn("Failed to fetch item types", error);
-  }
-  return null;
-}
-
 async function fetchItemsForSlot(
   slot: SlotKey,
-  typeIndex: ItemTypeIndex | null,
   language = DEFAULT_LANGUAGE,
 ): Promise<ItemMeta[]> {
-  const configs = SLOT_REQUESTS[slot] ?? [];
+  const configs = SLOT_REQUEST_SOURCES[slot] ?? [];
   const results = new Map<number, ItemMeta>();
 
   for (const config of configs) {
     const baseSkip = config.skip ?? 0;
-    const pageSize = Math.max(1, Math.min(config.limit ?? 800, 2000));
+    const pageSize = Math.max(1, Math.min(config.limit ?? 1200, 2000));
     const maxPages = Math.max(1, config.maxPages ?? 25);
     let skip = baseSkip;
-    const typeIds = matchTypeIds(config, typeIndex);
+    const typeIds = config.typeIds ?? [];
     if (!typeIds.length) {
       continue;
     }
 
     for (let page = 0; page < maxPages; page += 1) {
       const params = new URLSearchParams();
-      params.set("lang", language);
+      const defaults = getDefaultDofusItemParams(language);
+      Object.entries(defaults).forEach(([key, value]) => {
+        params.set(key, value);
+      });
       params.set("$skip", String(skip));
       params.set("$limit", String(pageSize));
       for (const typeId of typeIds) {
         params.append("typeId[$in][]", String(typeId));
       }
+      Object.entries(config.query ?? {}).forEach(([key, value]) => {
+        params.set(key, value);
+      });
 
       const url = `${DOFUS_API_HOST}/items?${params.toString()}`;
       const payload = await fetchJson(url);
@@ -477,16 +270,16 @@ async function fetchItemsForSlot(
 export async function fetchItemsForIndex(
   language = DEFAULT_LANGUAGE,
 ): Promise<Record<SlotKey, ItemMeta[]>> {
-  const typeIndex = await fetchItemTypes(language);
   const items: Partial<Record<SlotKey, ItemMeta[]>> = {};
   for (const slot of SLOTS) {
-    items[slot] = await fetchItemsForSlot(slot, typeIndex, language);
+    items[slot] = await fetchItemsForSlot(slot, language);
   }
   return items as Record<SlotKey, ItemMeta[]>;
 }
 
 export interface BreedOption {
-  code: string;
+  id: number;
+  slug: string;
   name: string;
   icon?: string;
   sortIndex: number;
@@ -503,22 +296,28 @@ export async function fetchDofusBreeds(language = DEFAULT_LANGUAGE): Promise<Bre
   const breeds: BreedOption[] = [];
 
   for (const entry of entries) {
-    const name = normalizeWhitespace(pickLocalized(entry.name ?? entry.title, language));
+    const id = ensureNumericId(entry.id, entry._id, entry.ankamaId);
+    if (id === null) {
+      continue;
+    }
+    const name = normalizeWhitespace(
+      pickLocalized(entry.shortName ?? entry.name ?? entry.title, language) || pickLocalized(entry.name, language),
+    );
     if (!name) {
       continue;
     }
     const slugSource =
       pickLocalized(entry.slug, language) || pickLocalized(entry.className, language) || name;
-    const code = slugify(slugSource || name);
-    if (!code) {
+    const slug = slugify(slugSource || name);
+    if (!slug) {
       continue;
     }
-    const sortIndex = ensureNumericId(entry.id, entry.order, entry.sortIndex) ??
-      (BREED_FALLBACK_ORDER.indexOf(code) >= 0
-        ? BREED_FALLBACK_ORDER.indexOf(code)
+    const sortIndex = ensureNumericId(entry.sortIndex, entry.order, entry.position) ??
+      (BREED_FALLBACK_ORDER.indexOf(slug) >= 0
+        ? BREED_FALLBACK_ORDER.indexOf(slug)
         : BREED_FALLBACK_ORDER.length + breeds.length);
     const icon = ensureAbsoluteUrl(entry.img ?? entry.icon ?? entry.image ?? entry.portrait);
-    breeds.push({ code, name, icon, sortIndex });
+    breeds.push({ id, slug, name, icon, sortIndex });
   }
 
   breeds.sort((a, b) => a.sortIndex - b.sortIndex || a.name.localeCompare(b.name));

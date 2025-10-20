@@ -2697,7 +2697,7 @@ a {
 }
 
 .lab-page__header {
-  width: min(1280px, calc(100% - 16px));
+  width: min(1400px, calc(100% - 8px));
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -2764,11 +2764,11 @@ a {
 }
 
 .lab-grid {
-  width: min(1280px, calc(100% - 16px));
+  width: min(1400px, calc(100% - 8px));
   margin: 0 auto 56px;
   display: grid;
   gap: 28px;
-  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(540px, 1fr));
 }
 
 .lab-card {

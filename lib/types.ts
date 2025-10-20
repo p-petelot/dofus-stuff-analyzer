@@ -81,6 +81,7 @@ export interface CandidateRef {
 }
 
 export interface ItemIndex {
+  version: number;
   updatedAt: number;
   items: Record<SlotKey, CandidateRef[]>;
 }

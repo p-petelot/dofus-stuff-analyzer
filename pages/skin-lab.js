@@ -248,7 +248,7 @@ export default function SkinLabPage() {
   const [optionsError, setOptionsError] = useState(null);
 
   const classLookup = useMemo(() => {
-    return new Map(classOptions.map((option) => [option.code, option]));
+    return new Map(classOptions.map((option) => [option.slug, option]));
   }, [classOptions]);
 
   const getClassLabel = useCallback(
@@ -307,7 +307,12 @@ export default function SkinLabPage() {
       if (!response.ok) {
         throw new Error(payload?.error ?? "Options indisponibles");
       }
-      setClassOptions(Array.isArray(payload?.classes) ? payload.classes : []);
+      const classes = Array.isArray(payload?.classes)
+        ? [...payload.classes].sort((a, b) => (a?.name ?? "").localeCompare(b?.name ?? "", "fr", {
+            sensitivity: "base",
+          }))
+        : [];
+      setClassOptions(classes);
       const slots = {};
       Object.entries(payload?.items ?? {}).forEach(([slot, entries]) => {
         slots[slot] = normalizeSlotOptions(entries);
@@ -532,7 +537,7 @@ export default function SkinLabPage() {
       if (prev.classId) {
         return prev;
       }
-      return { ...prev, classId: classOptions[0].code };
+      return { ...prev, classId: classOptions[0].slug };
     });
   }, [classOptions, descriptorForm?.classId]);
 
@@ -661,14 +666,14 @@ export default function SkinLabPage() {
                 {optionsError ? <p className="lab-error">{optionsError}</p> : null}
                 <div className="lab-class-selector">
                   {classOptions.map((option) => {
-                    const isActive = descriptorForm.classId === option.code;
-                    const fallback = option.name?.charAt(0)?.toUpperCase() ?? option.code?.charAt(0)?.toUpperCase() ?? "?";
+                    const isActive = descriptorForm.classId === option.slug;
+                    const fallback = option.name?.charAt(0)?.toUpperCase() ?? option.slug?.charAt(0)?.toUpperCase() ?? "?";
                     return (
                       <button
-                        key={option.code}
+                        key={option.slug}
                         type="button"
                         className={`lab-class-chip${isActive ? " is-active" : ""}`}
-                        onClick={() => setDescriptorForm((prev) => ({ ...prev, classId: option.code }))}
+                        onClick={() => setDescriptorForm((prev) => ({ ...prev, classId: option.slug }))}
                         aria-pressed={isActive}
                       >
                         <span className="lab-class-chip__icon" aria-hidden="true">

@@ -9,11 +9,16 @@ import {
   translate,
   useLanguage,
 } from "../lib/i18n";
+import {
+  DOFUS_API_HOST,
+  DOFUS_API_BASE_URL,
+  DOFUS_DEFAULT_LIMIT,
+  FAMILIER_TYPE_GROUPS,
+  SLOT_REQUEST_SOURCES,
+  getDefaultDofusItemParams,
+} from "../lib/items/dofusSources";
 
 const ITEM_TYPES = ["coiffe", "cape", "bouclier", "familier", "epauliere", "costume", "ailes"];
-const DOFUS_API_HOST = "https://api.dofusdb.fr";
-const DOFUS_API_BASE_URL = `${DOFUS_API_HOST}/items`;
-const DEFAULT_LIMIT = 1200;
 
 let activeLocalizationPriority = getLanguagePriority();
 
@@ -29,14 +34,7 @@ function getActiveLocalizationPriority() {
 }
 
 function getDefaultDofusQueryParams(language = DEFAULT_LANGUAGE) {
-  const normalized = language ?? DEFAULT_LANGUAGE;
-  return {
-    "typeId[$ne]": "203",
-    "$sort": "-id",
-    "level[$gte]": "0",
-    "level[$lte]": "200",
-    lang: normalized,
-  };
+  return getDefaultDofusItemParams(language);
 }
 
 function buildBreedsUrl(language = DEFAULT_LANGUAGE) {
@@ -48,13 +46,13 @@ function buildBreedsUrl(language = DEFAULT_LANGUAGE) {
   return `${DOFUS_API_HOST}/breeds?${params.toString()}`;
 }
 
-const FAMILIER_FILTERS = Object.freeze([
-  { key: "pet", labelKey: "companions.filters.pet", typeIds: [18, 249] },
-  { key: "mount", labelKey: "companions.filters.mount", typeIds: [121, 250] },
-  { key: "dragodinde", labelKey: "companions.filters.dragodinde", typeIds: [97] },
-  { key: "muldo", labelKey: "companions.filters.muldo", typeIds: [196] },
-  { key: "volkorne", labelKey: "companions.filters.volkorne", typeIds: [207] },
-]);
+const FAMILIER_FILTERS = Object.freeze(
+  FAMILIER_TYPE_GROUPS.map((group) => ({
+    key: group.key,
+    labelKey: `companions.filters.${group.key}`,
+    typeIds: group.typeIds,
+  })),
+);
 
 const FAMILIER_TYPE_ID_TO_FILTER_KEY = new Map();
 FAMILIER_FILTERS.forEach((filter) => {
@@ -68,42 +66,9 @@ const ITEM_FLAG_FILTERS = Object.freeze([
   { key: "cosmetic", labelKey: "items.filters.cosmetic", flagKey: "isCosmetic" },
 ]);
 
-const ITEM_TYPE_CONFIG = {
-  coiffe: {
-    requests: [
-      { typeIds: [16], skip: 0, limit: 1200 },
-      { typeIds: [246], skip: 0, limit: 1200 },
-    ],
-  },
-  cape: {
-    requests: [
-      { typeIds: [17], skip: 0, limit: 1200 },
-      { typeIds: [247], skip: 0, limit: 1200 },
-    ],
-  },
-  familier: {
-    requests: FAMILIER_FILTERS.map((filter) => ({
-      typeIds: filter.typeIds,
-      skip: 0,
-      limit: 1200,
-    })),
-  },
-  epauliere: {
-    requests: [{ typeIds: [299], skip: 0, limit: 1200 }],
-  },
-  costume: {
-    requests: [{ typeIds: [199], skip: 0, limit: 1200 }],
-  },
-  ailes: {
-    requests: [{ typeIds: [300], skip: 0, limit: 1200 }],
-  },
-  bouclier: {
-    requests: [
-      { typeIds: [82], skip: 0, limit: 1200 },
-      { typeIds: [248], skip: 0, limit: 1200 },
-    ],
-  },
-};
+const ITEM_TYPE_CONFIG = Object.fromEntries(
+  Object.entries(SLOT_REQUEST_SOURCES).map(([slot, requests]) => [slot, { requests }]),
+);
 
 const MAX_ITEM_PALETTE_COLORS = 6;
 const IMAGE_REFERENCE_KEYS = [
@@ -627,7 +592,7 @@ function buildDofusApiUrls(type, language = DEFAULT_LANGUAGE) {
       params.set(key, value);
     });
 
-    const limit = source.limit ?? config.limit ?? DEFAULT_LIMIT;
+    const limit = source.limit ?? config.limit ?? DOFUS_DEFAULT_LIMIT;
     params.set("$limit", String(limit));
 
     const skip = source.skip ?? config.skip;

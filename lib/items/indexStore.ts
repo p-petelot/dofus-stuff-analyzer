@@ -5,6 +5,7 @@ import type { CandidateRef, ItemIndex, ItemMeta, SlotKey } from "../types";
 import { resolveCachePath } from "../utils/cache";
 
 const CACHE_PATH = resolveCachePath("items-index.json");
+const ITEM_INDEX_VERSION = 2;
 
 let indexCache: ItemIndex | null = null;
 
@@ -67,7 +68,9 @@ function loadIndexFromDisk(): ItemIndex | null {
     if (fs.existsSync(CACHE_PATH)) {
       const raw = fs.readFileSync(CACHE_PATH, "utf8");
       const parsed = JSON.parse(raw) as ItemIndex;
-      return parsed;
+      if (parsed.version === ITEM_INDEX_VERSION) {
+        return parsed;
+      }
     }
   } catch (error) {
     console.warn("Failed to load item index", error);
@@ -91,7 +94,7 @@ export async function buildItemIndex(itemsBySlot: Record<SlotKey, ItemMeta[]>): 
       return [slot, metas.map(convertItem)];
     }),
   ) as Record<SlotKey, CandidateRef[]>;
-  const index: ItemIndex = { updatedAt: Date.now(), items };
+  const index: ItemIndex = { version: ITEM_INDEX_VERSION, updatedAt: Date.now(), items };
   indexCache = index;
   saveIndex(index);
   return index;
@@ -102,7 +105,7 @@ function requireIndex(): ItemIndex {
     return indexCache;
   }
   const loaded = loadIndexFromDisk();
-  if (loaded) {
+  if (loaded && loaded.version === ITEM_INDEX_VERSION) {
     indexCache = loaded;
     return loaded;
   }
@@ -111,6 +114,7 @@ function requireIndex(): ItemIndex {
     CandidateRef[]
   >;
   const empty: ItemIndex = {
+    version: ITEM_INDEX_VERSION,
     updatedAt: Date.now(),
     items: emptyItems,
   };

@@ -51,11 +51,14 @@ describe("skinRecognizer", () => {
       samplesPerClass: 2,
       randomSeed: "unit-test",
       persist: false,
+      updateDataset: true,
     });
     expect(model.samples).toHaveLength(2 * 2 * 2);
     expect(model.metadata.classes).toEqual(["iop", "cra"]);
     expect(model.metadata.samples).toBe(model.samples.length);
     expect(model.metadata.labeledSamples).toBe(0);
+    const summary = await getSkinRecognizerDatasetSummary();
+    expect(summary.synthetic).toBe(model.samples.length);
   });
 
   it("recognises a matching synthetic skin image", async () => {

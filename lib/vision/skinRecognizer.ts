@@ -53,6 +53,7 @@ export interface SkinTrainingConfig {
   randomSeed?: string;
   persist?: boolean;
   includeLabeled?: boolean;
+  updateDataset?: boolean;
 }
 
 export interface RecognizeOptions {
@@ -208,6 +209,20 @@ async function getDatasetSamples(): Promise<SkinSampleFeatures[]> {
 
 function stripImage(sample: SkinSampleFeatures): SkinSampleFeatures {
   return { ...sample, image: undefined, source: sample.source ?? "labeled" };
+}
+
+async function persistSyntheticSamples(samples: SkinSampleFeatures[]): Promise<void> {
+  if (!samples.length) {
+    return;
+  }
+  const dataset = await loadDatasetFile();
+  const merged = new Map(dataset.samples.map((sample) => [sample.id, sample]));
+  for (const sample of samples) {
+    const entry = { ...stripImage(sample), source: "synthetic" as const };
+    merged.set(entry.id, entry);
+  }
+  dataset.samples = Array.from(merged.values());
+  await saveDatasetFile(dataset);
 }
 
 function hashImageData(img512: ImageDataLike): string {
@@ -501,6 +516,13 @@ export async function trainSkinRecognizer(config: SkinTrainingConfig): Promise<S
 
   if (config.persist) {
     await saveSkinRecognizerModel(model);
+  }
+
+  if (config.updateDataset) {
+    const syntheticSamples = samples.filter((sample) => sample.source === "synthetic");
+    if (syntheticSamples.length) {
+      await persistSyntheticSamples(syntheticSamples);
+    }
   }
 
   return model;

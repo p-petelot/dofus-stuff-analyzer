@@ -159,7 +159,12 @@ function presentItems(items: Record<SlotKey, CandidateRef>): Array<{
 }
 
 function presentBreeds(breeds: BreedOption[]) {
-  return breeds.map((breed) => ({ code: breed.code, name: breed.name, icon: breed.icon ?? null }));
+  return breeds.map((breed) => ({
+    id: breed.id,
+    slug: breed.slug,
+    name: breed.name,
+    icon: breed.icon ?? null,
+  }));
 }
 
 function presentSample(sample: SkinSampleFeatures) {
@@ -343,16 +348,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const classes = body.classes?.length ? body.classes : defaultClassesFromTags(items);
     try {
       const persist = body.persist ?? true;
-      const model = await trainSkinRecognizer({
-        items,
-        classes,
-        paletteSeeds: body.paletteSeeds,
-        samplesPerClass: body.samplesPerClass,
-        randomSeed: body.randomSeed,
-        persist,
-        includeLabeled: body.includeLabeled ?? true,
-        sexes: body.sexes,
-      });
+        const model = await trainSkinRecognizer({
+          items,
+          classes,
+          paletteSeeds: body.paletteSeeds,
+          samplesPerClass: body.samplesPerClass,
+          randomSeed: body.randomSeed,
+          persist,
+          includeLabeled: body.includeLabeled ?? true,
+          updateDataset: true,
+          sexes: body.sexes,
+        });
       const evaluation = body.evaluationSamples
         ? await evaluateSkinRecognizer({
             model,
@@ -403,6 +409,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           randomSeed: iterationSeed,
           persist: body.persist ?? i === iterations - 1,
           includeLabeled: body.includeLabeled ?? true,
+          updateDataset: true,
           sexes: body.sexes,
         });
         const evaluationReport = await evaluateSkinRecognizer({
