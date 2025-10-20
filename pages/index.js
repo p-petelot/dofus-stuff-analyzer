@@ -140,6 +140,16 @@ function normalizeWhitespace(value) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function normalizeSearchText(value) {
+  if (!value) {
+    return "";
+  }
+  return normalizeWhitespace(String(value))
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
 function pickLocalizedValue(value, languagePriority = getActiveLocalizationPriority()) {
   if (!value) return "";
   if (typeof value === "string") {
@@ -813,6 +823,7 @@ function normalizeDofusItem(rawItem, type, options = {}) {
     name,
     type,
     palette,
+    searchIndex: normalizeSearchText(name),
     url: encyclopediaUrl,
     imageUrl,
     paletteSource,
@@ -2453,6 +2464,14 @@ export default function Home({ initialBreeds = [] }) {
       return accumulator;
     }, {})
   );
+  const [selectedItemsBySlot, setSelectedItemsBySlot] = useState(() =>
+    ITEM_TYPES.reduce((accumulator, type) => {
+      accumulator[type] = null;
+      return accumulator;
+    }, {})
+  );
+  const [activeItemSlot, setActiveItemSlot] = useState(null);
+  const [itemSearchQuery, setItemSearchQuery] = useState("");
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [inputMode, setInputMode] = useState("image");
   const [selectedColor, setSelectedColor] = useState(null);
@@ -2484,6 +2503,8 @@ export default function Home({ initialBreeds = [] }) {
   );
 
   const isImageMode = inputMode === "image";
+  const isColorMode = inputMode === "color";
+  const isItemsMode = inputMode === "items";
 
   const hasCatalogData = useMemo(
     () => ITEM_TYPES.some((type) => (itemsCatalog[type] ?? []).length > 0),
@@ -2501,6 +2522,98 @@ export default function Home({ initialBreeds = [] }) {
   const areAllFamilierFiltersDisabled = activeFamilierFilterCount === 0;
 
   const colorsCount = colors.length;
+
+  const selectedItemHexes = useMemo(() => {
+    const seen = new Set();
+    const collected = [];
+    ITEM_TYPES.forEach((type) => {
+      const item = selectedItemsBySlot?.[type];
+      if (!item || !Array.isArray(item.palette)) {
+        return;
+      }
+      item.palette.forEach((value) => {
+        const normalized = normalizeColorToHex(value);
+        if (!normalized || seen.has(normalized)) {
+          return;
+        }
+        seen.add(normalized);
+        collected.push(normalized);
+      });
+    });
+    return collected.slice(0, MAX_COLORS);
+  }, [selectedItemsBySlot]);
+
+  const selectedItemPalette = useMemo(() => {
+    const entries = [];
+    const seen = new Set();
+    selectedItemHexes.forEach((hex) => {
+      const normalized = normalizeColorToHex(hex);
+      if (!normalized || seen.has(normalized)) {
+        return;
+      }
+      const rgb = hexToRgb(normalized);
+      if (!rgb) {
+        return;
+      }
+      seen.add(normalized);
+      entries.push({
+        hex: normalized,
+        rgb: `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`,
+        r: rgb.r,
+        g: rgb.g,
+        b: rgb.b,
+        weight: 1,
+      });
+    });
+    return entries.slice(0, MAX_COLORS);
+  }, [selectedItemHexes]);
+
+  const filteredItemOptions = useMemo(() => {
+    if (!activeItemSlot) {
+      return [];
+    }
+    const pool = itemsCatalog?.[activeItemSlot] ?? [];
+    const normalizedQuery = normalizeSearchText(itemSearchQuery);
+    if (!normalizedQuery) {
+      return pool;
+    }
+    return pool.filter((item) => {
+      if (!item) {
+        return false;
+      }
+      if (item.searchIndex) {
+        return item.searchIndex.includes(normalizedQuery);
+      }
+      return normalizeSearchText(item.name).includes(normalizedQuery);
+    });
+  }, [activeItemSlot, itemSearchQuery, itemsCatalog]);
+
+  const hasSelectedItems = useMemo(
+    () => ITEM_TYPES.some((type) => Boolean(selectedItemsBySlot?.[type])),
+    [selectedItemsBySlot]
+  );
+
+  const analysisModes = useMemo(
+    () => [
+      { key: "image", labelKey: "workspace.mode.image" },
+      { key: "color", labelKey: "workspace.mode.color" },
+      { key: "items", labelKey: "workspace.mode.items" },
+    ],
+    []
+  );
+
+  const activeModeIndex = useMemo(() => {
+    const index = analysisModes.findIndex((mode) => mode.key === inputMode);
+    return index >= 0 ? index : 0;
+  }, [analysisModes, inputMode]);
+
+  const inputSwitchStyle = useMemo(
+    () => ({
+      "--option-count": String(analysisModes.length),
+      "--active-index": String(activeModeIndex),
+    }),
+    [analysisModes, activeModeIndex]
+  );
 
   const handleFamilierFilterToggle = useCallback((key) => {
     if (!FAMILIER_FILTERS.some((filter) => filter.key === key)) {
@@ -2522,6 +2635,62 @@ export default function Home({ initialBreeds = [] }) {
       ...previous,
       [key]: !previous[key],
     }));
+  }, []);
+
+  const handleOpenItemSlot = useCallback(
+    (slot) => {
+      if (!ITEM_TYPES.includes(slot)) {
+        return;
+      }
+      setInputMode("items");
+      setActiveItemSlot(slot);
+    },
+    [setInputMode]
+  );
+
+  const handleClearItemSlot = useCallback((slot) => {
+    if (!ITEM_TYPES.includes(slot)) {
+      return;
+    }
+    setSelectedItemsBySlot((previous = {}) => {
+      if (!previous?.[slot]) {
+        return previous;
+      }
+      return { ...previous, [slot]: null };
+    });
+  }, []);
+
+  const handleSelectItemForSlot = useCallback(
+    (slot, item) => {
+      if (!ITEM_TYPES.includes(slot) || !item) {
+        return;
+      }
+      setInputMode("items");
+      setSelectedItemsBySlot((previous = {}) => {
+        const current = previous?.[slot];
+        if (current) {
+          const sameId = current.id && item.id && current.id === item.id;
+          const sameAnkama =
+            Number.isFinite(current?.ankamaId) &&
+            Number.isFinite(item.ankamaId) &&
+            current.ankamaId === item.ankamaId;
+          if (sameId || sameAnkama) {
+            return previous;
+          }
+        }
+        return { ...previous, [slot]: item };
+      });
+    },
+    [setInputMode]
+  );
+
+  const handleCloseItemPanel = useCallback(() => {
+    setActiveItemSlot(null);
+  }, []);
+
+  const handleItemSearchChange = useCallback((event) => {
+    const value = event?.target?.value ?? "";
+    setItemSearchQuery(value);
   }, []);
 
   const activeBreed = useMemo(() => {
@@ -2691,6 +2860,55 @@ export default function Home({ initialBreeds = [] }) {
     setShowDetailedMatches(false);
   }, [colors]);
 
+  useEffect(() => {
+    if (!isItemsMode) {
+      return;
+    }
+
+    if (!selectedItemPalette.length) {
+      setColors([]);
+      setImageSignature(null);
+      setImageShape(null);
+      setImageTones(null);
+      setImageHash(null);
+      setImageEdges(null);
+      setIsProcessing(false);
+      setAnalysisProgress(0);
+      setCopiedCode(null);
+      setToast(null);
+      setError(null);
+      return;
+    }
+
+    setColors(selectedItemPalette);
+    setImageSignature(null);
+    setImageShape(null);
+    setImageTones(
+      computeToneDistributionFromPalette(selectedItemPalette.map((entry) => entry.hex))
+    );
+    setImageHash(null);
+    setImageEdges(null);
+    setIsProcessing(false);
+    setAnalysisProgress(0);
+    setCopiedCode(null);
+    setToast(null);
+    setError(null);
+  }, [
+    isItemsMode,
+    selectedItemPalette,
+    setColors,
+    setImageSignature,
+    setImageShape,
+    setImageTones,
+    setImageHash,
+    setImageEdges,
+    setIsProcessing,
+    setAnalysisProgress,
+    setCopiedCode,
+    setToast,
+    setError,
+  ]);
+
   const applyColorSeed = useCallback(
     (seedHex) => {
       if (!seedHex) {
@@ -2803,6 +3021,7 @@ export default function Home({ initialBreeds = [] }) {
 
     return ITEM_TYPES.reduce((accumulator, type) => {
       let catalogItems = itemsCatalog[type] ?? [];
+      const lockedItem = selectedItemsBySlot?.[type] ?? null;
 
       if (catalogItems.length) {
         catalogItems = catalogItems.filter((item) => {
@@ -2872,9 +3091,51 @@ export default function Home({ initialBreeds = [] }) {
         .sort((a, b) => a.score - b.score);
 
       const finiteScores = scoredItems.filter(({ score }) => Number.isFinite(score));
-      const ranked = finiteScores.length > 0 ? finiteScores : scoredItems;
+      const rankedEntries = finiteScores.length > 0 ? finiteScores : scoredItems;
+      let rankedItems = rankedEntries.map(({ item }) => item);
 
-      accumulator[type] = ranked.slice(0, MAX_RECOMMENDATIONS).map(({ item }) => item);
+      if (lockedItem) {
+        const matchIndex = rankedItems.findIndex((candidate) => {
+          if (!candidate) {
+            return false;
+          }
+          if (candidate.id && lockedItem.id && candidate.id === lockedItem.id) {
+            return true;
+          }
+          if (
+            Number.isFinite(candidate.ankamaId) &&
+            Number.isFinite(lockedItem.ankamaId) &&
+            candidate.ankamaId === lockedItem.ankamaId
+          ) {
+            return true;
+          }
+          return false;
+        });
+
+        if (matchIndex !== -1) {
+          const [matched] = rankedItems.splice(matchIndex, 1);
+          rankedItems = [matched, ...rankedItems];
+        } else {
+          rankedItems = [lockedItem, ...rankedItems];
+        }
+      }
+
+      const seenIds = new Set();
+      accumulator[type] = rankedItems
+        .filter((item) => {
+          if (!item) {
+            return false;
+          }
+          const key = item.id ?? (Number.isFinite(item.ankamaId) ? `ankama-${item.ankamaId}` : null);
+          if (key && seenIds.has(key)) {
+            return false;
+          }
+          if (key) {
+            seenIds.add(key);
+          }
+          return true;
+        })
+        .slice(0, MAX_RECOMMENDATIONS);
       return accumulator;
     }, {});
   }, [
@@ -2888,6 +3149,7 @@ export default function Home({ initialBreeds = [] }) {
     itemsCatalog,
     familierFilters,
     itemFlagFilters,
+    selectedItemsBySlot,
   ]);
 
   useEffect(() => {
@@ -3000,7 +3262,11 @@ export default function Home({ initialBreeds = [] }) {
     for (let index = 0; index < total; index += 1) {
       const items = ITEM_TYPES.map((type) => {
         const pool = recommendations[type] ?? [];
+        const lockedItem = selectedItemsBySlot?.[type] ?? null;
         if (!pool.length) {
+          if (lockedItem) {
+            return { ...lockedItem, slotType: type };
+          }
           return null;
         }
 
@@ -3012,7 +3278,26 @@ export default function Home({ initialBreeds = [] }) {
             : index;
 
         let pick = null;
-        if (pool.length) {
+
+        if (lockedItem) {
+          pick =
+            pool.find((candidate) => {
+              if (!candidate) {
+                return false;
+              }
+              if (candidate.id && lockedItem.id && candidate.id === lockedItem.id) {
+                return true;
+              }
+              if (
+                Number.isFinite(candidate.ankamaId) &&
+                Number.isFinite(lockedItem.ankamaId) &&
+                candidate.ankamaId === lockedItem.ankamaId
+              ) {
+                return true;
+              }
+              return false;
+            }) ?? lockedItem;
+        } else if (pool.length) {
           const startIndex = Math.min(pool.length - 1, Math.max(0, fallbackIndex));
           for (let offset = 0; offset < pool.length; offset += 1) {
             const candidate = pool[(startIndex + offset) % pool.length];
@@ -3167,6 +3452,7 @@ export default function Home({ initialBreeds = [] }) {
     fallbackColorValues,
     proposalItemIndexes,
     recommendations,
+    selectedItemsBySlot,
     useCustomSkinTone,
   ]);
 
@@ -3493,6 +3779,9 @@ export default function Home({ initialBreeds = [] }) {
       }
 
       const pool = recommendations[type] ?? [];
+      if (selectedItemsBySlot?.[type]) {
+        return;
+      }
       if (!pool.length) {
         return;
       }
@@ -3539,7 +3828,7 @@ export default function Home({ initialBreeds = [] }) {
         }
       }
     },
-    [recommendations]
+    [recommendations, selectedItemsBySlot]
   );
 
   const inputRef = useRef(null);
@@ -3667,6 +3956,66 @@ export default function Home({ initialBreeds = [] }) {
     };
   }, [language, languagePriority, t]);
 
+  useEffect(() => {
+    setSelectedItemsBySlot((previous = {}) => {
+      let changed = false;
+      const next = { ...previous };
+      ITEM_TYPES.forEach((type) => {
+        const selected = previous?.[type] ?? null;
+        if (!selected) {
+          return;
+        }
+        const pool = itemsCatalog?.[type] ?? [];
+        const match =
+          pool.find((candidate) => {
+            if (!candidate) {
+              return false;
+            }
+            if (candidate.id && selected.id && candidate.id === selected.id) {
+              return true;
+            }
+            if (
+              Number.isFinite(candidate.ankamaId) &&
+              Number.isFinite(selected.ankamaId) &&
+              candidate.ankamaId === selected.ankamaId
+            ) {
+              return true;
+            }
+            return false;
+          }) ?? null;
+
+        if (!match) {
+          next[type] = null;
+          changed = true;
+        } else if (match !== selected) {
+          next[type] = match;
+          changed = true;
+        }
+      });
+
+      return changed ? next : previous;
+    });
+  }, [itemsCatalog]);
+
+  useEffect(() => {
+    if (!isItemsMode) {
+      setActiveItemSlot(null);
+      setItemSearchQuery("");
+    }
+  }, [isItemsMode]);
+
+  useEffect(() => {
+    if (!isItemsMode) {
+      return;
+    }
+
+    setImageSrc((previous) => (previous === null ? previous : null));
+  }, [isItemsMode]);
+
+  useEffect(() => {
+    setItemSearchQuery("");
+  }, [activeItemSlot]);
+
   const handleDataUrl = useCallback((dataUrl) => {
     if (!dataUrl) return;
     setInputMode("image");
@@ -3753,6 +4102,10 @@ export default function Home({ initialBreeds = [] }) {
   );
 
   useEffect(() => {
+    if (!isImageMode) {
+      return undefined;
+    }
+
     const handlePaste = (event) => {
       const items = event.clipboardData?.items;
       if (!items) return;
@@ -3770,7 +4123,7 @@ export default function Home({ initialBreeds = [] }) {
 
     window.addEventListener("paste", handlePaste);
     return () => window.removeEventListener("paste", handlePaste);
-  }, [handleFile]);
+  }, [handleFile, isImageMode]);
 
   useEffect(() => {
     if (!copiedCode) return;
@@ -4007,30 +4360,28 @@ export default function Home({ initialBreeds = [] }) {
               <div className="reference__title">
                 <h2>{t("workspace.referenceTitle")}</h2>
               </div>
-              <div className="input-switch" role="radiogroup" aria-label={t("aria.analysisMode")}>
-                <span
-                  className="input-switch__thumb"
-                  style={{ transform: inputMode === "image" ? "translateX(0%)" : "translateX(100%)" }}
-                  aria-hidden="true"
-                />
-                <button
-                  type="button"
-                  className={`input-switch__option${isImageMode ? " is-active" : ""}`}
-                  onClick={() => setInputMode("image")}
-                  role="radio"
-                  aria-checked={isImageMode}
-                >
-                  {t("workspace.mode.image")}
-                </button>
-                <button
-                  type="button"
-                  className={`input-switch__option${!isImageMode ? " is-active" : ""}`}
-                  onClick={() => setInputMode("color")}
-                  role="radio"
-                  aria-checked={!isImageMode}
-                >
-                  {t("workspace.mode.color")}
-                </button>
+              <div
+                className="input-switch"
+                role="radiogroup"
+                aria-label={t("aria.analysisMode")}
+                style={inputSwitchStyle}
+              >
+                <span className="input-switch__thumb" aria-hidden="true" />
+                {analysisModes.map((mode) => {
+                  const isActive = inputMode === mode.key;
+                  return (
+                    <button
+                      key={mode.key}
+                      type="button"
+                      className={`input-switch__option${isActive ? " is-active" : ""}`}
+                      onClick={() => setInputMode(mode.key)}
+                      role="radio"
+                      aria-checked={isActive}
+                    >
+                      {t(mode.labelKey)}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             {isImageMode ? (
@@ -4071,7 +4422,7 @@ export default function Home({ initialBreeds = [] }) {
                   onChange={onFileInputChange}
                 />
               </div>
-            ) : (
+            ) : isColorMode ? (
               <div className="color-picker">
                 <div
                   className="color-picker__preview"
@@ -4112,6 +4463,174 @@ export default function Home({ initialBreeds = [] }) {
                       );
                     })}
                   </div>
+                </div>
+              </div>
+            ) : (
+              <div className="item-selector">
+                <div className="item-selector__grid" role="list">
+                  {ITEM_TYPES.map((type) => {
+                    const slotLabel = ITEM_TYPE_LABEL_KEYS[type] ? t(ITEM_TYPE_LABEL_KEYS[type]) : type;
+                    const selection = selectedItemsBySlot?.[type] ?? null;
+                    const isActive = activeItemSlot === type;
+                    const slotClasses = ["item-slot"];
+                    if (isActive) {
+                      slotClasses.push("item-slot--active");
+                    }
+                    if (selection) {
+                      slotClasses.push("item-slot--filled");
+                    }
+                    return (
+                      <div key={type} className={slotClasses.join(" ")} role="listitem">
+                        <button
+                          type="button"
+                          className="item-slot__button"
+                          onClick={() => handleOpenItemSlot(type)}
+                          aria-pressed={isActive}
+                        >
+                          {selection ? (
+                            <>
+                              <span className="item-slot__media" aria-hidden={selection.imageUrl ? "true" : undefined}>
+                                {selection.imageUrl ? (
+                                  <img src={selection.imageUrl} alt="" loading="lazy" />
+                                ) : (
+                                  <span className="item-slot__fallback">{slotLabel}</span>
+                                )}
+                              </span>
+                              <span className="item-slot__name">{selection.name}</span>
+                            </>
+                          ) : (
+                            <span className="item-slot__placeholder">
+                              <span className="item-slot__icon" aria-hidden="true">＋</span>
+                              <span className="item-slot__label">{slotLabel}</span>
+                            </span>
+                          )}
+                        </button>
+                        {selection ? (
+                          <button
+                            type="button"
+                            className="item-slot__clear"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleClearItemSlot(type);
+                            }}
+                            aria-label={t("aria.itemSlotClear", { type: slotLabel })}
+                          >
+                            <span aria-hidden="true">×</span>
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className={`item-selector__panel${activeItemSlot ? " is-open" : ""}`}>
+                  {activeItemSlot ? (
+                    <>
+                      <div className="item-selector__panel-header">
+                        <div className="item-selector__panel-title">
+                          <h3>
+                            {t("items.selector.title", {
+                              type:
+                                ITEM_TYPE_LABEL_KEYS[activeItemSlot]
+                                  ? t(ITEM_TYPE_LABEL_KEYS[activeItemSlot])
+                                  : activeItemSlot,
+                            })}
+                          </h3>
+                          {selectedItemsBySlot?.[activeItemSlot] ? (
+                            <span className="item-selector__panel-badge">
+                              {t("items.selector.lockedBadge")}
+                            </span>
+                          ) : null}
+                        </div>
+                        <button
+                          type="button"
+                          className="item-selector__panel-close"
+                          onClick={handleCloseItemPanel}
+                          aria-label={t("aria.closeItemPanel")}
+                        >
+                          <span aria-hidden="true">×</span>
+                        </button>
+                      </div>
+                      <div className="item-selector__search">
+                        <label className="sr-only" htmlFor="item-search">
+                          {t("items.selector.searchLabel")}
+                        </label>
+                        <input
+                          id="item-search"
+                          type="search"
+                          value={itemSearchQuery}
+                          onChange={handleItemSearchChange}
+                          placeholder={t("items.selector.searchPlaceholder")}
+                        />
+                      </div>
+                      <div className="item-selector__list" role="list">
+                        {itemsLoading && filteredItemOptions.length === 0 ? (
+                          <p className="item-selector__status">{t("items.selector.loading")}</p>
+                        ) : null}
+                        {itemsError && filteredItemOptions.length === 0 ? (
+                          <p className="item-selector__status item-selector__status--error">{itemsError}</p>
+                        ) : null}
+                        {!itemsLoading && filteredItemOptions.length === 0 ? (
+                          <p className="item-selector__status">{t("items.selector.empty")}</p>
+                        ) : null}
+                        {filteredItemOptions.length > 0 ? (
+                          <ul>
+                            {filteredItemOptions.map((item) => {
+                              const isSelected =
+                                Boolean(selectedItemsBySlot?.[activeItemSlot]) &&
+                                ((selectedItemsBySlot[activeItemSlot]?.id &&
+                                  item.id === selectedItemsBySlot[activeItemSlot].id) ||
+                                  (Number.isFinite(selectedItemsBySlot[activeItemSlot]?.ankamaId) &&
+                                    Number.isFinite(item.ankamaId) &&
+                                    selectedItemsBySlot[activeItemSlot].ankamaId === item.ankamaId));
+                              const optionClasses = ["item-option"];
+                              if (isSelected) {
+                                optionClasses.push("item-option--selected");
+                              }
+                              return (
+                                <li key={item.id} className={optionClasses.join(" ")}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectItemForSlot(activeItemSlot, item)}
+                                    aria-pressed={isSelected}
+                                  >
+                                    <span className="item-option__media" aria-hidden="true">
+                                      {item.imageUrl ? (
+                                        <img src={item.imageUrl} alt="" loading="lazy" />
+                                      ) : (
+                                        <span className="item-option__fallback">
+                                          {ITEM_TYPE_LABEL_KEYS[activeItemSlot]
+                                            ? t(ITEM_TYPE_LABEL_KEYS[activeItemSlot])
+                                            : activeItemSlot}
+                                        </span>
+                                      )}
+                                    </span>
+                                    <span className="item-option__details">
+                                      <span className="item-option__name">{item.name}</span>
+                                      {item.palette.length ? (
+                                        <span className="item-option__swatches" aria-hidden="true">
+                                          {item.palette.slice(0, 4).map((hex) => (
+                                            <span
+                                              key={`${item.id}-${hex}`}
+                                              className="item-option__swatch"
+                                              style={{ backgroundColor: hex }}
+                                            />
+                                          ))}
+                                        </span>
+                                      ) : null}
+                                    </span>
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : null}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="item-selector__empty">
+                      {t("items.selector.hint")}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -4417,7 +4936,13 @@ export default function Home({ initialBreeds = [] }) {
           ) : null}
           {colors.length === 0 ? (
             <div className="suggestions__empty">
-              <p>{t("suggestions.empty.start")}</p>
+              <p>
+                {isItemsMode
+                  ? hasSelectedItems
+                    ? t("suggestions.empty.itemsPalette")
+                    : t("suggestions.empty.items")
+                  : t("suggestions.empty.start")}
+              </p>
             </div>
           ) : !Number.isFinite(activeClassId) ? (
             <div className="suggestions__status suggestions__status--empty">
@@ -4571,7 +5096,8 @@ export default function Home({ initialBreeds = [] }) {
                                           name: item.name ?? slotLabel,
                                         });
                                         const rerollDisabled =
-                                          (recommendations?.[item.slotType]?.length ?? 0) <= 1;
+                                          (recommendations?.[item.slotType]?.length ?? 0) <= 1 ||
+                                          Boolean(selectedItemsBySlot?.[item.slotType]);
                                         const flagEntries = buildItemFlags(item, t);
                                         const overlayFlags = flagEntries.filter((flag) => flag.key !== "colorable");
                                         const flagSummary = flagEntries.map((flag) => flag.label).join(", ");
@@ -4682,7 +5208,8 @@ export default function Home({ initialBreeds = [] }) {
                                         const slotLabel = slotLabelKey ? t(slotLabelKey) : item.slotType;
                                         const itemName = item.name ?? slotLabel;
                                         const rerollDisabled =
-                                          (recommendations?.[item.slotType]?.length ?? 0) <= 1;
+                                          (recommendations?.[item.slotType]?.length ?? 0) <= 1 ||
+                                          Boolean(selectedItemsBySlot?.[item.slotType]);
                                         const flagEntries = buildItemFlags(item, t);
                                         const flagSummary = flagEntries.map((flag) => flag.label).join(", ");
                                         return (
@@ -4881,12 +5408,10 @@ export default function Home({ initialBreeds = [] }) {
                               <p className="suggestions__group-empty">{t("suggestions.panel.empty")}</p>
                             ) : (
                               <ul className="suggestions__deck">
-                                {items.map(({ item, slotIndex }) => {
+                                {items.map(({ item }) => {
                                   const hasPalette = item.palette.length > 0;
                                   const paletteFromImage = item.paletteSource === "image" && hasPalette;
                                   const notes = [];
-                                  const typeLabel =
-                                    ITEM_TYPE_LABEL_KEYS[type] ? t(ITEM_TYPE_LABEL_KEYS[type]) : type;
                                   const isColorable = item.isColorable === true;
                                   const thumbClasses = ["suggestions__thumb"];
                                   if (isColorable) {
@@ -4900,9 +5425,19 @@ export default function Home({ initialBreeds = [] }) {
                                   if (!item.imageUrl) {
                                     notes.push(t("errors.imageMissing"));
                                   }
+                                  const lockedSelection = selectedItemsBySlot?.[type];
+                                  const isLocked = Boolean(lockedSelection) &&
+                                    ((lockedSelection?.id && item.id === lockedSelection.id) ||
+                                      (Number.isFinite(lockedSelection?.ankamaId) &&
+                                        Number.isFinite(item.ankamaId) &&
+                                        lockedSelection.ankamaId === item.ankamaId));
+                                  const cardClasses = ["suggestions__card"];
+                                  if (isLocked) {
+                                    cardClasses.push("suggestions__card--locked");
+                                  }
 
                                   return (
-                                    <li key={item.id} className="suggestions__card">
+                                    <li key={item.id} className={cardClasses.join(" ")}>
                                       <div className={thumbClasses.join(" ")}>
                                         {item.imageUrl ? (
                                           <img
@@ -4926,6 +5461,11 @@ export default function Home({ initialBreeds = [] }) {
                                           >
                                             {item.name}
                                           </a>
+                                          {isLocked ? (
+                                            <span className="suggestions__badge suggestions__badge--locked">
+                                              {t("items.selector.lockedBadge")}
+                                            </span>
+                                          ) : null}
                                         </div>
                                         <div
                                           className={`suggestions__swatches${hasPalette ? "" : " suggestions__swatches--empty"}`}
