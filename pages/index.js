@@ -3480,12 +3480,17 @@ export default function Home({ initialBreeds = [] }) {
 
   useEffect(() => {
     lookPreviewsRef.current = lookPreviews;
-  }, [lookPreviews, t]);
+  }, [lookPreviews]);
 
   useEffect(() => {
     if (!proposals.length) {
-      setLookPreviews({});
       lookPreviewsRef.current = {};
+      setLookPreviews((previous = {}) => {
+        if (!previous || Object.keys(previous).length === 0) {
+          return previous;
+        }
+        return {};
+      });
       return;
     }
 
@@ -3650,7 +3655,7 @@ export default function Home({ initialBreeds = [] }) {
       cancelled = true;
       abortController.abort();
     };
-  }, [language, proposals]);
+  }, [language, proposals, t]);
 
   const handleNextProposal = useCallback(() => {
     if (!proposalCount) {
