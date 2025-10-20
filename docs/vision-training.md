@@ -38,10 +38,11 @@ Placez les fichiers dans `./.cache/generations/` (ou passez un autre dossier via
 
 ## Lancer un entraînement
 
-L'index est construit à la demande. Vous pouvez déclencher manuellement une session depuis la ligne de commande Node.js :
+L'index est construit à la demande. Assurez-vous d'abord que les dépendances sont installées (`npm install`),
+puis déclenchez manuellement une session depuis la ligne de commande Node.js :
 
 ```bash
-node -e "import('./lib/vision/index').then(async (m) => {\n  await m.buildVisionIndexFromGenerations();\n  process.exit(0);\n});"
+node -e "import('./lib/vision/index.mjs').then(async (m) => {\n  await m.buildVisionIndexFromGenerations();\n  process.exit(0);\n});"
 ```
 
 Options utiles (toutes facultatives) :
