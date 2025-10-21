@@ -421,17 +421,17 @@ a {
   background: var(--card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--card-border);
-  padding: 12px;
+  padding: 10px;
   box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .reference__header {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
   justify-content: space-between;
   align-items: stretch;
 }
@@ -463,7 +463,7 @@ a {
 
 .reference__title h2 {
   margin: 0;
-  font-size: 1.28rem;
+  font-size: 1.2rem;
 }
 
 .input-switch {
@@ -753,13 +753,13 @@ a {
 
 .item-selector {
   display: grid;
-  gap: 18px;
+  gap: 14px;
 }
 
 .item-selector__grid {
   display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
 }
 
 .item-slot {
@@ -767,7 +767,7 @@ a {
   border: 1px solid rgba(148, 163, 184, 0.22);
   background: rgba(10, 17, 32, 0.62);
   border-radius: var(--radius-lg);
-  min-height: 112px;
+  min-height: 100px;
   transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
 
@@ -780,6 +780,12 @@ a {
   background: rgba(15, 23, 42, 0.7);
 }
 
+.item-slot--disabled {
+  background: rgba(13, 20, 38, 0.48);
+  border-style: dashed;
+  border-color: rgba(148, 163, 184, 0.26);
+}
+
 .item-slot__button {
   width: 100%;
   height: 100%;
@@ -788,12 +794,12 @@ a {
   color: inherit;
   font: inherit;
   border-radius: inherit;
-  padding: 14px 12px;
+  padding: 12px 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   cursor: pointer;
   transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
@@ -805,6 +811,20 @@ a {
   outline: none;
 }
 
+.item-slot__button:disabled {
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  opacity: 0.85;
+}
+
+.item-slot__button:disabled:hover,
+.item-slot__button:disabled:focus-visible {
+  transform: none;
+  box-shadow: none;
+  outline: none;
+}
+
 .item-slot__placeholder {
   display: flex;
   flex-direction: column;
@@ -812,6 +832,20 @@ a {
   gap: 4px;
   color: var(--text-muted);
   font-size: 0.85rem;
+}
+
+.item-slot__placeholder--disabled {
+  gap: 3px;
+  color: rgba(148, 163, 184, 0.78);
+  font-size: 0.82rem;
+}
+
+.item-slot__note {
+  font-size: 0.7rem;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: rgba(148, 163, 184, 0.65);
 }
 
 .item-slot__icon {
@@ -825,8 +859,8 @@ a {
 }
 
 .item-slot__media {
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
   border-radius: var(--radius-md);
   border: 1px solid rgba(148, 163, 184, 0.24);
   background: rgba(15, 23, 42, 0.62);
@@ -849,17 +883,17 @@ a {
 
 .item-slot__name {
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   text-align: center;
   line-height: 1.2;
 }
 
 .item-slot__clear {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 26px;
-  height: 26px;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.3);
   background: rgba(15, 23, 42, 0.92);
@@ -882,10 +916,10 @@ a {
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: var(--radius-lg);
   background: rgba(9, 14, 32, 0.62);
-  padding: 18px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
 .item-selector__panel-header {
@@ -899,12 +933,32 @@ a {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  flex: 1;
+  min-width: 0;
 }
 
 .item-selector__panel-title h3 {
   margin: 0;
   font-size: 1.05rem;
   font-weight: 600;
+}
+
+.item-selector__panel-meta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.item-selector__panel-count {
+  font-weight: 600;
+  color: rgba(148, 163, 184, 0.82);
+}
+
+.item-selector__panel-count--filtered {
+  color: rgba(96, 165, 250, 0.88);
 }
 
 .item-selector__panel-badge {
@@ -961,7 +1015,7 @@ a {
 }
 
 .item-selector__list {
-  max-height: 260px;
+  max-height: 240px;
   overflow-y: auto;
   border-radius: var(--radius-md);
   border: 1px solid rgba(148, 163, 184, 0.18);

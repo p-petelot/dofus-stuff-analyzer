@@ -894,6 +894,12 @@ const ITEM_TYPE_LABEL_KEYS = {
   ailes: "itemTypes.ailes",
 };
 
+const OPTIONAL_ITEM_TYPES = Object.freeze(["costume", "ailes"]);
+const OPTIONAL_ITEM_FILTERS = OPTIONAL_ITEM_TYPES.map((type) => ({
+  key: type,
+  labelKey: ITEM_TYPE_LABEL_KEYS[type] ?? type,
+}));
+
 const BARBOFUS_BASE_URL = "https://barbofus.com/skinator";
 const BARBOFUS_EQUIPMENT_SLOTS = ["6", "7", "8", "9", "10", "11", "12"];
 const BARBOFUS_SLOT_BY_TYPE = {
@@ -2013,6 +2019,83 @@ function computeToneDistance(tonesA, tonesB) {
   return total / length;
 }
 
+function shiftHexTone(hex, delta) {
+  const normalized = normalizeColorToHex(hex);
+  if (!normalized) {
+    return null;
+  }
+  const rgb = hexToRgb(normalized);
+  if (!rgb) {
+    return normalized;
+  }
+  const { h, s, l } = rgbToHsl(rgb.r, rgb.g, rgb.b);
+  const adjustedLightness = clamp(l + delta, 0, 1);
+  const saturationDelta = delta > 0 ? delta * 0.35 : delta * 0.25;
+  const adjustedSaturation = clamp(s + saturationDelta, 0, 1);
+  const { r, g, b } = hslToRgb(h, adjustedSaturation, adjustedLightness);
+  return rgbToHex(Math.round(r), Math.round(g), Math.round(b));
+}
+
+function buildLookPalette(basePalette, variantIndex = 0) {
+  if (!Array.isArray(basePalette) || basePalette.length === 0) {
+    return [];
+  }
+
+  const normalizedBase = basePalette
+    .map((hex) => normalizeColorToHex(hex))
+    .filter(Boolean);
+
+  if (!normalizedBase.length) {
+    return [];
+  }
+
+  const uniqueBase = Array.from(new Set(normalizedBase));
+
+  if (variantIndex <= 0) {
+    return uniqueBase.slice(0, MAX_ITEM_PALETTE_COLORS);
+  }
+
+  const rotation = variantIndex % uniqueBase.length;
+  const rotated = uniqueBase.slice(rotation).concat(uniqueBase.slice(0, rotation));
+
+  const amplitude = Math.min(0.12, 0.05 + variantIndex * 0.02);
+  const direction = variantIndex % 2 === 0 ? 1 : -1;
+
+  const adjusted = rotated
+    .slice(0, MAX_ITEM_PALETTE_COLORS * 2)
+    .map((hex, index) => {
+      const weight = 1 - Math.min(index, 4) * 0.12;
+      const delta = direction * amplitude * weight;
+      const shifted = shiftHexTone(hex, delta);
+      return normalizeColorToHex(shifted) ?? normalizeColorToHex(hex);
+    })
+    .filter(Boolean);
+
+  const seen = new Set();
+  const result = [];
+  adjusted.forEach((hex) => {
+    if (!hex || seen.has(hex)) {
+      return;
+    }
+    seen.add(hex);
+    result.push(hex);
+  });
+
+  if (result.length < MAX_ITEM_PALETTE_COLORS) {
+    uniqueBase.forEach((hex) => {
+      if (result.length >= MAX_ITEM_PALETTE_COLORS) {
+        return;
+      }
+      if (!seen.has(hex)) {
+        seen.add(hex);
+        result.push(hex);
+      }
+    });
+  }
+
+  return result.slice(0, MAX_ITEM_PALETTE_COLORS);
+}
+
 function computeSignatureDistance(signatureA, signatureB) {
   if (!Array.isArray(signatureA) || !Array.isArray(signatureB)) {
     return Number.POSITIVE_INFINITY;
@@ -2465,6 +2548,12 @@ export default function Home({ initialBreeds = [] }) {
       return accumulator;
     }, {})
   );
+  const [itemSlotFilters, setItemSlotFilters] = useState(() =>
+    OPTIONAL_ITEM_TYPES.reduce((accumulator, type) => {
+      accumulator[type] = true;
+      return accumulator;
+    }, {})
+  );
   const [selectedItemsBySlot, setSelectedItemsBySlot] = useState(() =>
     ITEM_TYPES.reduce((accumulator, type) => {
       accumulator[type] = null;
@@ -2589,6 +2678,26 @@ export default function Home({ initialBreeds = [] }) {
     });
   }, [activeItemSlot, itemSearchQuery, itemsCatalog]);
 
+  const activeSlotTotalCount = activeItemSlot
+    ? Array.isArray(itemsCatalog?.[activeItemSlot])
+      ? itemsCatalog[activeItemSlot].length
+      : 0
+    : 0;
+  const activeSlotFilteredCount = activeItemSlot ? filteredItemOptions.length : 0;
+  const hasActiveSearch = Boolean(
+    activeItemSlot && normalizeWhitespace(itemSearchQuery ?? "").length
+  );
+  const showFilteredCount =
+    Boolean(activeItemSlot) &&
+    hasActiveSearch &&
+    activeSlotFilteredCount !== activeSlotTotalCount;
+  const activeSlotCountLabel = activeItemSlot
+    ? t(showFilteredCount ? "items.selector.countFiltered" : "items.selector.countTotal", {
+        count: activeSlotFilteredCount,
+        total: activeSlotTotalCount,
+      })
+    : "";
+
   const hasSelectedItems = useMemo(
     () => ITEM_TYPES.some((type) => Boolean(selectedItemsBySlot?.[type])),
     [selectedItemsBySlot]
@@ -2638,15 +2747,29 @@ export default function Home({ initialBreeds = [] }) {
     }));
   }, []);
 
+  const handleItemSlotFilterToggle = useCallback((key) => {
+    if (!OPTIONAL_ITEM_TYPES.includes(key)) {
+      return;
+    }
+
+    setItemSlotFilters((previous = {}) => ({
+      ...previous,
+      [key]: previous[key] === false ? true : false,
+    }));
+  }, []);
+
   const handleOpenItemSlot = useCallback(
     (slot) => {
       if (!ITEM_TYPES.includes(slot)) {
         return;
       }
+      if (itemSlotFilters?.[slot] === false) {
+        return;
+      }
       setInputMode("items");
       setActiveItemSlot(slot);
     },
-    [setInputMode]
+    [itemSlotFilters, setInputMode]
   );
 
   const handleClearItemSlot = useCallback((slot) => {
@@ -2666,6 +2789,9 @@ export default function Home({ initialBreeds = [] }) {
       if (!ITEM_TYPES.includes(slot) || !item) {
         return;
       }
+      if (itemSlotFilters?.[slot] === false) {
+        return;
+      }
       setInputMode("items");
       setSelectedItemsBySlot((previous = {}) => {
         const current = previous?.[slot];
@@ -2682,7 +2808,7 @@ export default function Home({ initialBreeds = [] }) {
         return { ...previous, [slot]: item };
       });
     },
-    [setInputMode]
+    [itemSlotFilters, setInputMode]
   );
 
   const handleCloseItemPanel = useCallback(() => {
@@ -3021,8 +3147,16 @@ export default function Home({ initialBreeds = [] }) {
     }
 
     return ITEM_TYPES.reduce((accumulator, type) => {
+      const isSlotEnabled = itemSlotFilters?.[type] !== false;
+      const lockedItemCandidate = selectedItemsBySlot?.[type] ?? null;
+      const lockedItem = isSlotEnabled ? lockedItemCandidate : null;
+
+      if (!isSlotEnabled) {
+        accumulator[type] = [];
+        return accumulator;
+      }
+
       let catalogItems = itemsCatalog[type] ?? [];
-      const lockedItem = selectedItemsBySlot?.[type] ?? null;
 
       if (catalogItems.length) {
         catalogItems = catalogItems.filter((item) => {
@@ -3150,6 +3284,7 @@ export default function Home({ initialBreeds = [] }) {
     itemsCatalog,
     familierFilters,
     itemFlagFilters,
+    itemSlotFilters,
     selectedItemsBySlot,
   ]);
 
@@ -3343,7 +3478,7 @@ export default function Home({ initialBreeds = [] }) {
         });
       });
 
-      const paletteSample = palette.slice(0, MAX_ITEM_PALETTE_COLORS);
+      const paletteSample = buildLookPalette(palette, index);
       const lookItemIds = Array.from(
         new Set(
           items
@@ -4047,6 +4182,26 @@ export default function Home({ initialBreeds = [] }) {
   }, [itemsCatalog]);
 
   useEffect(() => {
+    setSelectedItemsBySlot((previous = {}) => {
+      let changed = false;
+      const next = { ...previous };
+      OPTIONAL_ITEM_TYPES.forEach((type) => {
+        if (itemSlotFilters?.[type] === false && next[type]) {
+          next[type] = null;
+          changed = true;
+        }
+      });
+      return changed ? next : previous;
+    });
+  }, [itemSlotFilters]);
+
+  useEffect(() => {
+    if (activeItemSlot && itemSlotFilters?.[activeItemSlot] === false) {
+      setActiveItemSlot(null);
+    }
+  }, [activeItemSlot, itemSlotFilters]);
+
+  useEffect(() => {
     if (!isItemsMode) {
       setActiveItemSlot(null);
       setItemSearchQuery("");
@@ -4521,6 +4676,7 @@ export default function Home({ initialBreeds = [] }) {
                     const slotLabel = ITEM_TYPE_LABEL_KEYS[type] ? t(ITEM_TYPE_LABEL_KEYS[type]) : type;
                     const selection = selectedItemsBySlot?.[type] ?? null;
                     const isActive = activeItemSlot === type;
+                    const isSlotEnabled = itemSlotFilters?.[type] !== false;
                     const slotClasses = ["item-slot"];
                     if (isActive) {
                       slotClasses.push("item-slot--active");
@@ -4528,15 +4684,26 @@ export default function Home({ initialBreeds = [] }) {
                     if (selection) {
                       slotClasses.push("item-slot--filled");
                     }
+                    if (!isSlotEnabled) {
+                      slotClasses.push("item-slot--disabled");
+                    }
                     return (
                       <div key={type} className={slotClasses.join(" ")} role="listitem">
                         <button
                           type="button"
                           className="item-slot__button"
                           onClick={() => handleOpenItemSlot(type)}
-                          aria-pressed={isActive}
+                          aria-pressed={isActive && isSlotEnabled}
+                          disabled={!isSlotEnabled}
+                          aria-disabled={!isSlotEnabled}
+                          title={!isSlotEnabled ? t("items.selector.disabled") : undefined}
                         >
-                          {selection ? (
+                          {!isSlotEnabled ? (
+                            <span className="item-slot__placeholder item-slot__placeholder--disabled">
+                              <span className="item-slot__label">{slotLabel}</span>
+                              <span className="item-slot__note">{t("items.selector.disabled")}</span>
+                            </span>
+                          ) : selection ? (
                             <>
                               <span className="item-slot__media" aria-hidden={selection.imageUrl ? "true" : undefined}>
                                 {selection.imageUrl ? (
@@ -4554,7 +4721,7 @@ export default function Home({ initialBreeds = [] }) {
                             </span>
                           )}
                         </button>
-                        {selection ? (
+                        {selection && isSlotEnabled ? (
                           <button
                             type="button"
                             className="item-slot__clear"
@@ -4590,6 +4757,17 @@ export default function Home({ initialBreeds = [] }) {
                             </span>
                           ) : null}
                         </div>
+                        {activeItemSlot ? (
+                          <div className="item-selector__panel-meta">
+                            <span
+                              className={`item-selector__panel-count${
+                                showFilteredCount ? " item-selector__panel-count--filtered" : ""
+                              }`}
+                            >
+                              {activeSlotCountLabel}
+                            </span>
+                          </div>
+                        ) : null}
                         <button
                           type="button"
                           className="item-selector__panel-close"
@@ -4943,6 +5121,55 @@ export default function Home({ initialBreeds = [] }) {
                       type="button"
                       className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
                       onClick={() => handleItemFlagFilterToggle(filter.key)}
+                      aria-pressed={isActive}
+                      title={title}
+                    >
+                      <span className="companion-toggle__indicator" aria-hidden="true">
+                        {isActive ? (
+                          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                              d="M5 10.5 8.2 13.7 15 6.5"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        ) : (
+                          <span className="companion-toggle__dot" />
+                        )}
+                      </span>
+                      <span className="companion-toggle__label">{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div
+              className="identity-card__section"
+              role="group"
+              aria-label={t("aria.optionalItemFilter")}
+            >
+              <span className="identity-card__section-title">
+                {t("identity.filters.optionalTitle")}
+              </span>
+              <div
+                className="companion-toggle companion-toggle--item-slots"
+                role="group"
+                aria-label={t("aria.optionalItemFilter")}
+              >
+                {OPTIONAL_ITEM_FILTERS.map((filter) => {
+                  const isActive = itemSlotFilters[filter.key] !== false;
+                  const label = t(filter.labelKey);
+                  const title = isActive
+                    ? t("companions.toggle.hide", { label: label.toLowerCase() })
+                    : t("companions.toggle.show", { label: label.toLowerCase() });
+                  return (
+                    <button
+                      key={filter.key}
+                      type="button"
+                      className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
+                      onClick={() => handleItemSlotFilterToggle(filter.key)}
                       aria-pressed={isActive}
                       title={title}
                     >
