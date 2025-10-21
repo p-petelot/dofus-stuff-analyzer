@@ -5287,489 +5287,111 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
               </div>
             )}
           </div>
-          <div className="identity-card" role="group" aria-label={t("aria.identityCard")}>
-            <div className="identity-card__section" role="group" aria-label={t("aria.genderSection")}>
-              <span className="identity-card__section-title">{t("identity.gender.sectionTitle")}</span>
-              <div className="identity-card__gender" role="radiogroup" aria-label={t("aria.genderGroup")}>
-                <button
-                  type="button"
-                  className={`identity-card__gender-option${selectedGender === "male" ? " is-active" : ""}`}
-                  onClick={() => setSelectedGender("male")}
-                  role="radio"
-                  aria-checked={selectedGender === "male"}
-                >
-                  <span className="identity-card__gender-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path
-                        d="M15 3h6v6m0-6-7.5 7.5m1.5-1.5a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </span>
-                  <span className="identity-card__gender-text">{t("identity.gender.male")}</span>
-                </button>
-                <button
-                  type="button"
-                  className={`identity-card__gender-option${selectedGender === "female" ? " is-active" : ""}`}
-                  onClick={() => setSelectedGender("female")}
-                  role="radio"
-                  aria-checked={selectedGender === "female"}
-                >
-                  <span className="identity-card__gender-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path
-                        d="M12 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm0 12v8m-4-4h8"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </span>
-                  <span className="identity-card__gender-text">{t("identity.gender.female")}</span>
-                </button>
-              </div>
-            </div>
-            <div className="identity-card__section" role="group" aria-label={t("aria.classSection")}>
-              {breedsError ? (
-                <div className="identity-card__status identity-card__status--error" role="alert">
-                  <span>{breedsError}</span>
+          
+          <section className="suggestions">
+            <div
+              className="identity-card suggestions__identity-card"
+              role="group"
+              aria-label={t("aria.identityCard")}
+            >
+              <div className="identity-card__section" role="group" aria-label={t("aria.genderSection")}>
+                <div className="identity-card__gender" role="radiogroup" aria-label={t("aria.genderGroup")}>
                   <button
                     type="button"
-                    className="identity-card__retry"
-                    onClick={handleRetryBreeds}
-                    disabled={breedsLoading}
+                    className={`identity-card__gender-option${selectedGender === "male" ? " is-active" : ""}`}
+                    onClick={() => setSelectedGender("male")}
+                    role="radio"
+                    aria-checked={selectedGender === "male"}
                   >
-                    {t("actions.retry")}
+                    <span className="identity-card__gender-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                          d="M15 3h6v6m0-6-7.5 7.5m1.5-1.5a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
+                    <span className="identity-card__gender-text">{t("identity.gender.male")}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`identity-card__gender-option${selectedGender === "female" ? " is-active" : ""}`}
+                    onClick={() => setSelectedGender("female")}
+                    role="radio"
+                    aria-checked={selectedGender === "female"}
+                  >
+                    <span className="identity-card__gender-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                          d="M12 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm0 12v8m-4-4h8"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
+                    <span className="identity-card__gender-text">{t("identity.gender.female")}</span>
                   </button>
                 </div>
-              ) : null}
-              {breedsLoading ? (
-                <div className="identity-card__status" role="status" aria-live="polite">
-                  {t("identity.class.loading")}
-                </div>
-              ) : null}
-              <div className="identity-card__grid" role="radiogroup" aria-label={t("aria.classGroup")}>
-                {breeds.map((breed) => {
-                  if (!Number.isFinite(breed.id)) {
-                    return null;
-                  }
-                  const isActive = breed.id === selectedBreedId;
-                  const fallbackLetter = breed.name?.charAt(0)?.toUpperCase() ?? "?";
-                  const breedLabel = breed.name ?? t("identity.class.fallback", { id: breed.id });
-
-                  return (
-                    <button
-                      key={breed.slug ?? `breed-${breed.id}`}
-                      type="button"
-                      className={`identity-card__chip${isActive ? " is-active" : ""}`}
-                      onClick={() => setSelectedBreedId(breed.id)}
-                      role="radio"
-                      aria-checked={isActive}
-                      aria-label={t("identity.class.choose", { name: breedLabel })}
-                      title={breedLabel}
-                    >
-                      <span className="identity-card__chip-icon">
-                        {breed.icon ? (
-                          <img src={breed.icon} alt="" loading="lazy" />
-                        ) : (
-                          <span className="identity-card__chip-letter" aria-hidden="true">
-                            {fallbackLetter}
-                          </span>
-                        )}
-                      </span>
-                    </button>
-                  );
-                })}
               </div>
-            </div>
-          </div>
-          <div className="filters-card-stack">
-            <aside className={filtersCardClassName} role="group" aria-label={t("aria.filtersCard")}>
-              <button
-                type="button"
-                className="filters-card__toggle"
-                onClick={handleFiltersToggle}
-                aria-expanded={areFiltersExpanded}
-                aria-controls={filtersContentId}
-              >
-                <span className="sr-only">{t("filters.card.title")}</span>
-                {hasCustomFilters ? <span className="filters-card__toggle-indicator" aria-hidden="true" /> : null}
-                <span className="filters-card__toggle-glyph" aria-hidden="true">
-                  <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                      d="M3.5 4.25h13m-11 0 3.75 5.25v5.25l3-1.5v-3.75l3.75-5.25"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-                <span
-                  className={`filters-card__toggle-arrow${areFiltersExpanded ? " is-open" : ""}`}
-                  aria-hidden="true"
-                >
-                  <svg viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" fill="none">
-                    <path
-                      d="M4 2.5 8 6l-4 3.5"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-              </button>
-              <div className="filters-card__content" id={filtersContentId} hidden={!areFiltersExpanded}>
-              <div className="filters-card__header">
-                <h2>{t("filters.card.title")}</h2>
-              </div>
-              <div
-                className="filters-card__section"
-                role="group"
-                aria-label={t("aria.companionSection")}
-              >
-                <span className="filters-card__section-title">{t("identity.companion.sectionTitle")}</span>
-                <div className="companion-toggle" role="group" aria-label={t("aria.companionFilter")}>
-                  {FAMILIER_FILTERS.map((filter) => {
-                    const isActive = familierFilters[filter.key] !== false;
-                    const label = t(filter.labelKey);
-                    const title = isActive
-                      ? t("companions.toggle.hide", { label: label.toLowerCase() })
-                      : t("companions.toggle.show", { label: label.toLowerCase() });
-
-                    return (
-                      <button
-                        key={filter.key}
-                        type="button"
-                        className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
-                        onClick={() => handleFamilierFilterToggle(filter.key)}
-                        aria-pressed={isActive}
-                        title={title}
-                      >
-                        <span className="companion-toggle__indicator" aria-hidden="true">
-                          {isActive ? (
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path
-                                d="M5 10.5 8.2 13.7 15 6.5"
-                                stroke="currentColor"
-                                strokeWidth="1.8"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                          ) : (
-                            <span className="companion-toggle__dot" />
-                          )}
-                        </span>
-                        <span className="companion-toggle__label">{label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                {areAllFamilierFiltersDisabled ? (
-                  <p className="companion-toggle__empty" role="status">{t("identity.companion.empty")}</p>
-                ) : null}
-              </div>
-              <div
-                className="filters-card__section"
-                role="group"
-                aria-label={t("aria.itemFlagSection")}
-              >
-                <span className="filters-card__section-title">{t("identity.filters.sectionTitle")}</span>
-                <div
-                  className="companion-toggle companion-toggle--item-flags"
-                  role="group"
-                  aria-label={t("aria.itemFlagFilter")}
-                >
-                  {ITEM_FLAG_FILTERS.map((filter) => {
-                    const isActive = itemFlagFilters[filter.key] !== false;
-                    const label = t(filter.labelKey);
-                    const title = isActive
-                      ? t("companions.toggle.hide", { label: label.toLowerCase() })
-                      : t("companions.toggle.show", { label: label.toLowerCase() });
-
-                    return (
-                      <button
-                        key={filter.key}
-                        type="button"
-                        className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
-                        onClick={() => handleItemFlagFilterToggle(filter.key)}
-                        aria-pressed={isActive}
-                        title={title}
-                      >
-                        <span className="companion-toggle__indicator" aria-hidden="true">
-                          {isActive ? (
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path
-                                d="M5 10.5 8.2 13.7 15 6.5"
-                                stroke="currentColor"
-                                strokeWidth="1.8"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                          ) : (
-                            <span className="companion-toggle__dot" />
-                          )}
-                        </span>
-                        <span className="companion-toggle__label">{label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div
-                className="filters-card__section"
-                role="group"
-                aria-label={t("aria.optionalItemFilter")}
-              >
-                <span className="filters-card__section-title">{t("identity.filters.optionalTitle")}</span>
-                <div
-                  className="companion-toggle companion-toggle--item-slots"
-                  role="group"
-                  aria-label={t("aria.optionalItemFilter")}
-                >
-                  {OPTIONAL_ITEM_FILTERS.map((filter) => {
-                    const isActive = itemSlotFilters[filter.key] !== false;
-                    const label = t(filter.labelKey);
-                    const title = isActive
-                      ? t("companions.toggle.hide", { label: label.toLowerCase() })
-                      : t("companions.toggle.show", { label: label.toLowerCase() });
-
-                    return (
-                      <button
-                        key={filter.key}
-                        type="button"
-                        className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
-                        onClick={() => handleItemSlotFilterToggle(filter.key)}
-                        aria-pressed={isActive}
-                        title={title}
-                      >
-                        <span className="companion-toggle__indicator" aria-hidden="true">
-                          {isActive ? (
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path
-                                d="M5 10.5 8.2 13.7 15 6.5"
-                                stroke="currentColor"
-                                strokeWidth="1.8"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                          ) : (
-                            <span className="companion-toggle__dot" />
-                          )}
-                        </span>
-                        <span className="companion-toggle__label">{label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              </div>
-            </aside>
-            <aside
-              className={previewBackgroundCardClassName}
-              role="group"
-              aria-label={t("aria.previewBackgroundCard")}
-            >
-              <button
-                type="button"
-                className="filters-card__toggle"
-                onClick={handlePreviewBackgroundCardToggle}
-                aria-expanded={arePreviewBackgroundOptionsExpanded}
-                aria-controls={previewBackgroundContentId}
-              >
-                <span className="sr-only">{t("previewBackground.card.title")}</span>
-                {hasCustomPreviewBackgroundSettings ? (
-                  <span className="filters-card__toggle-indicator" aria-hidden="true" />
-                ) : null}
-                <span className="filters-card__toggle-glyph" aria-hidden="true">
-                  <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect
-                      x="3.25"
-                      y="4"
-                      width="13.5"
-                      height="9.5"
-                      rx="2"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                    />
-                    <path
-                      d="m5.5 11 3-3a1 1 0 0 1 1.5.05l2.35 3.05 1.4-1.4 2.25 2.25"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <circle cx="7.25" cy="6.75" r="0.9" fill="currentColor" />
-                  </svg>
-                </span>
-                <span
-                  className={`filters-card__toggle-arrow${
-                    arePreviewBackgroundOptionsExpanded ? " is-open" : ""
-                  }`}
-                  aria-hidden="true"
-                >
-                  <svg viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" fill="none">
-                    <path
-                      d="M4 2.5 8 6l-4 3.5"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-              </button>
-              <div
-                className="filters-card__content"
-                id={previewBackgroundContentId}
-                hidden={!arePreviewBackgroundOptionsExpanded}
-              >
-                <div className="filters-card__header">
-                  <h2>{t("previewBackground.card.title")}</h2>
-                </div>
-                <div
-                  className="filters-card__section"
-                  role="group"
-                  aria-label={t("aria.previewBackgroundSection")}
-                >
-                  <span className="filters-card__section-title">
-                    {t("identity.previewBackground.sectionTitle")}
-                  </span>
-                  <div
-                    className="companion-toggle companion-toggle--preview-background"
-                    role="group"
-                    aria-label={t("aria.previewBackgroundToggle")}
-                  >
+              <div className="identity-card__section" role="group" aria-label={t("aria.classSection")}>
+                {breedsError ? (
+                  <div className="identity-card__status identity-card__status--error" role="alert">
+                    <span>{breedsError}</span>
                     <button
                       type="button"
-                      className={`companion-toggle__chip${
-                        isPreviewBackgroundEnabled ? " is-active" : ""
-                      }`}
-                      onClick={() => {
-                        if (!hasPreviewBackgroundOptions) {
-                          return;
-                        }
-                        setPreviewBackgroundEnabled((previous) => !previous);
-                      }}
-                      aria-pressed={isPreviewBackgroundEnabled}
-                      title={
-                        isPreviewBackgroundEnabled
-                          ? t("identity.previewBackground.disable")
-                          : t("identity.previewBackground.enable")
-                      }
-                      disabled={!hasPreviewBackgroundOptions}
+                      className="identity-card__retry"
+                      onClick={handleRetryBreeds}
+                      disabled={breedsLoading}
                     >
-                      <span className="companion-toggle__indicator" aria-hidden="true">
-                        {isPreviewBackgroundEnabled ? (
-                          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path
-                              d="M5 10.5 8.2 13.7 15 6.5"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        ) : (
-                          <span className="companion-toggle__dot" />
-                        )}
-                      </span>
-                      <span className="companion-toggle__label">
-                        {t("identity.previewBackground.toggleLabel")}
-                      </span>
+                      {t("actions.retry")}
                     </button>
                   </div>
-                  {!hasPreviewBackgroundOptions ? (
-                    <p className="preview-background-picker__empty">
-                      {t("identity.previewBackground.empty")}
-                    </p>
-                  ) : null}
-                  {hasPreviewBackgroundOptions && isPreviewBackgroundEnabled ? (
-                    <div
-                      className="preview-background-picker"
-                      role="radiogroup"
-                      aria-label={t("aria.previewBackgroundPicker")}
-                    >
+                ) : null}
+                {breedsLoading ? (
+                  <div className="identity-card__status" role="status" aria-live="polite">
+                    {t("identity.class.loading")}
+                  </div>
+                ) : null}
+                <div className="identity-card__grid" role="radiogroup" aria-label={t("aria.classGroup")}>
+                  {breeds.map((breed) => {
+                    if (!Number.isFinite(breed.id)) {
+                      return null;
+                    }
+                    const isActive = breed.id === selectedBreedId;
+                    const fallbackLetter = breed.name?.charAt(0)?.toUpperCase() ?? "?";
+                    const breedLabel = breed.name ?? t("identity.class.fallback", { id: breed.id });
+
+                    return (
                       <button
+                        key={breed.slug ?? `breed-${breed.id}`}
                         type="button"
-                        className={`preview-background-picker__option${
-                          previewBackgroundMode === PREVIEW_BACKGROUND_MODES.AUTO ? " is-active" : ""
-                        } preview-background-picker__option--auto`}
-                        onClick={() => setPreviewBackgroundMode(PREVIEW_BACKGROUND_MODES.AUTO)}
+                        className={`identity-card__chip${isActive ? " is-active" : ""}`}
+                        onClick={() => setSelectedBreedId(breed.id)}
                         role="radio"
-                        aria-checked={previewBackgroundMode === PREVIEW_BACKGROUND_MODES.AUTO}
-                        aria-label={t("identity.previewBackground.chooseAuto")}
-                        style={{
-                          backgroundImage:
-                            "linear-gradient(135deg, rgba(99, 102, 241, 0.72), rgba(14, 165, 233, 0.72))",
-                        }}
+                        aria-checked={isActive}
+                        aria-label={t("identity.class.choose", { name: breedLabel })}
+                        title={breedLabel}
                       >
-                        <span className="preview-background-picker__label">
-                          {t("identity.previewBackground.auto")}
+                        <span className="identity-card__chip-icon">
+                          {breed.icon ? (
+                            <img src={breed.icon} alt="" loading="lazy" />
+                          ) : (
+                            <span className="identity-card__chip-letter" aria-hidden="true">
+                              {fallbackLetter}
+                            </span>
+                          )}
                         </span>
                       </button>
-                      <button
-                        type="button"
-                        className={`preview-background-picker__option${
-                          previewBackgroundMode === PREVIEW_BACKGROUND_MODES.RANDOM ? " is-active" : ""
-                        } preview-background-picker__option--random`}
-                        onClick={() => setPreviewBackgroundMode(PREVIEW_BACKGROUND_MODES.RANDOM)}
-                        role="radio"
-                        aria-checked={previewBackgroundMode === PREVIEW_BACKGROUND_MODES.RANDOM}
-                        aria-label={t("identity.previewBackground.chooseRandom")}
-                        style={{
-                          backgroundImage:
-                            "linear-gradient(135deg, rgba(236, 72, 153, 0.72), rgba(59, 130, 246, 0.72))",
-                        }}
-                      >
-                        <span className="preview-background-picker__label">
-                          {t("identity.previewBackground.random")}
-                        </span>
-                      </button>
-                      {previewBackgroundOptions.map((background) => {
-                        const isActive =
-                          previewBackgroundMode === PREVIEW_BACKGROUND_MODES.MANUAL &&
-                          selectedPreviewBackgroundId === background.id;
-                        const ariaLabel = t("identity.previewBackground.choose", {
-                          label: background.label,
-                        });
-                        return (
-                          <button
-                            key={background.id}
-                            type="button"
-                            className={`preview-background-picker__option${
-                              isActive ? " is-active" : ""
-                            }`}
-                            onClick={() => {
-                              setPreviewBackgroundMode(PREVIEW_BACKGROUND_MODES.MANUAL);
-                              setSelectedPreviewBackgroundId(background.id);
-                            }}
-                            role="radio"
-                            aria-checked={isActive}
-                            aria-label={ariaLabel}
-                            style={{ backgroundImage: `url(${background.src})` }}
-                          >
-                            <span className="preview-background-picker__label">{background.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : null}
+                    );
+                  })}
                 </div>
               </div>
-            </aside>
-          </div>
-          </section>
-
-          <section className="suggestions">
+            </div>
           {itemsLoading || (itemsError && !showDetailedMatches) ? (
             <div className="suggestions__header">
               {itemsLoading ? (
@@ -6412,6 +6034,389 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
             </>
           )}
           </section>
+          <div className="filters-card-stack">
+            <aside className={filtersCardClassName} role="group" aria-label={t("aria.filtersCard")}>
+              <button
+                type="button"
+                className="filters-card__toggle"
+                onClick={handleFiltersToggle}
+                aria-expanded={areFiltersExpanded}
+                aria-controls={filtersContentId}
+              >
+                <span className="sr-only">{t("filters.card.title")}</span>
+                {hasCustomFilters ? <span className="filters-card__toggle-indicator" aria-hidden="true" /> : null}
+                <span className="filters-card__toggle-glyph" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path
+                      d="M3.5 4.25h13m-11 0 3.75 5.25v5.25l3-1.5v-3.75l3.75-5.25"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+                <span
+                  className={`filters-card__toggle-arrow${areFiltersExpanded ? " is-open" : ""}`}
+                  aria-hidden="true"
+                >
+                  <svg viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" fill="none">
+                    <path
+                      d="M4 2.5 8 6l-4 3.5"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+              <div className="filters-card__content" id={filtersContentId} hidden={!areFiltersExpanded}>
+              <div className="filters-card__header">
+                <h2>{t("filters.card.title")}</h2>
+              </div>
+              <div
+                className="filters-card__section"
+                role="group"
+                aria-label={t("aria.companionSection")}
+              >
+                <span className="filters-card__section-title">{t("identity.companion.sectionTitle")}</span>
+                <div className="companion-toggle" role="group" aria-label={t("aria.companionFilter")}>
+                  {FAMILIER_FILTERS.map((filter) => {
+                    const isActive = familierFilters[filter.key] !== false;
+                    const label = t(filter.labelKey);
+                    const title = isActive
+                      ? t("companions.toggle.hide", { label: label.toLowerCase() })
+                      : t("companions.toggle.show", { label: label.toLowerCase() });
+
+                    return (
+                      <button
+                        key={filter.key}
+                        type="button"
+                        className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
+                        onClick={() => handleFamilierFilterToggle(filter.key)}
+                        aria-pressed={isActive}
+                        title={title}
+                      >
+                        <span className="companion-toggle__indicator" aria-hidden="true">
+                          {isActive ? (
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path
+                                d="M5 10.5 8.2 13.7 15 6.5"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          ) : (
+                            <span className="companion-toggle__dot" />
+                          )}
+                        </span>
+                        <span className="companion-toggle__label">{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {areAllFamilierFiltersDisabled ? (
+                  <p className="companion-toggle__empty" role="status">{t("identity.companion.empty")}</p>
+                ) : null}
+              </div>
+              <div
+                className="filters-card__section"
+                role="group"
+                aria-label={t("aria.itemFlagSection")}
+              >
+                <span className="filters-card__section-title">{t("identity.filters.sectionTitle")}</span>
+                <div
+                  className="companion-toggle companion-toggle--item-flags"
+                  role="group"
+                  aria-label={t("aria.itemFlagFilter")}
+                >
+                  {ITEM_FLAG_FILTERS.map((filter) => {
+                    const isActive = itemFlagFilters[filter.key] !== false;
+                    const label = t(filter.labelKey);
+                    const title = isActive
+                      ? t("companions.toggle.hide", { label: label.toLowerCase() })
+                      : t("companions.toggle.show", { label: label.toLowerCase() });
+
+                    return (
+                      <button
+                        key={filter.key}
+                        type="button"
+                        className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
+                        onClick={() => handleItemFlagFilterToggle(filter.key)}
+                        aria-pressed={isActive}
+                        title={title}
+                      >
+                        <span className="companion-toggle__indicator" aria-hidden="true">
+                          {isActive ? (
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path
+                                d="M5 10.5 8.2 13.7 15 6.5"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          ) : (
+                            <span className="companion-toggle__dot" />
+                          )}
+                        </span>
+                        <span className="companion-toggle__label">{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div
+                className="filters-card__section"
+                role="group"
+                aria-label={t("aria.optionalItemFilter")}
+              >
+                <span className="filters-card__section-title">{t("identity.filters.optionalTitle")}</span>
+                <div
+                  className="companion-toggle companion-toggle--item-slots"
+                  role="group"
+                  aria-label={t("aria.optionalItemFilter")}
+                >
+                  {OPTIONAL_ITEM_FILTERS.map((filter) => {
+                    const isActive = itemSlotFilters[filter.key] !== false;
+                    const label = t(filter.labelKey);
+                    const title = isActive
+                      ? t("companions.toggle.hide", { label: label.toLowerCase() })
+                      : t("companions.toggle.show", { label: label.toLowerCase() });
+
+                    return (
+                      <button
+                        key={filter.key}
+                        type="button"
+                        className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
+                        onClick={() => handleItemSlotFilterToggle(filter.key)}
+                        aria-pressed={isActive}
+                        title={title}
+                      >
+                        <span className="companion-toggle__indicator" aria-hidden="true">
+                          {isActive ? (
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path
+                                d="M5 10.5 8.2 13.7 15 6.5"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          ) : (
+                            <span className="companion-toggle__dot" />
+                          )}
+                        </span>
+                        <span className="companion-toggle__label">{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              </div>
+            </aside>
+            <aside
+              className={previewBackgroundCardClassName}
+              role="group"
+              aria-label={t("aria.previewBackgroundCard")}
+            >
+              <button
+                type="button"
+                className="filters-card__toggle"
+                onClick={handlePreviewBackgroundCardToggle}
+                aria-expanded={arePreviewBackgroundOptionsExpanded}
+                aria-controls={previewBackgroundContentId}
+              >
+                <span className="sr-only">{t("previewBackground.card.title")}</span>
+                {hasCustomPreviewBackgroundSettings ? (
+                  <span className="filters-card__toggle-indicator" aria-hidden="true" />
+                ) : null}
+                <span className="filters-card__toggle-glyph" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect
+                      x="3.25"
+                      y="4"
+                      width="13.5"
+                      height="9.5"
+                      rx="2"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                    />
+                    <path
+                      d="m5.5 11 3-3a1 1 0 0 1 1.5.05l2.35 3.05 1.4-1.4 2.25 2.25"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <circle cx="7.25" cy="6.75" r="0.9" fill="currentColor" />
+                  </svg>
+                </span>
+                <span
+                  className={`filters-card__toggle-arrow${
+                    arePreviewBackgroundOptionsExpanded ? " is-open" : ""
+                  }`}
+                  aria-hidden="true"
+                >
+                  <svg viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" fill="none">
+                    <path
+                      d="M4 2.5 8 6l-4 3.5"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+              <div
+                className="filters-card__content"
+                id={previewBackgroundContentId}
+                hidden={!arePreviewBackgroundOptionsExpanded}
+              >
+                <div className="filters-card__header">
+                  <h2>{t("previewBackground.card.title")}</h2>
+                </div>
+                <div
+                  className="filters-card__section"
+                  role="group"
+                  aria-label={t("aria.previewBackgroundSection")}
+                >
+                  <span className="filters-card__section-title">
+                    {t("identity.previewBackground.sectionTitle")}
+                  </span>
+                  <div
+                    className="companion-toggle companion-toggle--preview-background"
+                    role="group"
+                    aria-label={t("aria.previewBackgroundToggle")}
+                  >
+                    <button
+                      type="button"
+                      className={`companion-toggle__chip${
+                        isPreviewBackgroundEnabled ? " is-active" : ""
+                      }`}
+                      onClick={() => {
+                        if (!hasPreviewBackgroundOptions) {
+                          return;
+                        }
+                        setPreviewBackgroundEnabled((previous) => !previous);
+                      }}
+                      aria-pressed={isPreviewBackgroundEnabled}
+                      title={
+                        isPreviewBackgroundEnabled
+                          ? t("identity.previewBackground.disable")
+                          : t("identity.previewBackground.enable")
+                      }
+                      disabled={!hasPreviewBackgroundOptions}
+                    >
+                      <span className="companion-toggle__indicator" aria-hidden="true">
+                        {isPreviewBackgroundEnabled ? (
+                          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                              d="M5 10.5 8.2 13.7 15 6.5"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        ) : (
+                          <span className="companion-toggle__dot" />
+                        )}
+                      </span>
+                      <span className="companion-toggle__label">
+                        {t("identity.previewBackground.toggleLabel")}
+                      </span>
+                    </button>
+                  </div>
+                  {!hasPreviewBackgroundOptions ? (
+                    <p className="preview-background-picker__empty">
+                      {t("identity.previewBackground.empty")}
+                    </p>
+                  ) : null}
+                  {hasPreviewBackgroundOptions && isPreviewBackgroundEnabled ? (
+                    <div
+                      className="preview-background-picker"
+                      role="radiogroup"
+                      aria-label={t("aria.previewBackgroundPicker")}
+                    >
+                      <button
+                        type="button"
+                        className={`preview-background-picker__option${
+                          previewBackgroundMode === PREVIEW_BACKGROUND_MODES.AUTO ? " is-active" : ""
+                        } preview-background-picker__option--auto`}
+                        onClick={() => setPreviewBackgroundMode(PREVIEW_BACKGROUND_MODES.AUTO)}
+                        role="radio"
+                        aria-checked={previewBackgroundMode === PREVIEW_BACKGROUND_MODES.AUTO}
+                        aria-label={t("identity.previewBackground.chooseAuto")}
+                        style={{
+                          backgroundImage:
+                            "linear-gradient(135deg, rgba(99, 102, 241, 0.72), rgba(14, 165, 233, 0.72))",
+                        }}
+                      >
+                        <span className="preview-background-picker__label">
+                          {t("identity.previewBackground.auto")}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`preview-background-picker__option${
+                          previewBackgroundMode === PREVIEW_BACKGROUND_MODES.RANDOM ? " is-active" : ""
+                        } preview-background-picker__option--random`}
+                        onClick={() => setPreviewBackgroundMode(PREVIEW_BACKGROUND_MODES.RANDOM)}
+                        role="radio"
+                        aria-checked={previewBackgroundMode === PREVIEW_BACKGROUND_MODES.RANDOM}
+                        aria-label={t("identity.previewBackground.chooseRandom")}
+                        style={{
+                          backgroundImage:
+                            "linear-gradient(135deg, rgba(236, 72, 153, 0.72), rgba(59, 130, 246, 0.72))",
+                        }}
+                      >
+                        <span className="preview-background-picker__label">
+                          {t("identity.previewBackground.random")}
+                        </span>
+                      </button>
+                      {previewBackgroundOptions.map((background) => {
+                        const isActive =
+                          previewBackgroundMode === PREVIEW_BACKGROUND_MODES.MANUAL &&
+                          selectedPreviewBackgroundId === background.id;
+                        const ariaLabel = t("identity.previewBackground.choose", {
+                          label: background.label,
+                        });
+                        return (
+                          <button
+                            key={background.id}
+                            type="button"
+                            className={`preview-background-picker__option${
+                              isActive ? " is-active" : ""
+                            }`}
+                            onClick={() => {
+                              setPreviewBackgroundMode(PREVIEW_BACKGROUND_MODES.MANUAL);
+                              setSelectedPreviewBackgroundId(background.id);
+                            }}
+                            role="radio"
+                            aria-checked={isActive}
+                            aria-label={ariaLabel}
+                            style={{ backgroundImage: `url(${background.src})` }}
+                          >
+                            <span className="preview-background-picker__label">{background.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+          
         </div>
       </main>
     </>
