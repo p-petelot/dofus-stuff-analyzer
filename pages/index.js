@@ -5121,10 +5121,21 @@ export default function Home({ initialBreeds = [] }) {
               aria-expanded={areFiltersExpanded}
               aria-controls={filtersContentId}
             >
-              <span className="filters-card__toggle-label">{t("filters.card.title")}</span>
+              <span className="sr-only">{t("filters.card.title")}</span>
               {hasCustomFilters ? <span className="filters-card__toggle-indicator" aria-hidden="true" /> : null}
+              <span className="filters-card__toggle-glyph" aria-hidden="true">
+                <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M3.5 4.25h13m-11 0 3.75 5.25v5.25l3-1.5v-3.75l3.75-5.25"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
               <span
-                className={`filters-card__toggle-icon${areFiltersExpanded ? " is-open" : ""}`}
+                className={`filters-card__toggle-arrow${areFiltersExpanded ? " is-open" : ""}`}
                 aria-hidden="true"
               >
                 <svg viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" fill="none">
