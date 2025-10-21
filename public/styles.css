@@ -343,6 +343,31 @@ a {
 
 
 
+.workspace-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  max-width: 1840px;
+}
+
+@media (min-width: 1280px) {
+  .workspace-layout {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .workspace-layout > .workspace {
+    flex: 1 1 60%;
+  }
+
+  .workspace-layout > .suggestions {
+    flex: 1 1 40%;
+    margin: 0;
+    max-width: none;
+  }
+}
+
 .workspace {
   width: 100%;
   max-width: 1840px;
@@ -2174,9 +2199,17 @@ a {
 
 .skin-carousel__controls {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+}
+
+@media (min-width: 1100px) {
+  .skin-carousel__controls {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
 }
 
 .skin-carousel__nav {
@@ -2224,6 +2257,29 @@ a {
   justify-content: center;
   gap: 4px;
   text-align: center;
+}
+
+.skin-carousel__class-selector {
+  flex: 1 1 360px;
+  min-width: 0;
+  display: flex;
+}
+
+.skin-carousel__class-selector .identity-card {
+  width: 100%;
+  min-width: 0;
+}
+
+@media (min-width: 960px) {
+  .skin-carousel__class-selector .identity-card {
+    min-width: 0;
+  }
+}
+
+@media (min-width: 1360px) {
+  .skin-carousel__class-selector .identity-card {
+    min-width: 0;
+  }
 }
 
 .skin-carousel__count {
@@ -2847,6 +2903,19 @@ a {
   display: flex;
   justify-content: center;
   gap: 8px;
+}
+
+.skin-carousel__pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.skin-carousel__pagination .skin-carousel__dots {
+  flex: 1 1 auto;
 }
 
 .skin-carousel__dot {

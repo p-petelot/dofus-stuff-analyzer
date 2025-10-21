@@ -4860,6 +4860,109 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
 
   const pageTitle = tagline ? `${BRAND_NAME} · ${tagline}` : BRAND_NAME;
 
+  const identityCard = (
+    <div className="identity-card" role="group" aria-label={t("aria.identityCard")}>
+      <div className="identity-card__section" role="group" aria-label={t("aria.genderSection")}>
+        <span className="identity-card__section-title">{t("identity.gender.sectionTitle")}</span>
+        <div className="identity-card__gender" role="radiogroup" aria-label={t("aria.genderGroup")}>
+          <button
+            type="button"
+            className={`identity-card__gender-option${selectedGender === "male" ? " is-active" : ""}`}
+            onClick={() => setSelectedGender("male")}
+            role="radio"
+            aria-checked={selectedGender === "male"}
+          >
+            <span className="identity-card__gender-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M15 3h6v6m0-6-7.5 7.5m1.5-1.5a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </span>
+            <span className="identity-card__gender-text">{t("identity.gender.male")}</span>
+          </button>
+          <button
+            type="button"
+            className={`identity-card__gender-option${selectedGender === "female" ? " is-active" : ""}`}
+            onClick={() => setSelectedGender("female")}
+            role="radio"
+            aria-checked={selectedGender === "female"}
+          >
+            <span className="identity-card__gender-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M12 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm0 12v8m-4-4h8"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </span>
+            <span className="identity-card__gender-text">{t("identity.gender.female")}</span>
+          </button>
+        </div>
+      </div>
+      <div className="identity-card__section" role="group" aria-label={t("aria.classSection")}>
+        {breedsError ? (
+          <div className="identity-card__status identity-card__status--error" role="alert">
+            <span>{breedsError}</span>
+            <button
+              type="button"
+              className="identity-card__retry"
+              onClick={handleRetryBreeds}
+              disabled={breedsLoading}
+            >
+              {t("actions.retry")}
+            </button>
+          </div>
+        ) : null}
+        {breedsLoading ? (
+          <div className="identity-card__status" role="status" aria-live="polite">
+            {t("identity.class.loading")}
+          </div>
+        ) : null}
+        <div className="identity-card__grid" role="radiogroup" aria-label={t("aria.classGroup")}>
+          {breeds.map((breed) => {
+            if (!Number.isFinite(breed.id)) {
+              return null;
+            }
+            const isActive = breed.id === selectedBreedId;
+            const fallbackLetter = breed.name?.charAt(0)?.toUpperCase() ?? "?";
+            const breedLabel = breed.name ?? t("identity.class.fallback", { id: breed.id });
+
+            return (
+              <button
+                key={breed.slug ?? `breed-${breed.id}`}
+                type="button"
+                className={`identity-card__chip${isActive ? " is-active" : ""}`}
+                onClick={() => setSelectedBreedId(breed.id)}
+                role="radio"
+                aria-checked={isActive}
+                aria-label={t("identity.class.choose", { name: breedLabel })}
+                title={breedLabel}
+              >
+                <span className="identity-card__chip-icon">
+                  {breed.icon ? (
+                    <img src={breed.icon} alt="" loading="lazy" />
+                  ) : (
+                    <span className="identity-card__chip-letter" aria-hidden="true">
+                      {fallbackLetter}
+                    </span>
+                  )}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <>
       <Head>
@@ -4924,7 +5027,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           })}
         </div>
 
-        <section className="workspace">
+        <div className="workspace-layout">
+          <section className="workspace">
           <div className={referenceClassName}>
             <div className="reference__header">
               <div className="reference__title">
@@ -5285,106 +5389,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                 <p>{t("palette.empty")}</p>
               </div>
             )}
-          </div>
-          <div className="identity-card" role="group" aria-label={t("aria.identityCard")}>
-            <div className="identity-card__section" role="group" aria-label={t("aria.genderSection")}>
-              <span className="identity-card__section-title">{t("identity.gender.sectionTitle")}</span>
-              <div className="identity-card__gender" role="radiogroup" aria-label={t("aria.genderGroup")}>
-                <button
-                  type="button"
-                  className={`identity-card__gender-option${selectedGender === "male" ? " is-active" : ""}`}
-                  onClick={() => setSelectedGender("male")}
-                  role="radio"
-                  aria-checked={selectedGender === "male"}
-                >
-                  <span className="identity-card__gender-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path
-                        d="M15 3h6v6m0-6-7.5 7.5m1.5-1.5a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </span>
-                  <span className="identity-card__gender-text">{t("identity.gender.male")}</span>
-                </button>
-                <button
-                  type="button"
-                  className={`identity-card__gender-option${selectedGender === "female" ? " is-active" : ""}`}
-                  onClick={() => setSelectedGender("female")}
-                  role="radio"
-                  aria-checked={selectedGender === "female"}
-                >
-                  <span className="identity-card__gender-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path
-                        d="M12 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm0 12v8m-4-4h8"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </span>
-                  <span className="identity-card__gender-text">{t("identity.gender.female")}</span>
-                </button>
-              </div>
-            </div>
-            <div className="identity-card__section" role="group" aria-label={t("aria.classSection")}>
-              {breedsError ? (
-                <div className="identity-card__status identity-card__status--error" role="alert">
-                  <span>{breedsError}</span>
-                  <button
-                    type="button"
-                    className="identity-card__retry"
-                    onClick={handleRetryBreeds}
-                    disabled={breedsLoading}
-                  >
-                    {t("actions.retry")}
-                  </button>
-                </div>
-              ) : null}
-              {breedsLoading ? (
-                <div className="identity-card__status" role="status" aria-live="polite">
-                  {t("identity.class.loading")}
-                </div>
-              ) : null}
-              <div className="identity-card__grid" role="radiogroup" aria-label={t("aria.classGroup")}>
-                {breeds.map((breed) => {
-                  if (!Number.isFinite(breed.id)) {
-                    return null;
-                  }
-                  const isActive = breed.id === selectedBreedId;
-                  const fallbackLetter = breed.name?.charAt(0)?.toUpperCase() ?? "?";
-                  const breedLabel = breed.name ?? t("identity.class.fallback", { id: breed.id });
-
-                  return (
-                    <button
-                      key={breed.slug ?? `breed-${breed.id}`}
-                      type="button"
-                      className={`identity-card__chip${isActive ? " is-active" : ""}`}
-                      onClick={() => setSelectedBreedId(breed.id)}
-                      role="radio"
-                      aria-checked={isActive}
-                      aria-label={t("identity.class.choose", { name: breedLabel })}
-                      title={breedLabel}
-                    >
-                      <span className="identity-card__chip-icon">
-                        {breed.icon ? (
-                          <img src={breed.icon} alt="" loading="lazy" />
-                        ) : (
-                          <span className="identity-card__chip-letter" aria-hidden="true">
-                            {fallbackLetter}
-                          </span>
-                        )}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
           </div>
           <div className="filters-card-stack">
             <aside className={filtersCardClassName} role="group" aria-label={t("aria.filtersCard")}>
@@ -5766,9 +5770,9 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
               </div>
             </aside>
           </div>
-        </section>
+          </section>
 
-        <section className="suggestions">
+          <section className="suggestions">
           {itemsLoading || (itemsError && !showDetailedMatches) ? (
             <div className="suggestions__header">
               {itemsLoading ? (
@@ -5815,20 +5819,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                     <div className="skin-carousel__shell">
                       <div className="skin-carousel">
                         <div className="skin-carousel__controls">
-                          <button
-                            type="button"
-                            className="skin-carousel__nav"
-                            onClick={handlePrevProposal}
-                            disabled={proposalCount <= 1}
-                            aria-label={t("aria.carouselPrevious")}
-                          >
-                            <img
-                              src="/icons/arrow-left.svg"
-                              alt=""
-                              className="skin-carousel__nav-icon"
-                              aria-hidden="true"
-                            />
-                          </button>
                           {(activeProposalSubtitle || proposalCount > 0) ? (
                             <div className="skin-carousel__legend" role="presentation">
                               {activeProposalSubtitle ? (
@@ -5854,20 +5844,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                               ) : null}
                             </div>
                           ) : null}
-                          <button
-                            type="button"
-                            className="skin-carousel__nav"
-                            onClick={handleNextProposal}
-                            disabled={proposalCount <= 1}
-                            aria-label={t("aria.carouselNext")}
-                          >
-                            <img
-                              src="/icons/arrow-right.svg"
-                              alt=""
-                              className="skin-carousel__nav-icon"
-                              aria-hidden="true"
-                            />
-                          </button>
+                          <div className="skin-carousel__class-selector">{identityCard}</div>
                         </div>
                         <div className="skin-carousel__viewport">
                           <div
@@ -6204,47 +6181,81 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                           })}
                         </div>
                       </div>
-                      <div className="skin-carousel__dots" role="tablist" aria-label={t("aria.carouselDots")}>
-                        {proposals.map((proposal, index) => (
-                          <button
-                            key={`${proposal.id}-dot`}
-                            type="button"
-                            className={`skin-carousel__dot${index === safeActiveProposalIndex ? " is-active" : ""}`}
-                            onClick={() => handleSelectProposal(index)}
-                            aria-label={t("aria.carouselDotSelect", { index: index + 1 })}
-                            aria-pressed={index === safeActiveProposalIndex}
+                      <div className="skin-carousel__pagination">
+                        <button
+                          type="button"
+                          className="skin-carousel__nav"
+                          onClick={handlePrevProposal}
+                          disabled={proposalCount <= 1}
+                          aria-label={t("aria.carouselPrevious")}
+                        >
+                          <img
+                            src="/icons/arrow-left.svg"
+                            alt=""
+                            className="skin-carousel__nav-icon"
+                            aria-hidden="true"
                           />
-                        ))}
+                        </button>
+                        <div className="skin-carousel__dots" role="tablist" aria-label={t("aria.carouselDots")}>
+                          {proposals.map((proposal, index) => (
+                            <button
+                              key={`${proposal.id}-dot`}
+                              type="button"
+                              className={`skin-carousel__dot${index === safeActiveProposalIndex ? " is-active" : ""}`}
+                              onClick={() => handleSelectProposal(index)}
+                              aria-label={t("aria.carouselDotSelect", { index: index + 1 })}
+                              aria-pressed={index === safeActiveProposalIndex}
+                            />
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          className="skin-carousel__nav"
+                          onClick={handleNextProposal}
+                          disabled={proposalCount <= 1}
+                          aria-label={t("aria.carouselNext")}
+                        >
+                          <img
+                            src="/icons/arrow-right.svg"
+                            alt=""
+                            className="skin-carousel__nav-icon"
+                            aria-hidden="true"
+                          />
+                        </button>
                       </div>
-                      </div>
-                      <button
-                        type="button"
-                    className={`suggestions__panel-toggle skin-carousel__panel-toggle${showDetailedMatches ? " is-open" : ""}`}
-                    onClick={toggleDetailedMatches}
-                    aria-expanded={showDetailedMatches}
-                    aria-label={
-                      showDetailedMatches ? t("aria.panelToggleClose") : t("aria.panelToggleOpen")
-                    }
-                  >
-                    <span className="skin-carousel__panel-toggle-icon" aria-hidden="true" />
-                  </button>
-                </div>
-              </div>
-                  <aside
-                    className={`suggestions__panel${showDetailedMatches ? " is-open" : ""}`}
-                    aria-hidden={!showDetailedMatches}
-                  >
-                  <div className="suggestions__panel-header">
-                      <h3>{t("suggestions.panel.title")}</h3>
-                      <button
-                        type="button"
-                        className="suggestions__panel-close"
-                        onClick={toggleDetailedMatches}
-                        aria-label={t("aria.panelClose")}
-                      >
-                        <span aria-hidden="true">×</span>
-                      </button>
                     </div>
+                    <button
+                      type="button"
+                      className={`suggestions__panel-toggle skin-carousel__panel-toggle${
+                        showDetailedMatches ? " is-open" : ""
+                      }`}
+                      onClick={toggleDetailedMatches}
+                      aria-expanded={showDetailedMatches}
+                      aria-label={
+                        showDetailedMatches
+                          ? t("aria.panelToggleClose")
+                          : t("aria.panelToggleOpen")
+                      }
+                    >
+                      <span className="skin-carousel__panel-toggle-icon" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+                <aside
+                  className={`suggestions__panel${showDetailedMatches ? " is-open" : ""}`}
+                  aria-hidden={!showDetailedMatches}
+                >
+                  <div className="suggestions__panel-header">
+                    <h3>{t("suggestions.panel.title")}</h3>
+                    <button
+                      type="button"
+                      className="suggestions__panel-close"
+                      onClick={toggleDetailedMatches}
+                      aria-label={t("aria.panelClose")}
+                    >
+                      <span aria-hidden="true">×</span>
+                    </button>
+                  </div>
                     {itemsError ? (
                       <p className="suggestions__status suggestions__status--error suggestions__status--inline">
                         {itemsError}
@@ -6404,7 +6415,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
               )}
             </>
           )}
-        </section>
+          </section>
+        </div>
       </main>
     </>
   );
