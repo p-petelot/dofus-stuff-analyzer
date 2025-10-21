@@ -7,6 +7,7 @@ import {
   normalizeLanguage,
   useLanguage,
 } from "../lib/i18n";
+import { BRAND_NAME } from "../lib/branding";
 import {
   ITEM_TYPES,
   FAMILIER_FILTERS,
