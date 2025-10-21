@@ -38,6 +38,7 @@ import {
   BARBOFUS_DEFAULT_BREED,
   LOOK_PREVIEW_SIZE,
   BARBOFUS_SLOT_BY_TYPE,
+  getBarbofusFaceId,
 } from "../lib/barbofus";
 import {
   generatePaletteFromSeed,
