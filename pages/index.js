@@ -130,6 +130,16 @@ function slugify(value) {
     .replace(/-+/g, "-");
 }
 
+function humanizeBackgroundName(value) {
+  if (!value) return "";
+  return value
+    .toString()
+    .replace(/\.png$/i, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function stripHtml(value) {
   if (!value) return "";
   return value.replace(/<[^>]*>/g, " ");
@@ -915,6 +925,12 @@ const OPTIONAL_ITEM_FILTERS = OPTIONAL_ITEM_TYPES.map((type) => ({
   labelKey: ITEM_TYPE_LABEL_KEYS[type] ?? type,
 }));
 
+const PREVIEW_BACKGROUND_MODES = Object.freeze({
+  AUTO: "auto",
+  RANDOM: "random",
+  MANUAL: "manual",
+});
+
 const DEFAULT_FAMILIER_FILTER_STATE = Object.freeze(
   FAMILIER_FILTERS.reduce((accumulator, filter) => {
     const isDefaultEnabled = filter.key === "pet" || filter.key === "mount";
@@ -936,6 +952,12 @@ const DEFAULT_ITEM_SLOT_FILTER_STATE = Object.freeze(
     return accumulator;
   }, {})
 );
+
+const DEFAULT_PREVIEW_BACKGROUND_STATE = Object.freeze({
+  enabled: false,
+  mode: PREVIEW_BACKGROUND_MODES.AUTO,
+  selection: null,
+});
 
 const BARBOFUS_BASE_URL = "https://barbofus.com/skinator";
 const BARBOFUS_EQUIPMENT_SLOTS = ["6", "7", "8", "9", "10", "11", "12"];
@@ -2483,7 +2505,7 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
   return enriched;
 }
 
-export default function Home({ initialBreeds = [] }) {
+export default function Home({ initialBreeds = [], previewBackgrounds: initialPreviewBackgrounds = [] }) {
   const router = useRouter();
   const routerLang = router?.query?.lang;
   const { language, languages: languageOptions, setLanguage, t } = useLanguage();
@@ -2606,6 +2628,167 @@ export default function Home({ initialBreeds = [] }) {
   const [selectedGender, setSelectedGender] = useState(BARBOFUS_DEFAULT_GENDER_KEY);
   const progressHandles = useRef({ frame: null, timeout: null, value: 0 });
   const breedsRequestRef = useRef(null);
+  const previewBackgroundOptions = useMemo(
+    () =>
+      Array.isArray(initialPreviewBackgrounds)
+        ? initialPreviewBackgrounds
+            .filter((entry) => entry && entry.id && entry.src)
+            .map((entry) => ({
+              id: entry.id,
+              label: entry.label ?? humanizeBackgroundName(entry.id),
+              src: entry.src,
+            }))
+        : [],
+    [initialPreviewBackgrounds]
+  );
+  const [isPreviewBackgroundEnabled, setPreviewBackgroundEnabled] = useState(
+    DEFAULT_PREVIEW_BACKGROUND_STATE.enabled
+  );
+  const [previewBackgroundMode, setPreviewBackgroundMode] = useState(
+    DEFAULT_PREVIEW_BACKGROUND_STATE.mode
+  );
+  const [selectedPreviewBackgroundId, setSelectedPreviewBackgroundId] = useState(
+    DEFAULT_PREVIEW_BACKGROUND_STATE.selection
+  );
+  const [randomPreviewBackgroundAssignments, setRandomPreviewBackgroundAssignments] = useState(
+    {}
+  );
+  const [previewBackgroundSwatches, setPreviewBackgroundSwatches] = useState({});
+  const previewBackgroundById = useMemo(() => {
+    const map = new Map();
+    previewBackgroundOptions.forEach((entry) => {
+      if (entry && entry.id) {
+        map.set(entry.id, entry);
+      }
+    });
+    return map;
+  }, [previewBackgroundOptions]);
+  const hasPreviewBackgroundOptions = previewBackgroundOptions.length > 0;
+
+  useEffect(() => {
+    if (hasPreviewBackgroundOptions) {
+      return;
+    }
+    if (isPreviewBackgroundEnabled) {
+      setPreviewBackgroundEnabled(false);
+    }
+    if (previewBackgroundMode !== DEFAULT_PREVIEW_BACKGROUND_STATE.mode) {
+      setPreviewBackgroundMode(DEFAULT_PREVIEW_BACKGROUND_STATE.mode);
+    }
+    if (selectedPreviewBackgroundId !== DEFAULT_PREVIEW_BACKGROUND_STATE.selection) {
+      setSelectedPreviewBackgroundId(DEFAULT_PREVIEW_BACKGROUND_STATE.selection);
+    }
+    if (Object.keys(randomPreviewBackgroundAssignments).length) {
+      setRandomPreviewBackgroundAssignments({});
+    }
+  }, [
+    hasPreviewBackgroundOptions,
+    isPreviewBackgroundEnabled,
+    previewBackgroundMode,
+    randomPreviewBackgroundAssignments,
+    selectedPreviewBackgroundId,
+  ]);
+
+  useEffect(() => {
+    if (!selectedPreviewBackgroundId) {
+      return;
+    }
+    if (!previewBackgroundById.has(selectedPreviewBackgroundId)) {
+      setSelectedPreviewBackgroundId(DEFAULT_PREVIEW_BACKGROUND_STATE.selection);
+    }
+  }, [previewBackgroundById, selectedPreviewBackgroundId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (!hasPreviewBackgroundOptions) {
+      setPreviewBackgroundSwatches({});
+      return;
+    }
+
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+
+    if (!context) {
+      setPreviewBackgroundSwatches({});
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadAverageColor = (background) =>
+      new Promise((resolve) => {
+        if (!background?.id || !background?.src) {
+          resolve({ id: background?.id ?? null, hex: null });
+          return;
+        }
+
+        const image = new Image();
+        image.crossOrigin = "anonymous";
+        image.onload = () => {
+          try {
+            const width = Math.max(1, image.naturalWidth || image.width || 1);
+            const height = Math.max(1, image.naturalHeight || image.height || 1);
+            canvas.width = width;
+            canvas.height = height;
+            context.clearRect(0, 0, width, height);
+            context.drawImage(image, 0, 0, width, height);
+            const imageData = context.getImageData(0, 0, width, height);
+            const { data } = imageData;
+            let totalWeight = 0;
+            let r = 0;
+            let g = 0;
+            let b = 0;
+            for (let index = 0; index < data.length; index += 4) {
+              const alpha = data[index + 3] / 255;
+              if (alpha <= 0) {
+                continue;
+              }
+              const weight = alpha;
+              totalWeight += weight;
+              r += data[index] * weight;
+              g += data[index + 1] * weight;
+              b += data[index + 2] * weight;
+            }
+            if (totalWeight === 0) {
+              resolve({ id: background.id, hex: null });
+              return;
+            }
+            const averageR = Math.round(r / totalWeight);
+            const averageG = Math.round(g / totalWeight);
+            const averageB = Math.round(b / totalWeight);
+            const hex = `#${averageR.toString(16).padStart(2, "0")}${averageG
+              .toString(16)
+              .padStart(2, "0")}${averageB.toString(16).padStart(2, "0")}`.toUpperCase();
+            resolve({ id: background.id, hex });
+          } catch (error) {
+            resolve({ id: background.id, hex: null });
+          }
+        };
+        image.onerror = () => resolve({ id: background.id, hex: null });
+        image.src = background.src;
+      });
+
+    Promise.all(previewBackgroundOptions.map((background) => loadAverageColor(background))).then(
+      (entries) => {
+        if (cancelled) {
+          return;
+        }
+        const next = {};
+        entries.forEach((entry) => {
+          if (entry?.id && entry?.hex) {
+            next[entry.id] = entry.hex;
+          }
+        });
+        setPreviewBackgroundSwatches(next);
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasPreviewBackgroundOptions, previewBackgroundOptions]);
 
   const handleLanguageSelect = useCallback(
     (nextLanguage) => {
@@ -2645,8 +2828,20 @@ export default function Home({ initialBreeds = [] }) {
     [familierFilters, itemFlagFilters, itemSlotFilters]
   );
 
+  const hasCustomPreviewBackgroundSettings = useMemo(
+    () =>
+      isPreviewBackgroundEnabled !== DEFAULT_PREVIEW_BACKGROUND_STATE.enabled ||
+      previewBackgroundMode !== DEFAULT_PREVIEW_BACKGROUND_STATE.mode ||
+      (previewBackgroundMode === PREVIEW_BACKGROUND_MODES.MANUAL &&
+        selectedPreviewBackgroundId !== DEFAULT_PREVIEW_BACKGROUND_STATE.selection),
+    [isPreviewBackgroundEnabled, previewBackgroundMode, selectedPreviewBackgroundId]
+  );
+
   const [areFiltersExpanded, setFiltersExpanded] = useState(false);
+  const [arePreviewBackgroundOptionsExpanded, setPreviewBackgroundOptionsExpanded] =
+    useState(false);
   const filtersContentId = useId();
+  const previewBackgroundContentId = useId();
   const filtersCardClassName = useMemo(() => {
     const classes = ["filters-card"];
     if (areFiltersExpanded) {
@@ -2657,6 +2852,17 @@ export default function Home({ initialBreeds = [] }) {
     }
     return classes.join(" ");
   }, [areFiltersExpanded, hasCustomFilters]);
+
+  const previewBackgroundCardClassName = useMemo(() => {
+    const classes = ["filters-card", "filters-card--preview"];
+    if (arePreviewBackgroundOptionsExpanded) {
+      classes.push("is-expanded");
+    }
+    if (hasCustomPreviewBackgroundSettings) {
+      classes.push("filters-card--active");
+    }
+    return classes.join(" ");
+  }, [arePreviewBackgroundOptionsExpanded, hasCustomPreviewBackgroundSettings]);
 
   const referenceClassName = useMemo(() => {
     const classes = ["reference"];
@@ -2774,11 +2980,21 @@ export default function Home({ initialBreeds = [] }) {
     setFiltersExpanded((value) => !value);
   }, []);
 
+  const handlePreviewBackgroundCardToggle = useCallback(() => {
+    setPreviewBackgroundOptionsExpanded((value) => !value);
+  }, []);
+
   useEffect(() => {
     if (hasCustomFilters) {
       setFiltersExpanded(true);
     }
   }, [hasCustomFilters]);
+
+  useEffect(() => {
+    if (hasCustomPreviewBackgroundSettings) {
+      setPreviewBackgroundOptionsExpanded(true);
+    }
+  }, [hasCustomPreviewBackgroundSettings]);
 
   const handleFamilierFilterToggle = useCallback((key) => {
     if (!FAMILIER_FILTERS.some((filter) => filter.key === key)) {
@@ -3647,6 +3863,104 @@ export default function Home({ initialBreeds = [] }) {
     useCustomSkinTone,
   ]);
 
+  const previewBackgroundAutoByProposal = useMemo(() => {
+    if (!previewBackgroundOptions.length) {
+      return new Map();
+    }
+
+    const backgroundsWithColor = previewBackgroundOptions
+      .map((entry) => {
+        const swatch = previewBackgroundSwatches?.[entry.id] ?? null;
+        const rgb = swatch ? hexToRgb(swatch) : null;
+        return { entry, rgb };
+      })
+      .filter((background) => background.entry?.id && background.rgb);
+
+    if (!backgroundsWithColor.length) {
+      return new Map();
+    }
+
+    const map = new Map();
+
+    proposals.forEach((proposal) => {
+      if (!proposal?.id) {
+        return;
+      }
+
+      const palette = Array.isArray(proposal.palette) ? proposal.palette : [];
+      const paletteColors = palette
+        .map((hex) => normalizeColorToHex(hex))
+        .map((normalized) => (normalized ? hexToRgb(normalized) : null))
+        .filter(Boolean);
+
+      if (!paletteColors.length) {
+        const fallback = backgroundsWithColor[proposal.index % backgroundsWithColor.length];
+        if (fallback?.entry?.id) {
+          map.set(proposal.id, fallback.entry.id);
+        }
+        return;
+      }
+
+      let bestBackground = null;
+      let bestScore = Number.POSITIVE_INFINITY;
+
+      backgroundsWithColor.forEach((background) => {
+        const score =
+          paletteColors.reduce((total, color) => total + colorDistance(background.rgb, color), 0) /
+          paletteColors.length;
+        if (score < bestScore) {
+          bestScore = score;
+          bestBackground = background.entry;
+        }
+      });
+
+      if (bestBackground?.id) {
+        map.set(proposal.id, bestBackground.id);
+      }
+    });
+
+    return map;
+  }, [previewBackgroundOptions, previewBackgroundSwatches, proposals]);
+
+  useEffect(() => {
+    if (
+      previewBackgroundMode !== PREVIEW_BACKGROUND_MODES.RANDOM ||
+      !isPreviewBackgroundEnabled ||
+      !previewBackgroundOptions.length ||
+      !proposals.length
+    ) {
+      setRandomPreviewBackgroundAssignments((previous = {}) => {
+        if (!previous || Object.keys(previous).length === 0) {
+          return previous;
+        }
+        return {};
+      });
+      return;
+    }
+
+    setRandomPreviewBackgroundAssignments(() => {
+      const assignments = {};
+      proposals.forEach((proposal) => {
+        if (!proposal?.id) {
+          return;
+        }
+        const option =
+          previewBackgroundOptions[
+            Math.floor(Math.random() * previewBackgroundOptions.length)
+          ];
+        if (option?.id) {
+          assignments[proposal.id] = option.id;
+        }
+      });
+      return assignments;
+    });
+  }, [
+    isPreviewBackgroundEnabled,
+    previewBackgroundMode,
+    previewBackgroundOptions,
+    proposals,
+  ]);
+
   const proposalCount = proposals.length;
   const safeActiveProposalIndex = proposalCount
     ? Math.min(activeProposal, proposalCount - 1)
@@ -3670,7 +3984,7 @@ export default function Home({ initialBreeds = [] }) {
 
   useEffect(() => {
     lookPreviewsRef.current = lookPreviews;
-  }, [lookPreviews]);
+  }, [lookPreviews, t]);
 
   useEffect(() => {
     if (!proposals.length) {
@@ -3930,8 +4244,10 @@ export default function Home({ initialBreeds = [] }) {
     try {
       setDownloadingPreviewId(proposal.id);
 
-      const fallbackName = `skin-${proposal.index + 1}`;
-      const baseName = slugify(proposal.className ?? fallbackName) || fallbackName;
+      const defaultLabel = t("suggestions.render.defaultName", { index: proposal.index + 1 });
+      const fallbackName = proposal.className ?? defaultLabel;
+      const baseName =
+        slugify(fallbackName) || slugify(defaultLabel) || `proposition-${proposal.index + 1}`;
 
       if (hasLookPreview) {
         const response = await fetch(lookPreview.dataUrl);
@@ -5070,43 +5386,44 @@ export default function Home({ initialBreeds = [] }) {
               </div>
             </div>
           </div>
-          <aside className={filtersCardClassName} role="group" aria-label={t("aria.filtersCard")}>
-            <button
-              type="button"
-              className="filters-card__toggle"
-              onClick={handleFiltersToggle}
-              aria-expanded={areFiltersExpanded}
-              aria-controls={filtersContentId}
-            >
-              <span className="sr-only">{t("filters.card.title")}</span>
-              {hasCustomFilters ? <span className="filters-card__toggle-indicator" aria-hidden="true" /> : null}
-              <span className="filters-card__toggle-glyph" aria-hidden="true">
-                <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M3.5 4.25h13m-11 0 3.75 5.25v5.25l3-1.5v-3.75l3.75-5.25"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </span>
-              <span
-                className={`filters-card__toggle-arrow${areFiltersExpanded ? " is-open" : ""}`}
-                aria-hidden="true"
+          <div className="filters-card-stack">
+            <aside className={filtersCardClassName} role="group" aria-label={t("aria.filtersCard")}>
+              <button
+                type="button"
+                className="filters-card__toggle"
+                onClick={handleFiltersToggle}
+                aria-expanded={areFiltersExpanded}
+                aria-controls={filtersContentId}
               >
-                <svg viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" fill="none">
-                  <path
-                    d="M4 2.5 8 6l-4 3.5"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </span>
-            </button>
-            <div className="filters-card__content" id={filtersContentId} hidden={!areFiltersExpanded}>
+                <span className="sr-only">{t("filters.card.title")}</span>
+                {hasCustomFilters ? <span className="filters-card__toggle-indicator" aria-hidden="true" /> : null}
+                <span className="filters-card__toggle-glyph" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path
+                      d="M3.5 4.25h13m-11 0 3.75 5.25v5.25l3-1.5v-3.75l3.75-5.25"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+                <span
+                  className={`filters-card__toggle-arrow${areFiltersExpanded ? " is-open" : ""}`}
+                  aria-hidden="true"
+                >
+                  <svg viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" fill="none">
+                    <path
+                      d="M4 2.5 8 6l-4 3.5"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+              <div className="filters-card__content" id={filtersContentId} hidden={!areFiltersExpanded}>
               <div className="filters-card__header">
                 <h2>{t("filters.card.title")}</h2>
               </div>
@@ -5253,8 +5570,202 @@ export default function Home({ initialBreeds = [] }) {
                   })}
                 </div>
               </div>
-            </div>
-          </aside>
+              </div>
+            </aside>
+            <aside
+              className={previewBackgroundCardClassName}
+              role="group"
+              aria-label={t("aria.previewBackgroundCard")}
+            >
+              <button
+                type="button"
+                className="filters-card__toggle"
+                onClick={handlePreviewBackgroundCardToggle}
+                aria-expanded={arePreviewBackgroundOptionsExpanded}
+                aria-controls={previewBackgroundContentId}
+              >
+                <span className="sr-only">{t("previewBackground.card.title")}</span>
+                {hasCustomPreviewBackgroundSettings ? (
+                  <span className="filters-card__toggle-indicator" aria-hidden="true" />
+                ) : null}
+                <span className="filters-card__toggle-glyph" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect
+                      x="3.25"
+                      y="4"
+                      width="13.5"
+                      height="9.5"
+                      rx="2"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                    />
+                    <path
+                      d="m5.5 11 3-3a1 1 0 0 1 1.5.05l2.35 3.05 1.4-1.4 2.25 2.25"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <circle cx="7.25" cy="6.75" r="0.9" fill="currentColor" />
+                  </svg>
+                </span>
+                <span
+                  className={`filters-card__toggle-arrow${
+                    arePreviewBackgroundOptionsExpanded ? " is-open" : ""
+                  }`}
+                  aria-hidden="true"
+                >
+                  <svg viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" fill="none">
+                    <path
+                      d="M4 2.5 8 6l-4 3.5"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+              <div
+                className="filters-card__content"
+                id={previewBackgroundContentId}
+                hidden={!arePreviewBackgroundOptionsExpanded}
+              >
+                <div className="filters-card__header">
+                  <h2>{t("previewBackground.card.title")}</h2>
+                </div>
+                <div
+                  className="filters-card__section"
+                  role="group"
+                  aria-label={t("aria.previewBackgroundSection")}
+                >
+                  <span className="filters-card__section-title">
+                    {t("identity.previewBackground.sectionTitle")}
+                  </span>
+                  <div
+                    className="companion-toggle companion-toggle--preview-background"
+                    role="group"
+                    aria-label={t("aria.previewBackgroundToggle")}
+                  >
+                    <button
+                      type="button"
+                      className={`companion-toggle__chip${
+                        isPreviewBackgroundEnabled ? " is-active" : ""
+                      }`}
+                      onClick={() => {
+                        if (!hasPreviewBackgroundOptions) {
+                          return;
+                        }
+                        setPreviewBackgroundEnabled((previous) => !previous);
+                      }}
+                      aria-pressed={isPreviewBackgroundEnabled}
+                      title={
+                        isPreviewBackgroundEnabled
+                          ? t("identity.previewBackground.disable")
+                          : t("identity.previewBackground.enable")
+                      }
+                      disabled={!hasPreviewBackgroundOptions}
+                    >
+                      <span className="companion-toggle__indicator" aria-hidden="true">
+                        {isPreviewBackgroundEnabled ? (
+                          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                              d="M5 10.5 8.2 13.7 15 6.5"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        ) : (
+                          <span className="companion-toggle__dot" />
+                        )}
+                      </span>
+                      <span className="companion-toggle__label">
+                        {t("identity.previewBackground.toggleLabel")}
+                      </span>
+                    </button>
+                  </div>
+                  {!hasPreviewBackgroundOptions ? (
+                    <p className="preview-background-picker__empty">
+                      {t("identity.previewBackground.empty")}
+                    </p>
+                  ) : null}
+                  {hasPreviewBackgroundOptions && isPreviewBackgroundEnabled ? (
+                    <div
+                      className="preview-background-picker"
+                      role="radiogroup"
+                      aria-label={t("aria.previewBackgroundPicker")}
+                    >
+                      <button
+                        type="button"
+                        className={`preview-background-picker__option${
+                          previewBackgroundMode === PREVIEW_BACKGROUND_MODES.AUTO ? " is-active" : ""
+                        } preview-background-picker__option--auto`}
+                        onClick={() => setPreviewBackgroundMode(PREVIEW_BACKGROUND_MODES.AUTO)}
+                        role="radio"
+                        aria-checked={previewBackgroundMode === PREVIEW_BACKGROUND_MODES.AUTO}
+                        aria-label={t("identity.previewBackground.chooseAuto")}
+                        style={{
+                          backgroundImage:
+                            "linear-gradient(135deg, rgba(99, 102, 241, 0.72), rgba(14, 165, 233, 0.72))",
+                        }}
+                      >
+                        <span className="preview-background-picker__label">
+                          {t("identity.previewBackground.auto")}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`preview-background-picker__option${
+                          previewBackgroundMode === PREVIEW_BACKGROUND_MODES.RANDOM ? " is-active" : ""
+                        } preview-background-picker__option--random`}
+                        onClick={() => setPreviewBackgroundMode(PREVIEW_BACKGROUND_MODES.RANDOM)}
+                        role="radio"
+                        aria-checked={previewBackgroundMode === PREVIEW_BACKGROUND_MODES.RANDOM}
+                        aria-label={t("identity.previewBackground.chooseRandom")}
+                        style={{
+                          backgroundImage:
+                            "linear-gradient(135deg, rgba(236, 72, 153, 0.72), rgba(59, 130, 246, 0.72))",
+                        }}
+                      >
+                        <span className="preview-background-picker__label">
+                          {t("identity.previewBackground.random")}
+                        </span>
+                      </button>
+                      {previewBackgroundOptions.map((background) => {
+                        const isActive =
+                          previewBackgroundMode === PREVIEW_BACKGROUND_MODES.MANUAL &&
+                          selectedPreviewBackgroundId === background.id;
+                        const ariaLabel = t("identity.previewBackground.choose", {
+                          label: background.label,
+                        });
+                        return (
+                          <button
+                            key={background.id}
+                            type="button"
+                            className={`preview-background-picker__option${
+                              isActive ? " is-active" : ""
+                            }`}
+                            onClick={() => {
+                              setPreviewBackgroundMode(PREVIEW_BACKGROUND_MODES.MANUAL);
+                              setSelectedPreviewBackgroundId(background.id);
+                            }}
+                            role="radio"
+                            aria-checked={isActive}
+                            aria-label={ariaLabel}
+                            style={{ backgroundImage: `url(${background.src})` }}
+                          >
+                            <span className="preview-background-picker__label">{background.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </aside>
+          </div>
         </section>
 
         <section className="suggestions">
@@ -5368,10 +5879,10 @@ export default function Home({ initialBreeds = [] }) {
                               const canvasBackground = buildGradientFromHex(primaryColor);
                               const lookPreview = lookPreviews?.[proposal.id];
                               const lookLoaded =
-                              lookPreview?.status === "loaded" &&
-                              typeof lookPreview?.dataUrl === "string" &&
-                              lookPreview.dataUrl.length > 0;
-                            const lookLoading = lookPreview?.status === "loading";
+                                lookPreview?.status === "loaded" &&
+                                typeof lookPreview?.dataUrl === "string" &&
+                                lookPreview.dataUrl.length > 0;
+                              const lookLoading = lookPreview?.status === "loading";
                               const lookError =
                                 lookPreview?.status === "error" && lookPreview?.error
                                   ? lookPreview.error
@@ -5381,14 +5892,50 @@ export default function Home({ initialBreeds = [] }) {
                               const previewSrc = lookLoaded ? lookPreview.dataUrl : null;
                               const heroSrc = !lookLoaded ? proposal.heroImage ?? null : null;
                               const previewAlt = t("suggestions.render.alt", { index: proposal.index + 1 });
+                              const autoBackgroundId = previewBackgroundAutoByProposal.get(proposal.id);
+                              const autoBackground = autoBackgroundId
+                                ? previewBackgroundById.get(autoBackgroundId)
+                                : null;
+                              let preferredBackground = null;
+                              if (previewBackgroundMode === PREVIEW_BACKGROUND_MODES.MANUAL) {
+                                preferredBackground = selectedPreviewBackgroundId
+                                  ? previewBackgroundById.get(selectedPreviewBackgroundId)
+                                  : null;
+                                if (!preferredBackground) {
+                                  preferredBackground = autoBackground;
+                                }
+                              } else if (previewBackgroundMode === PREVIEW_BACKGROUND_MODES.RANDOM) {
+                                const randomBackgroundId =
+                                  randomPreviewBackgroundAssignments?.[proposal.id] ?? null;
+                                preferredBackground = randomBackgroundId
+                                  ? previewBackgroundById.get(randomBackgroundId)
+                                  : null;
+                                if (!preferredBackground) {
+                                  preferredBackground = autoBackground;
+                                }
+                              } else {
+                                preferredBackground = autoBackground;
+                              }
+                              const fallbackBackground = isPreviewBackgroundEnabled
+                                ? previewBackgroundOptions[proposal.index % previewBackgroundOptions.length] ?? null
+                                : null;
+                              const activeBackground = isPreviewBackgroundEnabled
+                                ? preferredBackground ?? fallbackBackground
+                                : null;
+                              const canvasStyle = activeBackground
+                                ? {
+                                    backgroundImage: `url(${activeBackground.src})`,
+                                    backgroundColor: primaryColor,
+                                  }
+                                : { backgroundImage: canvasBackground };
                               return (
                                 <article key={proposal.id} className="skin-card">
-                                <h3 className="sr-only">{t("suggestions.carousel.proposalTitle", { index: proposal.index + 1 })}</h3>
-                                <div className="skin-card__body">
-                                  <div
-                                    className="skin-card__canvas"
-                                    style={{ backgroundImage: canvasBackground }}
-                                  >
+                                  <h3 className="sr-only">{t("suggestions.carousel.proposalTitle", { index: proposal.index + 1 })}</h3>
+                                  <div className="skin-card__body">
+                                    <div
+                                      className="skin-card__canvas"
+                                      style={canvasStyle}
+                                    >
                                     <div className="skin-card__render">
                                       {lookLoading ? (
                                             <div className="skin-card__loader" role="status" aria-live="polite">
@@ -5863,11 +6410,65 @@ export default function Home({ initialBreeds = [] }) {
   );
 }
 
+async function loadPreviewBackgroundsFromDisk() {
+  try {
+    const path = await import("path");
+    const { readdir } = await import("fs/promises");
+    const backgroundsDir = path.join(process.cwd(), "public", "backgrounds");
+    const entries = await readdir(backgroundsDir, { withFileTypes: true }).catch(() => []);
+
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return [];
+    }
+
+    const seen = new Set();
+    const items = entries
+      .filter((entry) => {
+        if (!entry) {
+          return false;
+        }
+        if (typeof entry.isFile === "function") {
+          return entry.isFile() && typeof entry.name === "string" && entry.name.toLowerCase().endsWith(".png");
+        }
+        if (typeof entry === "string") {
+          return entry.toLowerCase().endsWith(".png");
+        }
+        return false;
+      })
+      .map((entry, index) => {
+        const fileName = typeof entry === "string" ? entry : entry.name;
+        const label = humanizeBackgroundName(fileName) || fileName.replace(/\.png$/i, "") || `Background ${
+          index + 1
+        }`;
+        const baseSlug = slugify(label) || slugify(fileName) || `background-${index + 1}`;
+        let id = baseSlug || `background-${index + 1}`;
+        let attempt = 1;
+        while (seen.has(id)) {
+          id = `${baseSlug}-${attempt}`;
+          attempt += 1;
+        }
+        seen.add(id);
+        return {
+          id,
+          label,
+          src: `/backgrounds/${fileName}`,
+        };
+      })
+      .filter((entry) => entry?.id && entry?.src);
+
+    return items.sort((a, b) => a.label.localeCompare(b.label, "fr", { sensitivity: "base" }));
+  } catch (error) {
+    console.error("Unable to load preview backgrounds:", error);
+    return [];
+  }
+}
+
 export async function getStaticProps() {
+  const previewBackgrounds = await loadPreviewBackgroundsFromDisk();
   try {
     if (typeof fetch !== "function") {
       return {
-        props: { initialBreeds: [BARBOFUS_DEFAULT_BREED] },
+        props: { initialBreeds: [BARBOFUS_DEFAULT_BREED], previewBackgrounds },
         revalidate: 3600,
       };
     }
@@ -5889,13 +6490,14 @@ export async function getStaticProps() {
     return {
       props: {
         initialBreeds: dataset.length ? dataset : [BARBOFUS_DEFAULT_BREED],
+        previewBackgrounds,
       },
       revalidate: 3600,
     };
   } catch (error) {
     console.error("Unable to prefetch Dofus breeds:", error);
     return {
-      props: { initialBreeds: [BARBOFUS_DEFAULT_BREED] },
+      props: { initialBreeds: [BARBOFUS_DEFAULT_BREED], previewBackgrounds },
       revalidate: 3600,
     };
   }
