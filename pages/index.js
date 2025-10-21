@@ -48,6 +48,7 @@ import {
   MAX_ITEM_PALETTE_COLORS,
   normalizeColorToHex,
   hexToRgb,
+  hexToNumeric,
 } from "../lib/utils/color";
 import { slugify, humanizeBackgroundName, normalizeSearchText, normalizeWhitespace } from "../lib/utils/text";
 import { normalizeSelection, cycleItemSelection } from "../lib/utils/selection";
