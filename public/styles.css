@@ -354,19 +354,19 @@ a {
 
 @media (min-width: 960px) {
   .workspace {
-    grid-template-columns: minmax(440px, 1.3fr) minmax(340px, 1.05fr);
+    grid-template-columns: minmax(440px, 1.28fr) minmax(360px, 1.18fr);
   }
 }
 
 @media (min-width: 1360px) {
   .workspace {
-    grid-template-columns: minmax(520px, 1.5fr) minmax(360px, 1.08fr) minmax(320px, 0.95fr);
+    grid-template-columns: minmax(520px, 1.46fr) minmax(400px, 1.18fr) minmax(300px, 0.88fr);
   }
 }
 
 @media (min-width: 1760px) {
   .workspace {
-    grid-template-columns: minmax(560px, 1.55fr) minmax(380px, 1.05fr) minmax(340px, 0.95fr) minmax(300px, 0.85fr);
+    grid-template-columns: minmax(560px, 1.5fr) minmax(420px, 1.16fr) minmax(320px, 0.9fr) minmax(300px, 0.82fr);
   }
 }
 
@@ -830,12 +830,12 @@ a {
   color: inherit;
   font: inherit;
   border-radius: inherit;
-  padding: 6px 4px;
+  padding: 8px 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 6px;
   cursor: pointer;
   transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
@@ -859,6 +859,11 @@ a {
   transform: none;
   box-shadow: none;
   outline: none;
+}
+
+.item-slot--filled .item-slot__button {
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 .item-slot__placeholder {
@@ -895,8 +900,8 @@ a {
 }
 
 .item-slot__media {
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   border-radius: var(--radius-md);
   border: 1px solid rgba(148, 163, 184, 0.24);
   background: rgba(15, 23, 42, 0.62);
@@ -919,9 +924,26 @@ a {
 
 .item-slot__name {
   font-weight: 600;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   text-align: center;
-  line-height: 1.16;
+  line-height: 1.2;
+  padding: 0 6px;
+  max-width: 100%;
+  word-break: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  min-height: 2.4em;
+  max-height: 2.6em;
+}
+
+@supports not (-webkit-line-clamp: 2) {
+  .item-slot__name {
+    display: block;
+    max-height: 2.6em;
+  }
 }
 
 .item-slot__clear {
@@ -1215,6 +1237,8 @@ a {
   flex-direction: column;
   gap: 6px;
   align-self: start;
+  width: 100%;
+  max-width: 420px;
 }
 
 .palette__header {
@@ -1267,6 +1291,24 @@ a {
   }
 }
 
+@media (min-width: 960px) {
+  .palette {
+    max-width: 440px;
+  }
+}
+
+@media (min-width: 1360px) {
+  .palette {
+    max-width: 480px;
+  }
+}
+
+@media (min-width: 1760px) {
+  .palette {
+    max-width: 520px;
+  }
+}
+
 .identity-card__section,
 .filters-card__section {
   display: flex;
@@ -1301,10 +1343,17 @@ a {
   overflow: visible;
   align-self: start;
   justify-self: start;
+  z-index: 4;
 }
 
 .filters-card.is-expanded {
   z-index: 22;
+}
+
+@media (min-width: 960px) {
+  .filters-card {
+    margin-top: -6px;
+  }
 }
 
 .filters-card__toggle {
@@ -2754,7 +2803,8 @@ a {
   background: var(--card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--card-border);
-  padding: 12px;
+  padding: 16px;
+  padding-top: 22px;
   box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
@@ -2762,11 +2812,29 @@ a {
   width: 100%;
   max-width: 1080px;
   margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.workspace + .suggestions {
+  margin-top: -6px;
 }
 
 @media (min-width: 960px) {
-  .suggestions {
-    margin-top: -6px;
+  .workspace + .suggestions {
+    margin-top: -22px;
+  }
+}
+
+@media (min-width: 1360px) {
+  .workspace + .suggestions {
+    margin-top: -32px;
+  }
+}
+
+@media (min-width: 1760px) {
+  .workspace + .suggestions {
+    margin-top: -38px;
   }
 }
 
