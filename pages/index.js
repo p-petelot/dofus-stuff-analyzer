@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useId } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import {
@@ -140,6 +140,16 @@ function normalizeWhitespace(value) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function normalizeSearchText(value) {
+  if (!value) {
+    return "";
+  }
+  return normalizeWhitespace(String(value))
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
 function pickLocalizedValue(value, languagePriority = getActiveLocalizationPriority()) {
   if (!value) return "";
   if (typeof value === "string") {
@@ -172,6 +182,21 @@ function normalizeTextContent(value, languagePriority = getActiveLocalizationPri
     return "";
   }
   return normalizeWhitespace(stripHtml(extracted));
+}
+
+function hasFilterDifferences(current, defaults) {
+  if (!current || !defaults) {
+    return false;
+  }
+
+  const keys = Object.keys(defaults);
+  for (const key of keys) {
+    if ((current[key] ?? false) !== defaults[key]) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function normalizeColorToHex(color) {
@@ -612,7 +637,7 @@ function resolveItemImageUrl(item) {
   return null;
 }
 
-function buildDofusApiUrls(type, language = DEFAULT_LANGUAGE) {
+function buildDofusApiRequests(type, language = DEFAULT_LANGUAGE) {
   const config = ITEM_TYPE_CONFIG[type];
   if (!config) {
     throw new Error(`Type d'objet inconnu: ${type}`);
@@ -628,11 +653,8 @@ function buildDofusApiUrls(type, language = DEFAULT_LANGUAGE) {
 
     const limit = source.limit ?? config.limit ?? DEFAULT_LIMIT;
     params.set("$limit", String(limit));
-
-    const skip = source.skip ?? config.skip;
-    if (typeof skip === "number") {
-      params.set("$skip", String(skip));
-    }
+    const initialSkip = typeof source.skip === "number" ? source.skip : typeof config.skip === "number" ? config.skip : 0;
+    params.set("$skip", "0");
 
     const typeIds = source.typeIds ?? config.typeIds;
     if (!typeIds || !typeIds.length) {
@@ -647,7 +669,11 @@ function buildDofusApiUrls(type, language = DEFAULT_LANGUAGE) {
       params.set(key, value);
     });
 
-    return `${DOFUS_API_BASE_URL}?${params.toString()}`;
+    return {
+      url: `${DOFUS_API_BASE_URL}?${params.toString()}`,
+      limit,
+      initialSkip,
+    };
   });
 }
 
@@ -813,6 +839,7 @@ function normalizeDofusItem(rawItem, type, options = {}) {
     name,
     type,
     palette,
+    searchIndex: normalizeSearchText(name),
     url: encyclopediaUrl,
     imageUrl,
     paletteSource,
@@ -881,6 +908,34 @@ const ITEM_TYPE_LABEL_KEYS = {
   costume: "itemTypes.costume",
   ailes: "itemTypes.ailes",
 };
+
+const OPTIONAL_ITEM_TYPES = Object.freeze(["costume", "ailes"]);
+const OPTIONAL_ITEM_FILTERS = OPTIONAL_ITEM_TYPES.map((type) => ({
+  key: type,
+  labelKey: ITEM_TYPE_LABEL_KEYS[type] ?? type,
+}));
+
+const DEFAULT_FAMILIER_FILTER_STATE = Object.freeze(
+  FAMILIER_FILTERS.reduce((accumulator, filter) => {
+    const isDefaultEnabled = filter.key === "pet" || filter.key === "mount";
+    accumulator[filter.key] = isDefaultEnabled;
+    return accumulator;
+  }, {})
+);
+
+const DEFAULT_ITEM_FLAG_FILTER_STATE = Object.freeze(
+  ITEM_FLAG_FILTERS.reduce((accumulator, filter) => {
+    accumulator[filter.key] = true;
+    return accumulator;
+  }, {})
+);
+
+const DEFAULT_ITEM_SLOT_FILTER_STATE = Object.freeze(
+  OPTIONAL_ITEM_TYPES.reduce((accumulator, type) => {
+    accumulator[type] = true;
+    return accumulator;
+  }, {})
+);
 
 const BARBOFUS_BASE_URL = "https://barbofus.com/skinator";
 const BARBOFUS_EQUIPMENT_SLOTS = ["6", "7", "8", "9", "10", "11", "12"];
@@ -2001,6 +2056,83 @@ function computeToneDistance(tonesA, tonesB) {
   return total / length;
 }
 
+function shiftHexTone(hex, delta) {
+  const normalized = normalizeColorToHex(hex);
+  if (!normalized) {
+    return null;
+  }
+  const rgb = hexToRgb(normalized);
+  if (!rgb) {
+    return normalized;
+  }
+  const { h, s, l } = rgbToHsl(rgb.r, rgb.g, rgb.b);
+  const adjustedLightness = clamp(l + delta, 0, 1);
+  const saturationDelta = delta > 0 ? delta * 0.35 : delta * 0.25;
+  const adjustedSaturation = clamp(s + saturationDelta, 0, 1);
+  const { r, g, b } = hslToRgb(h, adjustedSaturation, adjustedLightness);
+  return rgbToHex(Math.round(r), Math.round(g), Math.round(b));
+}
+
+function buildLookPalette(basePalette, variantIndex = 0) {
+  if (!Array.isArray(basePalette) || basePalette.length === 0) {
+    return [];
+  }
+
+  const normalizedBase = basePalette
+    .map((hex) => normalizeColorToHex(hex))
+    .filter(Boolean);
+
+  if (!normalizedBase.length) {
+    return [];
+  }
+
+  const uniqueBase = Array.from(new Set(normalizedBase));
+
+  if (variantIndex <= 0) {
+    return uniqueBase.slice(0, MAX_ITEM_PALETTE_COLORS);
+  }
+
+  const rotation = variantIndex % uniqueBase.length;
+  const rotated = uniqueBase.slice(rotation).concat(uniqueBase.slice(0, rotation));
+
+  const amplitude = Math.min(0.12, 0.05 + variantIndex * 0.02);
+  const direction = variantIndex % 2 === 0 ? 1 : -1;
+
+  const adjusted = rotated
+    .slice(0, MAX_ITEM_PALETTE_COLORS * 2)
+    .map((hex, index) => {
+      const weight = 1 - Math.min(index, 4) * 0.12;
+      const delta = direction * amplitude * weight;
+      const shifted = shiftHexTone(hex, delta);
+      return normalizeColorToHex(shifted) ?? normalizeColorToHex(hex);
+    })
+    .filter(Boolean);
+
+  const seen = new Set();
+  const result = [];
+  adjusted.forEach((hex) => {
+    if (!hex || seen.has(hex)) {
+      return;
+    }
+    seen.add(hex);
+    result.push(hex);
+  });
+
+  if (result.length < MAX_ITEM_PALETTE_COLORS) {
+    uniqueBase.forEach((hex) => {
+      if (result.length >= MAX_ITEM_PALETTE_COLORS) {
+        return;
+      }
+      if (!seen.has(hex)) {
+        seen.add(hex);
+        result.push(hex);
+      }
+    });
+  }
+
+  return result.slice(0, MAX_ITEM_PALETTE_COLORS);
+}
+
 function computeSignatureDistance(signatureA, signatureB) {
   if (!Array.isArray(signatureA) || !Array.isArray(signatureB)) {
     return Number.POSITIVE_INFINITY;
@@ -2440,19 +2572,23 @@ export default function Home({ initialBreeds = [] }) {
   const [itemsError, setItemsError] = useState(null);
   const [panelItemIndexes, setPanelItemIndexes] = useState({});
   const [proposalItemIndexes, setProposalItemIndexes] = useState({});
-  const [familierFilters, setFamilierFilters] = useState(() =>
-    FAMILIER_FILTERS.reduce((accumulator, filter) => {
-      const isDefaultEnabled = filter.key === "pet" || filter.key === "mount";
-      accumulator[filter.key] = isDefaultEnabled;
+  const [familierFilters, setFamilierFilters] = useState(() => ({
+    ...DEFAULT_FAMILIER_FILTER_STATE,
+  }));
+  const [itemFlagFilters, setItemFlagFilters] = useState(() => ({
+    ...DEFAULT_ITEM_FLAG_FILTER_STATE,
+  }));
+  const [itemSlotFilters, setItemSlotFilters] = useState(() => ({
+    ...DEFAULT_ITEM_SLOT_FILTER_STATE,
+  }));
+  const [selectedItemsBySlot, setSelectedItemsBySlot] = useState(() =>
+    ITEM_TYPES.reduce((accumulator, type) => {
+      accumulator[type] = null;
       return accumulator;
     }, {})
   );
-  const [itemFlagFilters, setItemFlagFilters] = useState(() =>
-    ITEM_FLAG_FILTERS.reduce((accumulator, filter) => {
-      accumulator[filter.key] = true;
-      return accumulator;
-    }, {})
-  );
+  const [activeItemSlot, setActiveItemSlot] = useState(null);
+  const [itemSearchQuery, setItemSearchQuery] = useState("");
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [inputMode, setInputMode] = useState("image");
   const [selectedColor, setSelectedColor] = useState(null);
@@ -2484,6 +2620,8 @@ export default function Home({ initialBreeds = [] }) {
   );
 
   const isImageMode = inputMode === "image";
+  const isColorMode = inputMode === "color";
+  const isItemsMode = inputMode === "items";
 
   const hasCatalogData = useMemo(
     () => ITEM_TYPES.some((type) => (itemsCatalog[type] ?? []).length > 0),
@@ -2500,7 +2638,161 @@ export default function Home({ initialBreeds = [] }) {
   );
   const areAllFamilierFiltersDisabled = activeFamilierFilterCount === 0;
 
+  const hasCustomFilters = useMemo(
+    () =>
+      hasFilterDifferences(familierFilters, DEFAULT_FAMILIER_FILTER_STATE) ||
+      hasFilterDifferences(itemFlagFilters, DEFAULT_ITEM_FLAG_FILTER_STATE) ||
+      hasFilterDifferences(itemSlotFilters, DEFAULT_ITEM_SLOT_FILTER_STATE),
+    [familierFilters, itemFlagFilters, itemSlotFilters]
+  );
+
+  const [areFiltersExpanded, setFiltersExpanded] = useState(false);
+  const filtersContentId = useId();
+  const filtersCardClassName = useMemo(() => {
+    const classes = ["filters-card"];
+    if (areFiltersExpanded) {
+      classes.push("is-expanded");
+    }
+    if (hasCustomFilters) {
+      classes.push("filters-card--active");
+    }
+    return classes.join(" ");
+  }, [areFiltersExpanded, hasCustomFilters]);
+
+  const referenceClassName = useMemo(() => {
+    const classes = ["reference"];
+    if (isItemsMode) {
+      classes.push("reference--items");
+      if (activeItemSlot) {
+        classes.push("reference--items-panel-open");
+      }
+    }
+    return classes.join(" ");
+  }, [activeItemSlot, isItemsMode]);
+
   const colorsCount = colors.length;
+
+  const selectedItemHexes = useMemo(() => {
+    const seen = new Set();
+    const collected = [];
+    ITEM_TYPES.forEach((type) => {
+      const item = selectedItemsBySlot?.[type];
+      if (!item || !Array.isArray(item.palette)) {
+        return;
+      }
+      item.palette.forEach((value) => {
+        const normalized = normalizeColorToHex(value);
+        if (!normalized || seen.has(normalized)) {
+          return;
+        }
+        seen.add(normalized);
+        collected.push(normalized);
+      });
+    });
+    return collected.slice(0, MAX_COLORS);
+  }, [selectedItemsBySlot]);
+
+  const selectedItemPalette = useMemo(() => {
+    const entries = [];
+    const seen = new Set();
+    selectedItemHexes.forEach((hex) => {
+      const normalized = normalizeColorToHex(hex);
+      if (!normalized || seen.has(normalized)) {
+        return;
+      }
+      const rgb = hexToRgb(normalized);
+      if (!rgb) {
+        return;
+      }
+      seen.add(normalized);
+      entries.push({
+        hex: normalized,
+        rgb: `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`,
+        r: rgb.r,
+        g: rgb.g,
+        b: rgb.b,
+        weight: 1,
+      });
+    });
+    return entries.slice(0, MAX_COLORS);
+  }, [selectedItemHexes]);
+
+  const filteredItemOptions = useMemo(() => {
+    if (!activeItemSlot) {
+      return [];
+    }
+    const pool = itemsCatalog?.[activeItemSlot] ?? [];
+    const normalizedQuery = normalizeSearchText(itemSearchQuery);
+    if (!normalizedQuery) {
+      return pool;
+    }
+    return pool.filter((item) => {
+      if (!item) {
+        return false;
+      }
+      if (item.searchIndex) {
+        return item.searchIndex.includes(normalizedQuery);
+      }
+      return normalizeSearchText(item.name).includes(normalizedQuery);
+    });
+  }, [activeItemSlot, itemSearchQuery, itemsCatalog]);
+
+  const activeSlotTotalCount = activeItemSlot
+    ? Array.isArray(itemsCatalog?.[activeItemSlot])
+      ? itemsCatalog[activeItemSlot].length
+      : 0
+    : 0;
+  const activeSlotFilteredCount = activeItemSlot ? filteredItemOptions.length : 0;
+  const hasActiveSearch = Boolean(
+    activeItemSlot && normalizeWhitespace(itemSearchQuery ?? "").length
+  );
+  const showFilteredCount =
+    Boolean(activeItemSlot) &&
+    hasActiveSearch &&
+    activeSlotFilteredCount !== activeSlotTotalCount;
+  const activeSlotCountLabel = activeItemSlot
+    ? t(showFilteredCount ? "items.selector.countFiltered" : "items.selector.countTotal", {
+        count: activeSlotFilteredCount,
+        total: activeSlotTotalCount,
+      })
+    : "";
+
+  const hasSelectedItems = useMemo(
+    () => ITEM_TYPES.some((type) => Boolean(selectedItemsBySlot?.[type])),
+    [selectedItemsBySlot]
+  );
+
+  const analysisModes = useMemo(
+    () => [
+      { key: "image", labelKey: "workspace.mode.image" },
+      { key: "color", labelKey: "workspace.mode.color" },
+      { key: "items", labelKey: "workspace.mode.items" },
+    ],
+    []
+  );
+
+  const activeModeIndex = useMemo(() => {
+    const index = analysisModes.findIndex((mode) => mode.key === inputMode);
+    return index >= 0 ? index : 0;
+  }, [analysisModes, inputMode]);
+
+  const inputSwitchStyle = useMemo(
+    () => ({
+      "--option-count": String(analysisModes.length),
+      "--active-index": String(activeModeIndex),
+    }),
+    [analysisModes, activeModeIndex]
+  );
+
+  const handleFiltersToggle = useCallback(() => {
+    setFiltersExpanded((value) => !value);
+  }, []);
+
+  useEffect(() => {
+    if (hasCustomFilters) {
+      setFiltersExpanded(true);
+    }
+  }, [hasCustomFilters]);
 
   const handleFamilierFilterToggle = useCallback((key) => {
     if (!FAMILIER_FILTERS.some((filter) => filter.key === key)) {
@@ -2522,6 +2814,79 @@ export default function Home({ initialBreeds = [] }) {
       ...previous,
       [key]: !previous[key],
     }));
+  }, []);
+
+  const handleItemSlotFilterToggle = useCallback((key) => {
+    if (!OPTIONAL_ITEM_TYPES.includes(key)) {
+      return;
+    }
+
+    setItemSlotFilters((previous = {}) => ({
+      ...previous,
+      [key]: previous[key] === false ? true : false,
+    }));
+  }, []);
+
+  const handleOpenItemSlot = useCallback(
+    (slot) => {
+      if (!ITEM_TYPES.includes(slot)) {
+        return;
+      }
+      if (itemSlotFilters?.[slot] === false) {
+        return;
+      }
+      setInputMode("items");
+      setActiveItemSlot(slot);
+    },
+    [itemSlotFilters, setInputMode]
+  );
+
+  const handleClearItemSlot = useCallback((slot) => {
+    if (!ITEM_TYPES.includes(slot)) {
+      return;
+    }
+    setSelectedItemsBySlot((previous = {}) => {
+      if (!previous?.[slot]) {
+        return previous;
+      }
+      return { ...previous, [slot]: null };
+    });
+  }, []);
+
+  const handleSelectItemForSlot = useCallback(
+    (slot, item) => {
+      if (!ITEM_TYPES.includes(slot) || !item) {
+        return;
+      }
+      if (itemSlotFilters?.[slot] === false) {
+        return;
+      }
+      setInputMode("items");
+      setSelectedItemsBySlot((previous = {}) => {
+        const current = previous?.[slot];
+        if (current) {
+          const sameId = current.id && item.id && current.id === item.id;
+          const sameAnkama =
+            Number.isFinite(current?.ankamaId) &&
+            Number.isFinite(item.ankamaId) &&
+            current.ankamaId === item.ankamaId;
+          if (sameId || sameAnkama) {
+            return previous;
+          }
+        }
+        return { ...previous, [slot]: item };
+      });
+    },
+    [itemSlotFilters, setInputMode]
+  );
+
+  const handleCloseItemPanel = useCallback(() => {
+    setActiveItemSlot(null);
+  }, []);
+
+  const handleItemSearchChange = useCallback((event) => {
+    const value = event?.target?.value ?? "";
+    setItemSearchQuery(value);
   }, []);
 
   const activeBreed = useMemo(() => {
@@ -2691,6 +3056,55 @@ export default function Home({ initialBreeds = [] }) {
     setShowDetailedMatches(false);
   }, [colors]);
 
+  useEffect(() => {
+    if (!isItemsMode) {
+      return;
+    }
+
+    if (!selectedItemPalette.length) {
+      setColors([]);
+      setImageSignature(null);
+      setImageShape(null);
+      setImageTones(null);
+      setImageHash(null);
+      setImageEdges(null);
+      setIsProcessing(false);
+      setAnalysisProgress(0);
+      setCopiedCode(null);
+      setToast(null);
+      setError(null);
+      return;
+    }
+
+    setColors(selectedItemPalette);
+    setImageSignature(null);
+    setImageShape(null);
+    setImageTones(
+      computeToneDistributionFromPalette(selectedItemPalette.map((entry) => entry.hex))
+    );
+    setImageHash(null);
+    setImageEdges(null);
+    setIsProcessing(false);
+    setAnalysisProgress(0);
+    setCopiedCode(null);
+    setToast(null);
+    setError(null);
+  }, [
+    isItemsMode,
+    selectedItemPalette,
+    setColors,
+    setImageSignature,
+    setImageShape,
+    setImageTones,
+    setImageHash,
+    setImageEdges,
+    setIsProcessing,
+    setAnalysisProgress,
+    setCopiedCode,
+    setToast,
+    setError,
+  ]);
+
   const applyColorSeed = useCallback(
     (seedHex) => {
       if (!seedHex) {
@@ -2802,6 +3216,15 @@ export default function Home({ initialBreeds = [] }) {
     }
 
     return ITEM_TYPES.reduce((accumulator, type) => {
+      const isSlotEnabled = itemSlotFilters?.[type] !== false;
+      const lockedItemCandidate = selectedItemsBySlot?.[type] ?? null;
+      const lockedItem = isSlotEnabled ? lockedItemCandidate : null;
+
+      if (!isSlotEnabled) {
+        accumulator[type] = [];
+        return accumulator;
+      }
+
       let catalogItems = itemsCatalog[type] ?? [];
 
       if (catalogItems.length) {
@@ -2872,9 +3295,51 @@ export default function Home({ initialBreeds = [] }) {
         .sort((a, b) => a.score - b.score);
 
       const finiteScores = scoredItems.filter(({ score }) => Number.isFinite(score));
-      const ranked = finiteScores.length > 0 ? finiteScores : scoredItems;
+      const rankedEntries = finiteScores.length > 0 ? finiteScores : scoredItems;
+      let rankedItems = rankedEntries.map(({ item }) => item);
 
-      accumulator[type] = ranked.slice(0, MAX_RECOMMENDATIONS).map(({ item }) => item);
+      if (lockedItem) {
+        const matchIndex = rankedItems.findIndex((candidate) => {
+          if (!candidate) {
+            return false;
+          }
+          if (candidate.id && lockedItem.id && candidate.id === lockedItem.id) {
+            return true;
+          }
+          if (
+            Number.isFinite(candidate.ankamaId) &&
+            Number.isFinite(lockedItem.ankamaId) &&
+            candidate.ankamaId === lockedItem.ankamaId
+          ) {
+            return true;
+          }
+          return false;
+        });
+
+        if (matchIndex !== -1) {
+          const [matched] = rankedItems.splice(matchIndex, 1);
+          rankedItems = [matched, ...rankedItems];
+        } else {
+          rankedItems = [lockedItem, ...rankedItems];
+        }
+      }
+
+      const seenIds = new Set();
+      accumulator[type] = rankedItems
+        .filter((item) => {
+          if (!item) {
+            return false;
+          }
+          const key = item.id ?? (Number.isFinite(item.ankamaId) ? `ankama-${item.ankamaId}` : null);
+          if (key && seenIds.has(key)) {
+            return false;
+          }
+          if (key) {
+            seenIds.add(key);
+          }
+          return true;
+        })
+        .slice(0, MAX_RECOMMENDATIONS);
       return accumulator;
     }, {});
   }, [
@@ -2888,6 +3353,8 @@ export default function Home({ initialBreeds = [] }) {
     itemsCatalog,
     familierFilters,
     itemFlagFilters,
+    itemSlotFilters,
+    selectedItemsBySlot,
   ]);
 
   useEffect(() => {
@@ -3000,7 +3467,11 @@ export default function Home({ initialBreeds = [] }) {
     for (let index = 0; index < total; index += 1) {
       const items = ITEM_TYPES.map((type) => {
         const pool = recommendations[type] ?? [];
+        const lockedItem = selectedItemsBySlot?.[type] ?? null;
         if (!pool.length) {
+          if (lockedItem) {
+            return { ...lockedItem, slotType: type };
+          }
           return null;
         }
 
@@ -3012,7 +3483,26 @@ export default function Home({ initialBreeds = [] }) {
             : index;
 
         let pick = null;
-        if (pool.length) {
+
+        if (lockedItem) {
+          pick =
+            pool.find((candidate) => {
+              if (!candidate) {
+                return false;
+              }
+              if (candidate.id && lockedItem.id && candidate.id === lockedItem.id) {
+                return true;
+              }
+              if (
+                Number.isFinite(candidate.ankamaId) &&
+                Number.isFinite(lockedItem.ankamaId) &&
+                candidate.ankamaId === lockedItem.ankamaId
+              ) {
+                return true;
+              }
+              return false;
+            }) ?? lockedItem;
+        } else if (pool.length) {
           const startIndex = Math.min(pool.length - 1, Math.max(0, fallbackIndex));
           for (let offset = 0; offset < pool.length; offset += 1) {
             const candidate = pool[(startIndex + offset) % pool.length];
@@ -3057,7 +3547,7 @@ export default function Home({ initialBreeds = [] }) {
         });
       });
 
-      const paletteSample = palette.slice(0, MAX_ITEM_PALETTE_COLORS);
+      const paletteSample = buildLookPalette(palette, index);
       const lookItemIds = Array.from(
         new Set(
           items
@@ -3167,6 +3657,7 @@ export default function Home({ initialBreeds = [] }) {
     fallbackColorValues,
     proposalItemIndexes,
     recommendations,
+    selectedItemsBySlot,
     useCustomSkinTone,
   ]);
 
@@ -3193,12 +3684,17 @@ export default function Home({ initialBreeds = [] }) {
 
   useEffect(() => {
     lookPreviewsRef.current = lookPreviews;
-  }, [lookPreviews, t]);
+  }, [lookPreviews]);
 
   useEffect(() => {
     if (!proposals.length) {
-      setLookPreviews({});
       lookPreviewsRef.current = {};
+      setLookPreviews((previous = {}) => {
+        if (!previous || Object.keys(previous).length === 0) {
+          return previous;
+        }
+        return {};
+      });
       return;
     }
 
@@ -3363,7 +3859,7 @@ export default function Home({ initialBreeds = [] }) {
       cancelled = true;
       abortController.abort();
     };
-  }, [language, proposals]);
+  }, [language, proposals, t]);
 
   const handleNextProposal = useCallback(() => {
     if (!proposalCount) {
@@ -3493,6 +3989,9 @@ export default function Home({ initialBreeds = [] }) {
       }
 
       const pool = recommendations[type] ?? [];
+      if (selectedItemsBySlot?.[type]) {
+        return;
+      }
       if (!pool.length) {
         return;
       }
@@ -3539,7 +4038,7 @@ export default function Home({ initialBreeds = [] }) {
         }
       }
     },
-    [recommendations]
+    [recommendations, selectedItemsBySlot]
   );
 
   const inputRef = useRef(null);
@@ -3557,40 +4056,83 @@ export default function Home({ initialBreeds = [] }) {
         const entries = await Promise.all(
           ITEM_TYPES.map(async (type) => {
             try {
-              const urls = buildDofusApiUrls(type, language);
+              const requests = buildDofusApiRequests(type, language);
               const aggregatedItems = [];
 
-              for (const url of urls) {
-                const controller = new AbortController();
-                controllers.push(controller);
+              for (const request of requests) {
+                const { url, limit, initialSkip } = request;
+                let skip = Number.isFinite(initialSkip) ? initialSkip : 0;
+                let expectedTotal = null;
+                let pageLimit = Number.isFinite(limit) && limit > 0 ? limit : DEFAULT_LIMIT;
 
-                try {
-                  const response = await fetch(url, {
-                    signal: controller.signal,
-                    headers: { Accept: "application/json" },
-                  });
-
-                  if (!response.ok) {
-                    throw new Error(`Requête DofusDB échouée (${response.status})`);
+                while (true) {
+                  const pageUrl = new URL(url);
+                  if (Number.isFinite(pageLimit) && pageLimit > 0) {
+                    pageUrl.searchParams.set("$limit", String(pageLimit));
                   }
+                  pageUrl.searchParams.set("$skip", String(skip));
 
-                  const payload = await response.json();
-                  const rawItems = Array.isArray(payload)
-                    ? payload
-                    : Array.isArray(payload?.data)
-                    ? payload.data
-                    : Array.isArray(payload?.items)
-                    ? payload.items
-                    : [];
+                  const controller = new AbortController();
+                  controllers.push(controller);
 
-                  aggregatedItems.push(...rawItems);
-                } catch (err) {
-                  if (err.name === "AbortError") {
-                    continue;
+                  try {
+                    const response = await fetch(pageUrl.toString(), {
+                      signal: controller.signal,
+                      headers: { Accept: "application/json" },
+                    });
+
+                    if (!response.ok) {
+                      throw new Error(`Requête DofusDB échouée (${response.status})`);
+                    }
+
+                    const payload = await response.json();
+                    const rawItems = Array.isArray(payload)
+                      ? payload
+                      : Array.isArray(payload?.data)
+                      ? payload.data
+                      : Array.isArray(payload?.items)
+                      ? payload.items
+                      : [];
+
+                    if (!Array.isArray(rawItems) || rawItems.length === 0) {
+                      break;
+                    }
+
+                    aggregatedItems.push(...rawItems);
+
+                    const payloadTotal = Number(payload?.total);
+                    if (Number.isFinite(payloadTotal) && payloadTotal >= 0) {
+                      expectedTotal = payloadTotal;
+                    }
+
+                    const payloadLimit = Number(payload?.limit);
+                    if (Number.isFinite(payloadLimit) && payloadLimit > 0) {
+                      pageLimit = payloadLimit;
+                    }
+
+                    const step = Number.isFinite(pageLimit) && pageLimit > 0 ? pageLimit : rawItems.length;
+                    if (!Number.isFinite(step) || step <= 0) {
+                      break;
+                    }
+
+                    skip += step;
+
+                    if (expectedTotal !== null && skip >= expectedTotal) {
+                      break;
+                    }
+
+                    if ((expectedTotal === null || !Number.isFinite(expectedTotal)) && rawItems.length < step) {
+                      break;
+                    }
+                  } catch (err) {
+                    if (err.name === "AbortError") {
+                      break;
+                    }
+
+                    console.error(err);
+                    errors.push({ type, error: err });
+                    break;
                   }
-
-                  console.error(err);
-                  errors.push({ type, error: err });
                 }
               }
 
@@ -3666,6 +4208,86 @@ export default function Home({ initialBreeds = [] }) {
       controllers.forEach((controller) => controller.abort());
     };
   }, [language, languagePriority, t]);
+
+  useEffect(() => {
+    setSelectedItemsBySlot((previous = {}) => {
+      let changed = false;
+      const next = { ...previous };
+      ITEM_TYPES.forEach((type) => {
+        const selected = previous?.[type] ?? null;
+        if (!selected) {
+          return;
+        }
+        const pool = itemsCatalog?.[type] ?? [];
+        const match =
+          pool.find((candidate) => {
+            if (!candidate) {
+              return false;
+            }
+            if (candidate.id && selected.id && candidate.id === selected.id) {
+              return true;
+            }
+            if (
+              Number.isFinite(candidate.ankamaId) &&
+              Number.isFinite(selected.ankamaId) &&
+              candidate.ankamaId === selected.ankamaId
+            ) {
+              return true;
+            }
+            return false;
+          }) ?? null;
+
+        if (!match) {
+          next[type] = null;
+          changed = true;
+        } else if (match !== selected) {
+          next[type] = match;
+          changed = true;
+        }
+      });
+
+      return changed ? next : previous;
+    });
+  }, [itemsCatalog]);
+
+  useEffect(() => {
+    setSelectedItemsBySlot((previous = {}) => {
+      let changed = false;
+      const next = { ...previous };
+      OPTIONAL_ITEM_TYPES.forEach((type) => {
+        if (itemSlotFilters?.[type] === false && next[type]) {
+          next[type] = null;
+          changed = true;
+        }
+      });
+      return changed ? next : previous;
+    });
+  }, [itemSlotFilters]);
+
+  useEffect(() => {
+    if (activeItemSlot && itemSlotFilters?.[activeItemSlot] === false) {
+      setActiveItemSlot(null);
+    }
+  }, [activeItemSlot, itemSlotFilters]);
+
+  useEffect(() => {
+    if (!isItemsMode) {
+      setActiveItemSlot(null);
+      setItemSearchQuery("");
+    }
+  }, [isItemsMode]);
+
+  useEffect(() => {
+    if (!isItemsMode) {
+      return;
+    }
+
+    setImageSrc((previous) => (previous === null ? previous : null));
+  }, [isItemsMode]);
+
+  useEffect(() => {
+    setItemSearchQuery("");
+  }, [activeItemSlot]);
 
   const handleDataUrl = useCallback((dataUrl) => {
     if (!dataUrl) return;
@@ -3753,6 +4375,10 @@ export default function Home({ initialBreeds = [] }) {
   );
 
   useEffect(() => {
+    if (!isImageMode) {
+      return undefined;
+    }
+
     const handlePaste = (event) => {
       const items = event.clipboardData?.items;
       if (!items) return;
@@ -3770,7 +4396,7 @@ export default function Home({ initialBreeds = [] }) {
 
     window.addEventListener("paste", handlePaste);
     return () => window.removeEventListener("paste", handlePaste);
-  }, [handleFile]);
+  }, [handleFile, isImageMode]);
 
   useEffect(() => {
     if (!copiedCode) return;
@@ -4002,35 +4628,33 @@ export default function Home({ initialBreeds = [] }) {
         </div>
 
         <section className="workspace">
-          <div className="reference">
+          <div className={referenceClassName}>
             <div className="reference__header">
               <div className="reference__title">
                 <h2>{t("workspace.referenceTitle")}</h2>
               </div>
-              <div className="input-switch" role="radiogroup" aria-label={t("aria.analysisMode")}>
-                <span
-                  className="input-switch__thumb"
-                  style={{ transform: inputMode === "image" ? "translateX(0%)" : "translateX(100%)" }}
-                  aria-hidden="true"
-                />
-                <button
-                  type="button"
-                  className={`input-switch__option${isImageMode ? " is-active" : ""}`}
-                  onClick={() => setInputMode("image")}
-                  role="radio"
-                  aria-checked={isImageMode}
-                >
-                  {t("workspace.mode.image")}
-                </button>
-                <button
-                  type="button"
-                  className={`input-switch__option${!isImageMode ? " is-active" : ""}`}
-                  onClick={() => setInputMode("color")}
-                  role="radio"
-                  aria-checked={!isImageMode}
-                >
-                  {t("workspace.mode.color")}
-                </button>
+              <div
+                className="input-switch"
+                role="radiogroup"
+                aria-label={t("aria.analysisMode")}
+                style={inputSwitchStyle}
+              >
+                <span className="input-switch__thumb" aria-hidden="true" />
+                {analysisModes.map((mode) => {
+                  const isActive = inputMode === mode.key;
+                  return (
+                    <button
+                      key={mode.key}
+                      type="button"
+                      className={`input-switch__option${isActive ? " is-active" : ""}`}
+                      onClick={() => setInputMode(mode.key)}
+                      role="radio"
+                      aria-checked={isActive}
+                    >
+                      {t(mode.labelKey)}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             {isImageMode ? (
@@ -4071,7 +4695,7 @@ export default function Home({ initialBreeds = [] }) {
                   onChange={onFileInputChange}
                 />
               </div>
-            ) : (
+            ) : isColorMode ? (
               <div className="color-picker">
                 <div
                   className="color-picker__preview"
@@ -4113,6 +4737,193 @@ export default function Home({ initialBreeds = [] }) {
                     })}
                   </div>
                 </div>
+              </div>
+            ) : (
+              <div className="item-selector">
+                <div className="item-selector__grid" role="list">
+                  {ITEM_TYPES.map((type) => {
+                    const slotLabel = ITEM_TYPE_LABEL_KEYS[type] ? t(ITEM_TYPE_LABEL_KEYS[type]) : type;
+                    const selection = selectedItemsBySlot?.[type] ?? null;
+                    const isActive = activeItemSlot === type;
+                    const isSlotEnabled = itemSlotFilters?.[type] !== false;
+                    const slotClasses = ["item-slot"];
+                    if (isActive) {
+                      slotClasses.push("item-slot--active");
+                    }
+                    if (selection) {
+                      slotClasses.push("item-slot--filled");
+                    }
+                    if (!isSlotEnabled) {
+                      slotClasses.push("item-slot--disabled");
+                    }
+                    return (
+                      <div key={type} className={slotClasses.join(" ")} role="listitem">
+                        <button
+                          type="button"
+                          className="item-slot__button"
+                          onClick={() => handleOpenItemSlot(type)}
+                          aria-pressed={isActive && isSlotEnabled}
+                          disabled={!isSlotEnabled}
+                          aria-disabled={!isSlotEnabled}
+                          title={!isSlotEnabled ? t("items.selector.disabled") : undefined}
+                        >
+                          {!isSlotEnabled ? (
+                            <span className="item-slot__placeholder item-slot__placeholder--disabled">
+                              <span className="item-slot__label">{slotLabel}</span>
+                              <span className="item-slot__note">{t("items.selector.disabled")}</span>
+                            </span>
+                          ) : selection ? (
+                            <>
+                              <span className="item-slot__media" aria-hidden={selection.imageUrl ? "true" : undefined}>
+                                {selection.imageUrl ? (
+                                  <img src={selection.imageUrl} alt="" loading="lazy" />
+                                ) : (
+                                  <span className="item-slot__fallback">{slotLabel}</span>
+                                )}
+                              </span>
+                              <span className="item-slot__name">{selection.name}</span>
+                            </>
+                          ) : (
+                            <span className="item-slot__placeholder">
+                              <span className="item-slot__icon" aria-hidden="true">＋</span>
+                              <span className="item-slot__label">{slotLabel}</span>
+                            </span>
+                          )}
+                        </button>
+                        {selection && isSlotEnabled ? (
+                          <button
+                            type="button"
+                            className="item-slot__clear"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleClearItemSlot(type);
+                            }}
+                            aria-label={t("aria.itemSlotClear", { type: slotLabel })}
+                          >
+                            <span aria-hidden="true">×</span>
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+                {activeItemSlot ? (
+                  <div className="item-selector__panel is-open">
+                    <div className="item-selector__panel-header">
+                      <div className="item-selector__panel-title">
+                        <h3>
+                          {t("items.selector.title", {
+                            type:
+                              ITEM_TYPE_LABEL_KEYS[activeItemSlot]
+                                ? t(ITEM_TYPE_LABEL_KEYS[activeItemSlot])
+                                : activeItemSlot,
+                          })}
+                        </h3>
+                        {selectedItemsBySlot?.[activeItemSlot] ? (
+                          <span className="item-selector__panel-badge">
+                            {t("items.selector.lockedBadge")}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="item-selector__panel-meta">
+                        <span
+                          className={`item-selector__panel-count${
+                            showFilteredCount ? " item-selector__panel-count--filtered" : ""
+                          }`}
+                        >
+                          {activeSlotCountLabel}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="item-selector__panel-close"
+                        onClick={handleCloseItemPanel}
+                        aria-label={t("aria.closeItemPanel")}
+                      >
+                        <span aria-hidden="true">×</span>
+                      </button>
+                    </div>
+                    <div className="item-selector__search">
+                      <label className="sr-only" htmlFor="item-search">
+                        {t("items.selector.searchLabel")}
+                      </label>
+                      <input
+                        id="item-search"
+                        type="search"
+                        value={itemSearchQuery}
+                        onChange={handleItemSearchChange}
+                        placeholder={t("items.selector.searchPlaceholder")}
+                      />
+                    </div>
+                    <div className="item-selector__list" role="list">
+                      {itemsLoading && filteredItemOptions.length === 0 ? (
+                        <p className="item-selector__status">{t("items.selector.loading")}</p>
+                      ) : null}
+                      {itemsError && filteredItemOptions.length === 0 ? (
+                        <p className="item-selector__status item-selector__status--error">{itemsError}</p>
+                      ) : null}
+                      {!itemsLoading && filteredItemOptions.length === 0 ? (
+                        <p className="item-selector__status">{t("items.selector.empty")}</p>
+                      ) : null}
+                      {filteredItemOptions.length > 0 ? (
+                        <ul>
+                          {filteredItemOptions.map((item) => {
+                            const isSelected =
+                              Boolean(selectedItemsBySlot?.[activeItemSlot]) &&
+                              ((selectedItemsBySlot[activeItemSlot]?.id &&
+                                item.id === selectedItemsBySlot[activeItemSlot].id) ||
+                                (Number.isFinite(selectedItemsBySlot[activeItemSlot]?.ankamaId) &&
+                                  Number.isFinite(item.ankamaId) &&
+                                  selectedItemsBySlot[activeItemSlot].ankamaId === item.ankamaId));
+                            const optionClasses = ["item-option"];
+                            if (isSelected) {
+                              optionClasses.push("item-option--selected");
+                            }
+                            return (
+                              <li key={item.id} className={optionClasses.join(" ")}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSelectItemForSlot(activeItemSlot, item)}
+                                  aria-pressed={isSelected}
+                                >
+                                  <span className="item-option__media" aria-hidden="true">
+                                    {item.imageUrl ? (
+                                      <img src={item.imageUrl} alt="" loading="lazy" />
+                                    ) : (
+                                      <span className="item-option__fallback">
+                                        {ITEM_TYPE_LABEL_KEYS[activeItemSlot]
+                                          ? t(ITEM_TYPE_LABEL_KEYS[activeItemSlot])
+                                          : activeItemSlot}
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span className="item-option__details">
+                                    <span className="item-option__name">{item.name}</span>
+                                    {item.palette.length ? (
+                                      <span className="item-option__swatches" aria-hidden="true">
+                                        {item.palette.slice(0, 4).map((hex) => (
+                                          <span
+                                            key={`${item.id}-${hex}`}
+                                            className="item-option__swatch"
+                                            style={{ backgroundColor: hex }}
+                                          />
+                                        ))}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="item-selector__empty">
+                    {t("items.selector.hint")}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -4301,105 +5112,192 @@ export default function Home({ initialBreeds = [] }) {
                 })}
               </div>
             </div>
-            <div
-              className="identity-card__section"
-              role="group"
-              aria-label={t("aria.companionSection")}
-            >
-              <span className="identity-card__section-title">{t("identity.companion.sectionTitle")}</span>
-              <div
-                className="companion-toggle"
-                role="group"
-                aria-label={t("aria.companionFilter")}
-              >
-                {FAMILIER_FILTERS.map((filter) => {
-                  const isActive = Boolean(familierFilters[filter.key]);
-                  const label = t(filter.labelKey);
-                  const title = isActive
-                    ? t("companions.toggle.hide", { label: label.toLowerCase() })
-                    : t("companions.toggle.show", { label: label.toLowerCase() });
-                  return (
-                    <button
-                      key={filter.key}
-                      type="button"
-                      className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
-                      onClick={() => handleFamilierFilterToggle(filter.key)}
-                      aria-pressed={isActive}
-                      title={title}
-                    >
-                      <span className="companion-toggle__indicator" aria-hidden="true">
-                        {isActive ? (
-                          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path
-                              d="M5 10.5 8.2 13.7 15 6.5"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        ) : (
-                          <span className="companion-toggle__dot" />
-                        )}
-                      </span>
-                      <span className="companion-toggle__label">{label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              {areAllFamilierFiltersDisabled ? (
-                <p className="companion-toggle__empty" role="status">{t("identity.companion.empty")}</p>
-              ) : null}
-            </div>
-            <div
-              className="identity-card__section"
-              role="group"
-              aria-label={t("aria.itemFlagSection")}
-            >
-              <span className="identity-card__section-title">{t("identity.filters.sectionTitle")}</span>
-              <div
-                className="companion-toggle companion-toggle--item-flags"
-                role="group"
-                aria-label={t("aria.itemFlagFilter")}
-              >
-                {ITEM_FLAG_FILTERS.map((filter) => {
-                  const isActive = itemFlagFilters[filter.key] !== false;
-                  const label = t(filter.labelKey);
-                  const title = isActive
-                    ? t("companions.toggle.hide", { label: label.toLowerCase() })
-                    : t("companions.toggle.show", { label: label.toLowerCase() });
-
-                  return (
-                    <button
-                      key={filter.key}
-                      type="button"
-                      className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
-                      onClick={() => handleItemFlagFilterToggle(filter.key)}
-                      aria-pressed={isActive}
-                      title={title}
-                    >
-                      <span className="companion-toggle__indicator" aria-hidden="true">
-                        {isActive ? (
-                          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path
-                              d="M5 10.5 8.2 13.7 15 6.5"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        ) : (
-                          <span className="companion-toggle__dot" />
-                        )}
-                      </span>
-                      <span className="companion-toggle__label">{label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
           </div>
+          <aside className={filtersCardClassName} role="group" aria-label={t("aria.filtersCard")}>
+            <button
+              type="button"
+              className="filters-card__toggle"
+              onClick={handleFiltersToggle}
+              aria-expanded={areFiltersExpanded}
+              aria-controls={filtersContentId}
+            >
+              <span className="sr-only">{t("filters.card.title")}</span>
+              {hasCustomFilters ? <span className="filters-card__toggle-indicator" aria-hidden="true" /> : null}
+              <span className="filters-card__toggle-glyph" aria-hidden="true">
+                <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M3.5 4.25h13m-11 0 3.75 5.25v5.25l3-1.5v-3.75l3.75-5.25"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+              <span
+                className={`filters-card__toggle-arrow${areFiltersExpanded ? " is-open" : ""}`}
+                aria-hidden="true"
+              >
+                <svg viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" fill="none">
+                  <path
+                    d="M4 2.5 8 6l-4 3.5"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+            </button>
+            <div className="filters-card__content" id={filtersContentId} hidden={!areFiltersExpanded}>
+              <div className="filters-card__header">
+                <h2>{t("filters.card.title")}</h2>
+              </div>
+              <div
+                className="filters-card__section"
+                role="group"
+                aria-label={t("aria.companionSection")}
+              >
+                <span className="filters-card__section-title">{t("identity.companion.sectionTitle")}</span>
+                <div className="companion-toggle" role="group" aria-label={t("aria.companionFilter")}>
+                  {FAMILIER_FILTERS.map((filter) => {
+                    const isActive = familierFilters[filter.key] !== false;
+                    const label = t(filter.labelKey);
+                    const title = isActive
+                      ? t("companions.toggle.hide", { label: label.toLowerCase() })
+                      : t("companions.toggle.show", { label: label.toLowerCase() });
+
+                    return (
+                      <button
+                        key={filter.key}
+                        type="button"
+                        className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
+                        onClick={() => handleFamilierFilterToggle(filter.key)}
+                        aria-pressed={isActive}
+                        title={title}
+                      >
+                        <span className="companion-toggle__indicator" aria-hidden="true">
+                          {isActive ? (
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path
+                                d="M5 10.5 8.2 13.7 15 6.5"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          ) : (
+                            <span className="companion-toggle__dot" />
+                          )}
+                        </span>
+                        <span className="companion-toggle__label">{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {areAllFamilierFiltersDisabled ? (
+                  <p className="companion-toggle__empty" role="status">{t("identity.companion.empty")}</p>
+                ) : null}
+              </div>
+              <div
+                className="filters-card__section"
+                role="group"
+                aria-label={t("aria.itemFlagSection")}
+              >
+                <span className="filters-card__section-title">{t("identity.filters.sectionTitle")}</span>
+                <div
+                  className="companion-toggle companion-toggle--item-flags"
+                  role="group"
+                  aria-label={t("aria.itemFlagFilter")}
+                >
+                  {ITEM_FLAG_FILTERS.map((filter) => {
+                    const isActive = itemFlagFilters[filter.key] !== false;
+                    const label = t(filter.labelKey);
+                    const title = isActive
+                      ? t("companions.toggle.hide", { label: label.toLowerCase() })
+                      : t("companions.toggle.show", { label: label.toLowerCase() });
+
+                    return (
+                      <button
+                        key={filter.key}
+                        type="button"
+                        className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
+                        onClick={() => handleItemFlagFilterToggle(filter.key)}
+                        aria-pressed={isActive}
+                        title={title}
+                      >
+                        <span className="companion-toggle__indicator" aria-hidden="true">
+                          {isActive ? (
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path
+                                d="M5 10.5 8.2 13.7 15 6.5"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          ) : (
+                            <span className="companion-toggle__dot" />
+                          )}
+                        </span>
+                        <span className="companion-toggle__label">{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div
+                className="filters-card__section"
+                role="group"
+                aria-label={t("aria.optionalItemFilter")}
+              >
+                <span className="filters-card__section-title">{t("identity.filters.optionalTitle")}</span>
+                <div
+                  className="companion-toggle companion-toggle--item-slots"
+                  role="group"
+                  aria-label={t("aria.optionalItemFilter")}
+                >
+                  {OPTIONAL_ITEM_FILTERS.map((filter) => {
+                    const isActive = itemSlotFilters[filter.key] !== false;
+                    const label = t(filter.labelKey);
+                    const title = isActive
+                      ? t("companions.toggle.hide", { label: label.toLowerCase() })
+                      : t("companions.toggle.show", { label: label.toLowerCase() });
+
+                    return (
+                      <button
+                        key={filter.key}
+                        type="button"
+                        className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
+                        onClick={() => handleItemSlotFilterToggle(filter.key)}
+                        aria-pressed={isActive}
+                        title={title}
+                      >
+                        <span className="companion-toggle__indicator" aria-hidden="true">
+                          {isActive ? (
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path
+                                d="M5 10.5 8.2 13.7 15 6.5"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          ) : (
+                            <span className="companion-toggle__dot" />
+                          )}
+                        </span>
+                        <span className="companion-toggle__label">{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </aside>
         </section>
 
         <section className="suggestions">
@@ -4417,7 +5315,13 @@ export default function Home({ initialBreeds = [] }) {
           ) : null}
           {colors.length === 0 ? (
             <div className="suggestions__empty">
-              <p>{t("suggestions.empty.start")}</p>
+              <p>
+                {isItemsMode
+                  ? hasSelectedItems
+                    ? t("suggestions.empty.itemsPalette")
+                    : t("suggestions.empty.items")
+                  : t("suggestions.empty.start")}
+              </p>
             </div>
           ) : !Number.isFinite(activeClassId) ? (
             <div className="suggestions__status suggestions__status--empty">
@@ -4571,7 +5475,8 @@ export default function Home({ initialBreeds = [] }) {
                                           name: item.name ?? slotLabel,
                                         });
                                         const rerollDisabled =
-                                          (recommendations?.[item.slotType]?.length ?? 0) <= 1;
+                                          (recommendations?.[item.slotType]?.length ?? 0) <= 1 ||
+                                          Boolean(selectedItemsBySlot?.[item.slotType]);
                                         const flagEntries = buildItemFlags(item, t);
                                         const overlayFlags = flagEntries.filter((flag) => flag.key !== "colorable");
                                         const flagSummary = flagEntries.map((flag) => flag.label).join(", ");
@@ -4682,7 +5587,8 @@ export default function Home({ initialBreeds = [] }) {
                                         const slotLabel = slotLabelKey ? t(slotLabelKey) : item.slotType;
                                         const itemName = item.name ?? slotLabel;
                                         const rerollDisabled =
-                                          (recommendations?.[item.slotType]?.length ?? 0) <= 1;
+                                          (recommendations?.[item.slotType]?.length ?? 0) <= 1 ||
+                                          Boolean(selectedItemsBySlot?.[item.slotType]);
                                         const flagEntries = buildItemFlags(item, t);
                                         const flagSummary = flagEntries.map((flag) => flag.label).join(", ");
                                         return (
@@ -4881,12 +5787,10 @@ export default function Home({ initialBreeds = [] }) {
                               <p className="suggestions__group-empty">{t("suggestions.panel.empty")}</p>
                             ) : (
                               <ul className="suggestions__deck">
-                                {items.map(({ item, slotIndex }) => {
+                                {items.map(({ item }) => {
                                   const hasPalette = item.palette.length > 0;
                                   const paletteFromImage = item.paletteSource === "image" && hasPalette;
                                   const notes = [];
-                                  const typeLabel =
-                                    ITEM_TYPE_LABEL_KEYS[type] ? t(ITEM_TYPE_LABEL_KEYS[type]) : type;
                                   const isColorable = item.isColorable === true;
                                   const thumbClasses = ["suggestions__thumb"];
                                   if (isColorable) {
@@ -4900,9 +5804,19 @@ export default function Home({ initialBreeds = [] }) {
                                   if (!item.imageUrl) {
                                     notes.push(t("errors.imageMissing"));
                                   }
+                                  const lockedSelection = selectedItemsBySlot?.[type];
+                                  const isLocked = Boolean(lockedSelection) &&
+                                    ((lockedSelection?.id && item.id === lockedSelection.id) ||
+                                      (Number.isFinite(lockedSelection?.ankamaId) &&
+                                        Number.isFinite(item.ankamaId) &&
+                                        lockedSelection.ankamaId === item.ankamaId));
+                                  const cardClasses = ["suggestions__card"];
+                                  if (isLocked) {
+                                    cardClasses.push("suggestions__card--locked");
+                                  }
 
                                   return (
-                                    <li key={item.id} className="suggestions__card">
+                                    <li key={item.id} className={cardClasses.join(" ")}>
                                       <div className={thumbClasses.join(" ")}>
                                         {item.imageUrl ? (
                                           <img
@@ -4926,6 +5840,11 @@ export default function Home({ initialBreeds = [] }) {
                                           >
                                             {item.name}
                                           </a>
+                                          {isLocked ? (
+                                            <span className="suggestions__badge suggestions__badge--locked">
+                                              {t("items.selector.lockedBadge")}
+                                            </span>
+                                          ) : null}
                                         </div>
                                         <div
                                           className={`suggestions__swatches${hasPalette ? "" : " suggestions__swatches--empty"}`}
