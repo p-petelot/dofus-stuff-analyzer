@@ -137,8 +137,7 @@ function humanizeBackgroundName(value) {
     .replace(/\.png$/i, "")
     .replace(/[-_]+/g, " ")
     .replace(/\s+/g, " ")
-    .trim()
-    .replace(/\b\w/g, (match) => match.toUpperCase());
+    .trim();
 }
 
 function stripHtml(value) {
@@ -926,6 +925,12 @@ const OPTIONAL_ITEM_FILTERS = OPTIONAL_ITEM_TYPES.map((type) => ({
   labelKey: ITEM_TYPE_LABEL_KEYS[type] ?? type,
 }));
 
+const PREVIEW_BACKGROUND_MODES = Object.freeze({
+  AUTO: "auto",
+  RANDOM: "random",
+  MANUAL: "manual",
+});
+
 const DEFAULT_FAMILIER_FILTER_STATE = Object.freeze(
   FAMILIER_FILTERS.reduce((accumulator, filter) => {
     const isDefaultEnabled = filter.key === "pet" || filter.key === "mount";
@@ -950,6 +955,7 @@ const DEFAULT_ITEM_SLOT_FILTER_STATE = Object.freeze(
 
 const DEFAULT_PREVIEW_BACKGROUND_STATE = Object.freeze({
   enabled: false,
+  mode: PREVIEW_BACKGROUND_MODES.AUTO,
   selection: null,
 });
 
@@ -2638,8 +2644,14 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const [isPreviewBackgroundEnabled, setPreviewBackgroundEnabled] = useState(
     DEFAULT_PREVIEW_BACKGROUND_STATE.enabled
   );
+  const [previewBackgroundMode, setPreviewBackgroundMode] = useState(
+    DEFAULT_PREVIEW_BACKGROUND_STATE.mode
+  );
   const [selectedPreviewBackgroundId, setSelectedPreviewBackgroundId] = useState(
     DEFAULT_PREVIEW_BACKGROUND_STATE.selection
+  );
+  const [randomPreviewBackgroundAssignments, setRandomPreviewBackgroundAssignments] = useState(
+    {}
   );
   const [previewBackgroundSwatches, setPreviewBackgroundSwatches] = useState({});
   const previewBackgroundById = useMemo(() => {
@@ -2654,10 +2666,28 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const hasPreviewBackgroundOptions = previewBackgroundOptions.length > 0;
 
   useEffect(() => {
-    if (!hasPreviewBackgroundOptions && isPreviewBackgroundEnabled) {
+    if (hasPreviewBackgroundOptions) {
+      return;
+    }
+    if (isPreviewBackgroundEnabled) {
       setPreviewBackgroundEnabled(false);
     }
-  }, [hasPreviewBackgroundOptions, isPreviewBackgroundEnabled]);
+    if (previewBackgroundMode !== DEFAULT_PREVIEW_BACKGROUND_STATE.mode) {
+      setPreviewBackgroundMode(DEFAULT_PREVIEW_BACKGROUND_STATE.mode);
+    }
+    if (selectedPreviewBackgroundId !== DEFAULT_PREVIEW_BACKGROUND_STATE.selection) {
+      setSelectedPreviewBackgroundId(DEFAULT_PREVIEW_BACKGROUND_STATE.selection);
+    }
+    if (Object.keys(randomPreviewBackgroundAssignments).length) {
+      setRandomPreviewBackgroundAssignments({});
+    }
+  }, [
+    hasPreviewBackgroundOptions,
+    isPreviewBackgroundEnabled,
+    previewBackgroundMode,
+    randomPreviewBackgroundAssignments,
+    selectedPreviewBackgroundId,
+  ]);
 
   useEffect(() => {
     if (!selectedPreviewBackgroundId) {
@@ -2794,21 +2824,24 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     () =>
       hasFilterDifferences(familierFilters, DEFAULT_FAMILIER_FILTER_STATE) ||
       hasFilterDifferences(itemFlagFilters, DEFAULT_ITEM_FLAG_FILTER_STATE) ||
-      hasFilterDifferences(itemSlotFilters, DEFAULT_ITEM_SLOT_FILTER_STATE) ||
+      hasFilterDifferences(itemSlotFilters, DEFAULT_ITEM_SLOT_FILTER_STATE),
+    [familierFilters, itemFlagFilters, itemSlotFilters]
+  );
+
+  const hasCustomPreviewBackgroundSettings = useMemo(
+    () =>
       isPreviewBackgroundEnabled !== DEFAULT_PREVIEW_BACKGROUND_STATE.enabled ||
-      (isPreviewBackgroundEnabled &&
+      previewBackgroundMode !== DEFAULT_PREVIEW_BACKGROUND_STATE.mode ||
+      (previewBackgroundMode === PREVIEW_BACKGROUND_MODES.MANUAL &&
         selectedPreviewBackgroundId !== DEFAULT_PREVIEW_BACKGROUND_STATE.selection),
-    [
-      familierFilters,
-      isPreviewBackgroundEnabled,
-      itemFlagFilters,
-      itemSlotFilters,
-      selectedPreviewBackgroundId,
-    ]
+    [isPreviewBackgroundEnabled, previewBackgroundMode, selectedPreviewBackgroundId]
   );
 
   const [areFiltersExpanded, setFiltersExpanded] = useState(false);
+  const [arePreviewBackgroundOptionsExpanded, setPreviewBackgroundOptionsExpanded] =
+    useState(false);
   const filtersContentId = useId();
+  const previewBackgroundContentId = useId();
   const filtersCardClassName = useMemo(() => {
     const classes = ["filters-card"];
     if (areFiltersExpanded) {
@@ -2819,6 +2852,17 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     }
     return classes.join(" ");
   }, [areFiltersExpanded, hasCustomFilters]);
+
+  const previewBackgroundCardClassName = useMemo(() => {
+    const classes = ["filters-card", "filters-card--preview"];
+    if (arePreviewBackgroundOptionsExpanded) {
+      classes.push("is-expanded");
+    }
+    if (hasCustomPreviewBackgroundSettings) {
+      classes.push("filters-card--active");
+    }
+    return classes.join(" ");
+  }, [arePreviewBackgroundOptionsExpanded, hasCustomPreviewBackgroundSettings]);
 
   const referenceClassName = useMemo(() => {
     const classes = ["reference"];
@@ -2936,11 +2980,21 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     setFiltersExpanded((value) => !value);
   }, []);
 
+  const handlePreviewBackgroundCardToggle = useCallback(() => {
+    setPreviewBackgroundOptionsExpanded((value) => !value);
+  }, []);
+
   useEffect(() => {
     if (hasCustomFilters) {
       setFiltersExpanded(true);
     }
   }, [hasCustomFilters]);
+
+  useEffect(() => {
+    if (hasCustomPreviewBackgroundSettings) {
+      setPreviewBackgroundOptionsExpanded(true);
+    }
+  }, [hasCustomPreviewBackgroundSettings]);
 
   const handleFamilierFilterToggle = useCallback((key) => {
     if (!FAMILIER_FILTERS.some((filter) => filter.key === key)) {
@@ -3868,6 +3922,45 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     return map;
   }, [previewBackgroundOptions, previewBackgroundSwatches, proposals]);
 
+  useEffect(() => {
+    if (
+      previewBackgroundMode !== PREVIEW_BACKGROUND_MODES.RANDOM ||
+      !isPreviewBackgroundEnabled ||
+      !previewBackgroundOptions.length ||
+      !proposals.length
+    ) {
+      setRandomPreviewBackgroundAssignments((previous = {}) => {
+        if (!previous || Object.keys(previous).length === 0) {
+          return previous;
+        }
+        return {};
+      });
+      return;
+    }
+
+    setRandomPreviewBackgroundAssignments(() => {
+      const assignments = {};
+      proposals.forEach((proposal) => {
+        if (!proposal?.id) {
+          return;
+        }
+        const option =
+          previewBackgroundOptions[
+            Math.floor(Math.random() * previewBackgroundOptions.length)
+          ];
+        if (option?.id) {
+          assignments[proposal.id] = option.id;
+        }
+      });
+      return assignments;
+    });
+  }, [
+    isPreviewBackgroundEnabled,
+    previewBackgroundMode,
+    previewBackgroundOptions,
+    proposals,
+  ]);
+
   const proposalCount = proposals.length;
   const safeActiveProposalIndex = proposalCount
     ? Math.min(activeProposal, proposalCount - 1)
@@ -3891,7 +3984,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
 
   useEffect(() => {
     lookPreviewsRef.current = lookPreviews;
-  }, [lookPreviews]);
+  }, [lookPreviews, t]);
 
   useEffect(() => {
     if (!proposals.length) {
@@ -4151,8 +4244,10 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     try {
       setDownloadingPreviewId(proposal.id);
 
-      const fallbackName = `skin-${proposal.index + 1}`;
-      const baseName = slugify(proposal.className ?? fallbackName) || fallbackName;
+      const defaultLabel = t("suggestions.render.defaultName", { index: proposal.index + 1 });
+      const fallbackName = proposal.className ?? defaultLabel;
+      const baseName =
+        slugify(fallbackName) || slugify(defaultLabel) || `proposition-${proposal.index + 1}`;
 
       if (hasLookPreview) {
         const response = await fetch(lookPreview.dataUrl);
@@ -5291,43 +5386,44 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
               </div>
             </div>
           </div>
-          <aside className={filtersCardClassName} role="group" aria-label={t("aria.filtersCard")}>
-            <button
-              type="button"
-              className="filters-card__toggle"
-              onClick={handleFiltersToggle}
-              aria-expanded={areFiltersExpanded}
-              aria-controls={filtersContentId}
-            >
-              <span className="sr-only">{t("filters.card.title")}</span>
-              {hasCustomFilters ? <span className="filters-card__toggle-indicator" aria-hidden="true" /> : null}
-              <span className="filters-card__toggle-glyph" aria-hidden="true">
-                <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M3.5 4.25h13m-11 0 3.75 5.25v5.25l3-1.5v-3.75l3.75-5.25"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </span>
-              <span
-                className={`filters-card__toggle-arrow${areFiltersExpanded ? " is-open" : ""}`}
-                aria-hidden="true"
+          <div className="filters-card-stack">
+            <aside className={filtersCardClassName} role="group" aria-label={t("aria.filtersCard")}>
+              <button
+                type="button"
+                className="filters-card__toggle"
+                onClick={handleFiltersToggle}
+                aria-expanded={areFiltersExpanded}
+                aria-controls={filtersContentId}
               >
-                <svg viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" fill="none">
-                  <path
-                    d="M4 2.5 8 6l-4 3.5"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </span>
-            </button>
-            <div className="filters-card__content" id={filtersContentId} hidden={!areFiltersExpanded}>
+                <span className="sr-only">{t("filters.card.title")}</span>
+                {hasCustomFilters ? <span className="filters-card__toggle-indicator" aria-hidden="true" /> : null}
+                <span className="filters-card__toggle-glyph" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path
+                      d="M3.5 4.25h13m-11 0 3.75 5.25v5.25l3-1.5v-3.75l3.75-5.25"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+                <span
+                  className={`filters-card__toggle-arrow${areFiltersExpanded ? " is-open" : ""}`}
+                  aria-hidden="true"
+                >
+                  <svg viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" fill="none">
+                    <path
+                      d="M4 2.5 8 6l-4 3.5"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+              <div className="filters-card__content" id={filtersContentId} hidden={!areFiltersExpanded}>
               <div className="filters-card__header">
                 <h2>{t("filters.card.title")}</h2>
               </div>
@@ -5474,114 +5570,202 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                   })}
                 </div>
               </div>
-              <div
-                className="filters-card__section"
-                role="group"
-                aria-label={t("aria.previewBackgroundSection")}
+              </div>
+            </aside>
+            <aside
+              className={previewBackgroundCardClassName}
+              role="group"
+              aria-label={t("aria.previewBackgroundCard")}
+            >
+              <button
+                type="button"
+                className="filters-card__toggle"
+                onClick={handlePreviewBackgroundCardToggle}
+                aria-expanded={arePreviewBackgroundOptionsExpanded}
+                aria-controls={previewBackgroundContentId}
               >
-                <span className="filters-card__section-title">
-                  {t("identity.previewBackground.sectionTitle")}
-                </span>
-                <div
-                  className="companion-toggle companion-toggle--preview-background"
-                  role="group"
-                  aria-label={t("aria.previewBackgroundToggle")}
-                >
-                  <button
-                    type="button"
-                    className={`companion-toggle__chip${
-                      isPreviewBackgroundEnabled ? " is-active" : ""
-                    }`}
-                    onClick={() => {
-                      if (!hasPreviewBackgroundOptions) {
-                        return;
-                      }
-                      setPreviewBackgroundEnabled((previous) => !previous);
-                    }}
-                    aria-pressed={isPreviewBackgroundEnabled}
-                    title={
-                      isPreviewBackgroundEnabled
-                        ? t("identity.previewBackground.disable")
-                        : t("identity.previewBackground.enable")
-                    }
-                    disabled={!hasPreviewBackgroundOptions}
-                  >
-                    <span className="companion-toggle__indicator" aria-hidden="true">
-                      {isPreviewBackgroundEnabled ? (
-                        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path
-                            d="M5 10.5 8.2 13.7 15 6.5"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      ) : (
-                        <span className="companion-toggle__dot" />
-                      )}
-                    </span>
-                    <span className="companion-toggle__label">
-                      {t("identity.previewBackground.toggleLabel")}
-                    </span>
-                  </button>
-                </div>
-                {!hasPreviewBackgroundOptions ? (
-                  <p className="preview-background-picker__empty">
-                    {t("identity.previewBackground.empty")}
-                  </p>
+                <span className="sr-only">{t("previewBackground.card.title")}</span>
+                {hasCustomPreviewBackgroundSettings ? (
+                  <span className="filters-card__toggle-indicator" aria-hidden="true" />
                 ) : null}
-                {hasPreviewBackgroundOptions && isPreviewBackgroundEnabled ? (
+                <span className="filters-card__toggle-glyph" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect
+                      x="3.25"
+                      y="4"
+                      width="13.5"
+                      height="9.5"
+                      rx="2"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                    />
+                    <path
+                      d="m5.5 11 3-3a1 1 0 0 1 1.5.05l2.35 3.05 1.4-1.4 2.25 2.25"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <circle cx="7.25" cy="6.75" r="0.9" fill="currentColor" />
+                  </svg>
+                </span>
+                <span
+                  className={`filters-card__toggle-arrow${
+                    arePreviewBackgroundOptionsExpanded ? " is-open" : ""
+                  }`}
+                  aria-hidden="true"
+                >
+                  <svg viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" fill="none">
+                    <path
+                      d="M4 2.5 8 6l-4 3.5"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+              <div
+                className="filters-card__content"
+                id={previewBackgroundContentId}
+                hidden={!arePreviewBackgroundOptionsExpanded}
+              >
+                <div className="filters-card__header">
+                  <h2>{t("previewBackground.card.title")}</h2>
+                </div>
+                <div
+                  className="filters-card__section"
+                  role="group"
+                  aria-label={t("aria.previewBackgroundSection")}
+                >
+                  <span className="filters-card__section-title">
+                    {t("identity.previewBackground.sectionTitle")}
+                  </span>
                   <div
-                    className="preview-background-picker"
-                    role="radiogroup"
-                    aria-label={t("aria.previewBackgroundPicker")}
+                    className="companion-toggle companion-toggle--preview-background"
+                    role="group"
+                    aria-label={t("aria.previewBackgroundToggle")}
                   >
                     <button
                       type="button"
-                      className={`preview-background-picker__option${
-                        selectedPreviewBackgroundId === null ? " is-active" : ""
-                      } preview-background-picker__option--auto`}
-                      onClick={() => setSelectedPreviewBackgroundId(null)}
-                      role="radio"
-                      aria-checked={selectedPreviewBackgroundId === null}
-                      aria-label={t("identity.previewBackground.chooseAuto")}
-                      style={{
-                        backgroundImage:
-                          "linear-gradient(135deg, rgba(99, 102, 241, 0.72), rgba(14, 165, 233, 0.72))",
+                      className={`companion-toggle__chip${
+                        isPreviewBackgroundEnabled ? " is-active" : ""
+                      }`}
+                      onClick={() => {
+                        if (!hasPreviewBackgroundOptions) {
+                          return;
+                        }
+                        setPreviewBackgroundEnabled((previous) => !previous);
                       }}
+                      aria-pressed={isPreviewBackgroundEnabled}
+                      title={
+                        isPreviewBackgroundEnabled
+                          ? t("identity.previewBackground.disable")
+                          : t("identity.previewBackground.enable")
+                      }
+                      disabled={!hasPreviewBackgroundOptions}
                     >
-                      <span className="preview-background-picker__label">
-                        {t("identity.previewBackground.auto")}
+                      <span className="companion-toggle__indicator" aria-hidden="true">
+                        {isPreviewBackgroundEnabled ? (
+                          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                              d="M5 10.5 8.2 13.7 15 6.5"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        ) : (
+                          <span className="companion-toggle__dot" />
+                        )}
+                      </span>
+                      <span className="companion-toggle__label">
+                        {t("identity.previewBackground.toggleLabel")}
                       </span>
                     </button>
-                    {previewBackgroundOptions.map((background) => {
-                      const isActive = selectedPreviewBackgroundId === background.id;
-                      const ariaLabel = t("identity.previewBackground.choose", {
-                        label: background.label,
-                      });
-                      return (
-                        <button
-                          key={background.id}
-                          type="button"
-                          className={`preview-background-picker__option${
-                            isActive ? " is-active" : ""
-                          }`}
-                          onClick={() => setSelectedPreviewBackgroundId(background.id)}
-                          role="radio"
-                          aria-checked={isActive}
-                          aria-label={ariaLabel}
-                          style={{ backgroundImage: `url(${background.src})` }}
-                        >
-                          <span className="preview-background-picker__label">{background.label}</span>
-                        </button>
-                      );
-                    })}
                   </div>
-                ) : null}
+                  {!hasPreviewBackgroundOptions ? (
+                    <p className="preview-background-picker__empty">
+                      {t("identity.previewBackground.empty")}
+                    </p>
+                  ) : null}
+                  {hasPreviewBackgroundOptions && isPreviewBackgroundEnabled ? (
+                    <div
+                      className="preview-background-picker"
+                      role="radiogroup"
+                      aria-label={t("aria.previewBackgroundPicker")}
+                    >
+                      <button
+                        type="button"
+                        className={`preview-background-picker__option${
+                          previewBackgroundMode === PREVIEW_BACKGROUND_MODES.AUTO ? " is-active" : ""
+                        } preview-background-picker__option--auto`}
+                        onClick={() => setPreviewBackgroundMode(PREVIEW_BACKGROUND_MODES.AUTO)}
+                        role="radio"
+                        aria-checked={previewBackgroundMode === PREVIEW_BACKGROUND_MODES.AUTO}
+                        aria-label={t("identity.previewBackground.chooseAuto")}
+                        style={{
+                          backgroundImage:
+                            "linear-gradient(135deg, rgba(99, 102, 241, 0.72), rgba(14, 165, 233, 0.72))",
+                        }}
+                      >
+                        <span className="preview-background-picker__label">
+                          {t("identity.previewBackground.auto")}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`preview-background-picker__option${
+                          previewBackgroundMode === PREVIEW_BACKGROUND_MODES.RANDOM ? " is-active" : ""
+                        } preview-background-picker__option--random`}
+                        onClick={() => setPreviewBackgroundMode(PREVIEW_BACKGROUND_MODES.RANDOM)}
+                        role="radio"
+                        aria-checked={previewBackgroundMode === PREVIEW_BACKGROUND_MODES.RANDOM}
+                        aria-label={t("identity.previewBackground.chooseRandom")}
+                        style={{
+                          backgroundImage:
+                            "linear-gradient(135deg, rgba(236, 72, 153, 0.72), rgba(59, 130, 246, 0.72))",
+                        }}
+                      >
+                        <span className="preview-background-picker__label">
+                          {t("identity.previewBackground.random")}
+                        </span>
+                      </button>
+                      {previewBackgroundOptions.map((background) => {
+                        const isActive =
+                          previewBackgroundMode === PREVIEW_BACKGROUND_MODES.MANUAL &&
+                          selectedPreviewBackgroundId === background.id;
+                        const ariaLabel = t("identity.previewBackground.choose", {
+                          label: background.label,
+                        });
+                        return (
+                          <button
+                            key={background.id}
+                            type="button"
+                            className={`preview-background-picker__option${
+                              isActive ? " is-active" : ""
+                            }`}
+                            onClick={() => {
+                              setPreviewBackgroundMode(PREVIEW_BACKGROUND_MODES.MANUAL);
+                              setSelectedPreviewBackgroundId(background.id);
+                            }}
+                            role="radio"
+                            aria-checked={isActive}
+                            aria-label={ariaLabel}
+                            style={{ backgroundImage: `url(${background.src})` }}
+                          >
+                            <span className="preview-background-picker__label">{background.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
               </div>
-            </div>
-          </aside>
+            </aside>
+          </div>
         </section>
 
         <section className="suggestions">
@@ -5708,18 +5892,35 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                               const previewSrc = lookLoaded ? lookPreview.dataUrl : null;
                               const heroSrc = !lookLoaded ? proposal.heroImage ?? null : null;
                               const previewAlt = t("suggestions.render.alt", { index: proposal.index + 1 });
-                              const manualBackground = selectedPreviewBackgroundId
-                                ? previewBackgroundById.get(selectedPreviewBackgroundId)
-                                : null;
                               const autoBackgroundId = previewBackgroundAutoByProposal.get(proposal.id);
                               const autoBackground = autoBackgroundId
                                 ? previewBackgroundById.get(autoBackgroundId)
                                 : null;
+                              let preferredBackground = null;
+                              if (previewBackgroundMode === PREVIEW_BACKGROUND_MODES.MANUAL) {
+                                preferredBackground = selectedPreviewBackgroundId
+                                  ? previewBackgroundById.get(selectedPreviewBackgroundId)
+                                  : null;
+                                if (!preferredBackground) {
+                                  preferredBackground = autoBackground;
+                                }
+                              } else if (previewBackgroundMode === PREVIEW_BACKGROUND_MODES.RANDOM) {
+                                const randomBackgroundId =
+                                  randomPreviewBackgroundAssignments?.[proposal.id] ?? null;
+                                preferredBackground = randomBackgroundId
+                                  ? previewBackgroundById.get(randomBackgroundId)
+                                  : null;
+                                if (!preferredBackground) {
+                                  preferredBackground = autoBackground;
+                                }
+                              } else {
+                                preferredBackground = autoBackground;
+                              }
                               const fallbackBackground = isPreviewBackgroundEnabled
                                 ? previewBackgroundOptions[proposal.index % previewBackgroundOptions.length] ?? null
                                 : null;
                               const activeBackground = isPreviewBackgroundEnabled
-                                ? manualBackground ?? autoBackground ?? fallbackBackground
+                                ? preferredBackground ?? fallbackBackground
                                 : null;
                               const canvasStyle = activeBackground
                                 ? {
