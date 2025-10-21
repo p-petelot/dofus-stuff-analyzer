@@ -354,19 +354,19 @@ a {
 
 @media (min-width: 960px) {
   .workspace {
-    grid-template-columns: minmax(440px, 1.35fr) minmax(300px, 1fr);
+    grid-template-columns: minmax(440px, 1.3fr) minmax(340px, 1.05fr);
   }
 }
 
 @media (min-width: 1360px) {
   .workspace {
-    grid-template-columns: minmax(520px, 1.6fr) minmax(300px, 1fr) minmax(280px, 0.9fr);
+    grid-template-columns: minmax(520px, 1.5fr) minmax(360px, 1.08fr) minmax(320px, 0.95fr);
   }
 }
 
 @media (min-width: 1760px) {
   .workspace {
-    grid-template-columns: minmax(560px, 1.7fr) minmax(320px, 1fr) minmax(300px, 0.95fr) minmax(280px, 0.85fr);
+    grid-template-columns: minmax(560px, 1.55fr) minmax(380px, 1.05fr) minmax(340px, 0.95fr) minmax(300px, 0.85fr);
   }
 }
 
@@ -1253,6 +1253,20 @@ a {
   align-self: start;
 }
 
+@media (min-width: 960px) {
+  .palette,
+  .identity-card {
+    min-width: 340px;
+  }
+}
+
+@media (min-width: 1360px) {
+  .palette,
+  .identity-card {
+    min-width: 360px;
+  }
+}
+
 .identity-card__section,
 .filters-card__section {
   display: flex;
@@ -1299,13 +1313,13 @@ a {
   background: rgba(8, 12, 26, 0.78);
   color: var(--text-soft);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 14px 12px;
-  min-width: 56px;
-  min-height: 82px;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  min-width: 74px;
+  min-height: 48px;
   cursor: pointer;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
@@ -1335,7 +1349,7 @@ a {
 
 .filters-card__toggle-indicator {
   position: absolute;
-  top: 10px;
+  top: 9px;
   right: 10px;
   width: 9px;
   height: 9px;
@@ -1349,8 +1363,8 @@ a {
 }
 
 .filters-card__toggle-glyph {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1363,8 +1377,8 @@ a {
 }
 
 .filters-card__toggle-arrow {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1384,8 +1398,8 @@ a {
 .filters-card__content {
   position: absolute;
   top: 0;
-  left: 0;
-  transform: translateX(calc(100% + 12px));
+  left: calc(100% + 12px);
+  transform: none;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1446,12 +1460,11 @@ a {
   }
 
   .filters-card__toggle {
-    flex-direction: row;
     justify-content: space-between;
     min-width: 100%;
     min-height: 0;
-    padding: 12px 14px;
-    gap: 10px;
+    padding: 12px 18px;
+    gap: 12px;
   }
 
   .filters-card__toggle-glyph {
@@ -2749,6 +2762,12 @@ a {
   width: 100%;
   max-width: 1080px;
   margin: 0 auto;
+}
+
+@media (min-width: 960px) {
+  .suggestions {
+    margin-top: -6px;
+  }
 }
 
 .suggestions__header {
