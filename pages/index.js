@@ -2611,6 +2611,17 @@ export default function Home({ initialBreeds = [] }) {
   );
   const areAllFamilierFiltersDisabled = activeFamilierFilterCount === 0;
 
+  const referenceClassName = useMemo(() => {
+    const classes = ["reference"];
+    if (isItemsMode) {
+      classes.push("reference--items");
+      if (activeItemSlot) {
+        classes.push("reference--items-panel-open");
+      }
+    }
+    return classes.join(" ");
+  }, [activeItemSlot, isItemsMode]);
+
   const colorsCount = colors.length;
 
   const selectedItemHexes = useMemo(() => {
@@ -4559,7 +4570,7 @@ export default function Home({ initialBreeds = [] }) {
         </div>
 
         <section className="workspace">
-          <div className="reference">
+          <div className={referenceClassName}>
             <div className="reference__header">
               <div className="reference__title">
                 <h2>{t("workspace.referenceTitle")}</h2>
@@ -4738,127 +4749,123 @@ export default function Home({ initialBreeds = [] }) {
                     );
                   })}
                 </div>
-                <div className={`item-selector__panel${activeItemSlot ? " is-open" : ""}`}>
-                  {activeItemSlot ? (
-                    <>
-                      <div className="item-selector__panel-header">
-                        <div className="item-selector__panel-title">
-                          <h3>
-                            {t("items.selector.title", {
-                              type:
-                                ITEM_TYPE_LABEL_KEYS[activeItemSlot]
-                                  ? t(ITEM_TYPE_LABEL_KEYS[activeItemSlot])
-                                  : activeItemSlot,
-                            })}
-                          </h3>
-                          {selectedItemsBySlot?.[activeItemSlot] ? (
-                            <span className="item-selector__panel-badge">
-                              {t("items.selector.lockedBadge")}
-                            </span>
-                          ) : null}
-                        </div>
-                        {activeItemSlot ? (
-                          <div className="item-selector__panel-meta">
-                            <span
-                              className={`item-selector__panel-count${
-                                showFilteredCount ? " item-selector__panel-count--filtered" : ""
-                              }`}
-                            >
-                              {activeSlotCountLabel}
-                            </span>
-                          </div>
+                {activeItemSlot ? (
+                  <div className="item-selector__panel is-open">
+                    <div className="item-selector__panel-header">
+                      <div className="item-selector__panel-title">
+                        <h3>
+                          {t("items.selector.title", {
+                            type:
+                              ITEM_TYPE_LABEL_KEYS[activeItemSlot]
+                                ? t(ITEM_TYPE_LABEL_KEYS[activeItemSlot])
+                                : activeItemSlot,
+                          })}
+                        </h3>
+                        {selectedItemsBySlot?.[activeItemSlot] ? (
+                          <span className="item-selector__panel-badge">
+                            {t("items.selector.lockedBadge")}
+                          </span>
                         ) : null}
-                        <button
-                          type="button"
-                          className="item-selector__panel-close"
-                          onClick={handleCloseItemPanel}
-                          aria-label={t("aria.closeItemPanel")}
+                      </div>
+                      <div className="item-selector__panel-meta">
+                        <span
+                          className={`item-selector__panel-count${
+                            showFilteredCount ? " item-selector__panel-count--filtered" : ""
+                          }`}
                         >
-                          <span aria-hidden="true">×</span>
-                        </button>
+                          {activeSlotCountLabel}
+                        </span>
                       </div>
-                      <div className="item-selector__search">
-                        <label className="sr-only" htmlFor="item-search">
-                          {t("items.selector.searchLabel")}
-                        </label>
-                        <input
-                          id="item-search"
-                          type="search"
-                          value={itemSearchQuery}
-                          onChange={handleItemSearchChange}
-                          placeholder={t("items.selector.searchPlaceholder")}
-                        />
-                      </div>
-                      <div className="item-selector__list" role="list">
-                        {itemsLoading && filteredItemOptions.length === 0 ? (
-                          <p className="item-selector__status">{t("items.selector.loading")}</p>
-                        ) : null}
-                        {itemsError && filteredItemOptions.length === 0 ? (
-                          <p className="item-selector__status item-selector__status--error">{itemsError}</p>
-                        ) : null}
-                        {!itemsLoading && filteredItemOptions.length === 0 ? (
-                          <p className="item-selector__status">{t("items.selector.empty")}</p>
-                        ) : null}
-                        {filteredItemOptions.length > 0 ? (
-                          <ul>
-                            {filteredItemOptions.map((item) => {
-                              const isSelected =
-                                Boolean(selectedItemsBySlot?.[activeItemSlot]) &&
-                                ((selectedItemsBySlot[activeItemSlot]?.id &&
-                                  item.id === selectedItemsBySlot[activeItemSlot].id) ||
-                                  (Number.isFinite(selectedItemsBySlot[activeItemSlot]?.ankamaId) &&
-                                    Number.isFinite(item.ankamaId) &&
-                                    selectedItemsBySlot[activeItemSlot].ankamaId === item.ankamaId));
-                              const optionClasses = ["item-option"];
-                              if (isSelected) {
-                                optionClasses.push("item-option--selected");
-                              }
-                              return (
-                                <li key={item.id} className={optionClasses.join(" ")}>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSelectItemForSlot(activeItemSlot, item)}
-                                    aria-pressed={isSelected}
-                                  >
-                                    <span className="item-option__media" aria-hidden="true">
-                                      {item.imageUrl ? (
-                                        <img src={item.imageUrl} alt="" loading="lazy" />
-                                      ) : (
-                                        <span className="item-option__fallback">
-                                          {ITEM_TYPE_LABEL_KEYS[activeItemSlot]
-                                            ? t(ITEM_TYPE_LABEL_KEYS[activeItemSlot])
-                                            : activeItemSlot}
-                                        </span>
-                                      )}
-                                    </span>
-                                    <span className="item-option__details">
-                                      <span className="item-option__name">{item.name}</span>
-                                      {item.palette.length ? (
-                                        <span className="item-option__swatches" aria-hidden="true">
-                                          {item.palette.slice(0, 4).map((hex) => (
-                                            <span
-                                              key={`${item.id}-${hex}`}
-                                              className="item-option__swatch"
-                                              style={{ backgroundColor: hex }}
-                                            />
-                                          ))}
-                                        </span>
-                                      ) : null}
-                                    </span>
-                                  </button>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        ) : null}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="item-selector__empty">
-                      {t("items.selector.hint")}
+                      <button
+                        type="button"
+                        className="item-selector__panel-close"
+                        onClick={handleCloseItemPanel}
+                        aria-label={t("aria.closeItemPanel")}
+                      >
+                        <span aria-hidden="true">×</span>
+                      </button>
                     </div>
-                  )}
-                </div>
+                    <div className="item-selector__search">
+                      <label className="sr-only" htmlFor="item-search">
+                        {t("items.selector.searchLabel")}
+                      </label>
+                      <input
+                        id="item-search"
+                        type="search"
+                        value={itemSearchQuery}
+                        onChange={handleItemSearchChange}
+                        placeholder={t("items.selector.searchPlaceholder")}
+                      />
+                    </div>
+                    <div className="item-selector__list" role="list">
+                      {itemsLoading && filteredItemOptions.length === 0 ? (
+                        <p className="item-selector__status">{t("items.selector.loading")}</p>
+                      ) : null}
+                      {itemsError && filteredItemOptions.length === 0 ? (
+                        <p className="item-selector__status item-selector__status--error">{itemsError}</p>
+                      ) : null}
+                      {!itemsLoading && filteredItemOptions.length === 0 ? (
+                        <p className="item-selector__status">{t("items.selector.empty")}</p>
+                      ) : null}
+                      {filteredItemOptions.length > 0 ? (
+                        <ul>
+                          {filteredItemOptions.map((item) => {
+                            const isSelected =
+                              Boolean(selectedItemsBySlot?.[activeItemSlot]) &&
+                              ((selectedItemsBySlot[activeItemSlot]?.id &&
+                                item.id === selectedItemsBySlot[activeItemSlot].id) ||
+                                (Number.isFinite(selectedItemsBySlot[activeItemSlot]?.ankamaId) &&
+                                  Number.isFinite(item.ankamaId) &&
+                                  selectedItemsBySlot[activeItemSlot].ankamaId === item.ankamaId));
+                            const optionClasses = ["item-option"];
+                            if (isSelected) {
+                              optionClasses.push("item-option--selected");
+                            }
+                            return (
+                              <li key={item.id} className={optionClasses.join(" ")}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSelectItemForSlot(activeItemSlot, item)}
+                                  aria-pressed={isSelected}
+                                >
+                                  <span className="item-option__media" aria-hidden="true">
+                                    {item.imageUrl ? (
+                                      <img src={item.imageUrl} alt="" loading="lazy" />
+                                    ) : (
+                                      <span className="item-option__fallback">
+                                        {ITEM_TYPE_LABEL_KEYS[activeItemSlot]
+                                          ? t(ITEM_TYPE_LABEL_KEYS[activeItemSlot])
+                                          : activeItemSlot}
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span className="item-option__details">
+                                    <span className="item-option__name">{item.name}</span>
+                                    {item.palette.length ? (
+                                      <span className="item-option__swatches" aria-hidden="true">
+                                        {item.palette.slice(0, 4).map((hex) => (
+                                          <span
+                                            key={`${item.id}-${hex}`}
+                                            className="item-option__swatch"
+                                            style={{ backgroundColor: hex }}
+                                          />
+                                        ))}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="item-selector__empty">
+                    {t("items.selector.hint")}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -5047,23 +5054,25 @@ export default function Home({ initialBreeds = [] }) {
                 })}
               </div>
             </div>
+          </div>
+          <aside className="filters-card" role="group" aria-label={t("aria.filtersCard")}>
+            <div className="filters-card__header">
+              <h2>{t("filters.card.title")}</h2>
+            </div>
             <div
-              className="identity-card__section"
+              className="filters-card__section"
               role="group"
               aria-label={t("aria.companionSection")}
             >
-              <span className="identity-card__section-title">{t("identity.companion.sectionTitle")}</span>
-              <div
-                className="companion-toggle"
-                role="group"
-                aria-label={t("aria.companionFilter")}
-              >
+              <span className="filters-card__section-title">{t("identity.companion.sectionTitle")}</span>
+              <div className="companion-toggle" role="group" aria-label={t("aria.companionFilter")}> 
                 {FAMILIER_FILTERS.map((filter) => {
-                  const isActive = Boolean(familierFilters[filter.key]);
+                  const isActive = familierFilters[filter.key] !== false;
                   const label = t(filter.labelKey);
                   const title = isActive
                     ? t("companions.toggle.hide", { label: label.toLowerCase() })
                     : t("companions.toggle.show", { label: label.toLowerCase() });
+
                   return (
                     <button
                       key={filter.key}
@@ -5098,11 +5107,11 @@ export default function Home({ initialBreeds = [] }) {
               ) : null}
             </div>
             <div
-              className="identity-card__section"
+              className="filters-card__section"
               role="group"
               aria-label={t("aria.itemFlagSection")}
             >
-              <span className="identity-card__section-title">{t("identity.filters.sectionTitle")}</span>
+              <span className="filters-card__section-title">{t("identity.filters.sectionTitle")}</span>
               <div
                 className="companion-toggle companion-toggle--item-flags"
                 role="group"
@@ -5146,13 +5155,11 @@ export default function Home({ initialBreeds = [] }) {
               </div>
             </div>
             <div
-              className="identity-card__section"
+              className="filters-card__section"
               role="group"
               aria-label={t("aria.optionalItemFilter")}
             >
-              <span className="identity-card__section-title">
-                {t("identity.filters.optionalTitle")}
-              </span>
+              <span className="filters-card__section-title">{t("identity.filters.optionalTitle")}</span>
               <div
                 className="companion-toggle companion-toggle--item-slots"
                 role="group"
@@ -5194,7 +5201,7 @@ export default function Home({ initialBreeds = [] }) {
                 })}
               </div>
             </div>
-          </div>
+          </aside>
         </section>
 
         <section className="suggestions">
