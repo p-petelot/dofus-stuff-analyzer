@@ -897,7 +897,14 @@ const HASH_STRONG_THRESHOLD = 0.12;
 const EDGE_CONFIDENCE_DISTANCE = 0.26;
 const EDGE_CONFIDENCE_WEIGHT = 0.12;
 const EDGE_STRONG_THRESHOLD = 0.1;
-const CURATED_COLOR_SWATCHES = ["#8B5CF6", "#F97316", "#10B981", "#38BDF8", "#F43F5E", "#FACC15"];
+const CURATED_COLOR_SWATCHES = [
+  "#6366F1",
+  "#EC4899",
+  "#0EA5E9",
+  "#F59E0B",
+  "#22C55E",
+  "#FBBF24",
+];
 
 const ITEM_TYPE_LABEL_KEYS = {
   coiffe: "itemTypes.coiffe",
@@ -2770,6 +2777,19 @@ export default function Home({ initialBreeds = [] }) {
     []
   );
 
+  const activeAnalysisModeIndex = useMemo(() => {
+    const index = analysisModes.findIndex((mode) => mode.key === inputMode);
+    return index === -1 ? 0 : index;
+  }, [analysisModes, inputMode]);
+
+  const analysisSwitchStyle = useMemo(
+    () => ({
+      "--option-count": String(Math.max(1, analysisModes.length)),
+      "--active-index": String(activeAnalysisModeIndex),
+    }),
+    [analysisModes.length, activeAnalysisModeIndex]
+  );
+
   const handleFiltersToggle = useCallback(() => {
     setFiltersExpanded((value) => !value);
   }, []);
@@ -4618,7 +4638,9 @@ export default function Home({ initialBreeds = [] }) {
                 className="input-switch"
                 role="radiogroup"
                 aria-label={t("aria.analysisMode")}
+                style={analysisSwitchStyle}
               >
+                <span className="input-switch__slider" aria-hidden="true" />
                 {analysisModes.map((mode) => {
                   const isActive = inputMode === mode.key;
                   return (
