@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useId } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import {
@@ -182,6 +182,21 @@ function normalizeTextContent(value, languagePriority = getActiveLocalizationPri
     return "";
   }
   return normalizeWhitespace(stripHtml(extracted));
+}
+
+function hasFilterDifferences(current, defaults) {
+  if (!current || !defaults) {
+    return false;
+  }
+
+  const keys = Object.keys(defaults);
+  for (const key of keys) {
+    if ((current[key] ?? false) !== defaults[key]) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function normalizeColorToHex(color) {
@@ -899,6 +914,28 @@ const OPTIONAL_ITEM_FILTERS = OPTIONAL_ITEM_TYPES.map((type) => ({
   key: type,
   labelKey: ITEM_TYPE_LABEL_KEYS[type] ?? type,
 }));
+
+const DEFAULT_FAMILIER_FILTER_STATE = Object.freeze(
+  FAMILIER_FILTERS.reduce((accumulator, filter) => {
+    const isDefaultEnabled = filter.key === "pet" || filter.key === "mount";
+    accumulator[filter.key] = isDefaultEnabled;
+    return accumulator;
+  }, {})
+);
+
+const DEFAULT_ITEM_FLAG_FILTER_STATE = Object.freeze(
+  ITEM_FLAG_FILTERS.reduce((accumulator, filter) => {
+    accumulator[filter.key] = true;
+    return accumulator;
+  }, {})
+);
+
+const DEFAULT_ITEM_SLOT_FILTER_STATE = Object.freeze(
+  OPTIONAL_ITEM_TYPES.reduce((accumulator, type) => {
+    accumulator[type] = true;
+    return accumulator;
+  }, {})
+);
 
 const BARBOFUS_BASE_URL = "https://barbofus.com/skinator";
 const BARBOFUS_EQUIPMENT_SLOTS = ["6", "7", "8", "9", "10", "11", "12"];
@@ -2535,25 +2572,15 @@ export default function Home({ initialBreeds = [] }) {
   const [itemsError, setItemsError] = useState(null);
   const [panelItemIndexes, setPanelItemIndexes] = useState({});
   const [proposalItemIndexes, setProposalItemIndexes] = useState({});
-  const [familierFilters, setFamilierFilters] = useState(() =>
-    FAMILIER_FILTERS.reduce((accumulator, filter) => {
-      const isDefaultEnabled = filter.key === "pet" || filter.key === "mount";
-      accumulator[filter.key] = isDefaultEnabled;
-      return accumulator;
-    }, {})
-  );
-  const [itemFlagFilters, setItemFlagFilters] = useState(() =>
-    ITEM_FLAG_FILTERS.reduce((accumulator, filter) => {
-      accumulator[filter.key] = true;
-      return accumulator;
-    }, {})
-  );
-  const [itemSlotFilters, setItemSlotFilters] = useState(() =>
-    OPTIONAL_ITEM_TYPES.reduce((accumulator, type) => {
-      accumulator[type] = true;
-      return accumulator;
-    }, {})
-  );
+  const [familierFilters, setFamilierFilters] = useState(() => ({
+    ...DEFAULT_FAMILIER_FILTER_STATE,
+  }));
+  const [itemFlagFilters, setItemFlagFilters] = useState(() => ({
+    ...DEFAULT_ITEM_FLAG_FILTER_STATE,
+  }));
+  const [itemSlotFilters, setItemSlotFilters] = useState(() => ({
+    ...DEFAULT_ITEM_SLOT_FILTER_STATE,
+  }));
   const [selectedItemsBySlot, setSelectedItemsBySlot] = useState(() =>
     ITEM_TYPES.reduce((accumulator, type) => {
       accumulator[type] = null;
@@ -2610,6 +2637,27 @@ export default function Home({ initialBreeds = [] }) {
     [familierFilters]
   );
   const areAllFamilierFiltersDisabled = activeFamilierFilterCount === 0;
+
+  const hasCustomFilters = useMemo(
+    () =>
+      hasFilterDifferences(familierFilters, DEFAULT_FAMILIER_FILTER_STATE) ||
+      hasFilterDifferences(itemFlagFilters, DEFAULT_ITEM_FLAG_FILTER_STATE) ||
+      hasFilterDifferences(itemSlotFilters, DEFAULT_ITEM_SLOT_FILTER_STATE),
+    [familierFilters, itemFlagFilters, itemSlotFilters]
+  );
+
+  const [areFiltersExpanded, setFiltersExpanded] = useState(false);
+  const filtersContentId = useId();
+  const filtersCardClassName = useMemo(() => {
+    const classes = ["filters-card"];
+    if (areFiltersExpanded) {
+      classes.push("is-expanded");
+    }
+    if (hasCustomFilters) {
+      classes.push("filters-card--active");
+    }
+    return classes.join(" ");
+  }, [areFiltersExpanded, hasCustomFilters]);
 
   const referenceClassName = useMemo(() => {
     const classes = ["reference"];
@@ -2735,6 +2783,16 @@ export default function Home({ initialBreeds = [] }) {
     }),
     [analysisModes, activeModeIndex]
   );
+
+  const handleFiltersToggle = useCallback(() => {
+    setFiltersExpanded((value) => !value);
+  }, []);
+
+  useEffect(() => {
+    if (hasCustomFilters) {
+      setFiltersExpanded(true);
+    }
+  }, [hasCustomFilters]);
 
   const handleFamilierFilterToggle = useCallback((key) => {
     if (!FAMILIER_FILTERS.some((filter) => filter.key === key)) {
@@ -5055,150 +5113,177 @@ export default function Home({ initialBreeds = [] }) {
               </div>
             </div>
           </div>
-          <aside className="filters-card" role="group" aria-label={t("aria.filtersCard")}>
-            <div className="filters-card__header">
-              <h2>{t("filters.card.title")}</h2>
-            </div>
-            <div
-              className="filters-card__section"
-              role="group"
-              aria-label={t("aria.companionSection")}
+          <aside className={filtersCardClassName} role="group" aria-label={t("aria.filtersCard")}>
+            <button
+              type="button"
+              className="filters-card__toggle"
+              onClick={handleFiltersToggle}
+              aria-expanded={areFiltersExpanded}
+              aria-controls={filtersContentId}
             >
-              <span className="filters-card__section-title">{t("identity.companion.sectionTitle")}</span>
-              <div className="companion-toggle" role="group" aria-label={t("aria.companionFilter")}> 
-                {FAMILIER_FILTERS.map((filter) => {
-                  const isActive = familierFilters[filter.key] !== false;
-                  const label = t(filter.labelKey);
-                  const title = isActive
-                    ? t("companions.toggle.hide", { label: label.toLowerCase() })
-                    : t("companions.toggle.show", { label: label.toLowerCase() });
-
-                  return (
-                    <button
-                      key={filter.key}
-                      type="button"
-                      className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
-                      onClick={() => handleFamilierFilterToggle(filter.key)}
-                      aria-pressed={isActive}
-                      title={title}
-                    >
-                      <span className="companion-toggle__indicator" aria-hidden="true">
-                        {isActive ? (
-                          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path
-                              d="M5 10.5 8.2 13.7 15 6.5"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        ) : (
-                          <span className="companion-toggle__dot" />
-                        )}
-                      </span>
-                      <span className="companion-toggle__label">{label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              {areAllFamilierFiltersDisabled ? (
-                <p className="companion-toggle__empty" role="status">{t("identity.companion.empty")}</p>
-              ) : null}
-            </div>
-            <div
-              className="filters-card__section"
-              role="group"
-              aria-label={t("aria.itemFlagSection")}
-            >
-              <span className="filters-card__section-title">{t("identity.filters.sectionTitle")}</span>
-              <div
-                className="companion-toggle companion-toggle--item-flags"
-                role="group"
-                aria-label={t("aria.itemFlagFilter")}
+              <span className="filters-card__toggle-label">{t("filters.card.title")}</span>
+              {hasCustomFilters ? <span className="filters-card__toggle-indicator" aria-hidden="true" /> : null}
+              <span
+                className={`filters-card__toggle-icon${areFiltersExpanded ? " is-open" : ""}`}
+                aria-hidden="true"
               >
-                {ITEM_FLAG_FILTERS.map((filter) => {
-                  const isActive = itemFlagFilters[filter.key] !== false;
-                  const label = t(filter.labelKey);
-                  const title = isActive
-                    ? t("companions.toggle.hide", { label: label.toLowerCase() })
-                    : t("companions.toggle.show", { label: label.toLowerCase() });
-
-                  return (
-                    <button
-                      key={filter.key}
-                      type="button"
-                      className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
-                      onClick={() => handleItemFlagFilterToggle(filter.key)}
-                      aria-pressed={isActive}
-                      title={title}
-                    >
-                      <span className="companion-toggle__indicator" aria-hidden="true">
-                        {isActive ? (
-                          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path
-                              d="M5 10.5 8.2 13.7 15 6.5"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        ) : (
-                          <span className="companion-toggle__dot" />
-                        )}
-                      </span>
-                      <span className="companion-toggle__label">{label}</span>
-                    </button>
-                  );
-                })}
+                <svg viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" fill="none">
+                  <path
+                    d="M4 2.5 8 6l-4 3.5"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+            </button>
+            <div className="filters-card__content" id={filtersContentId} hidden={!areFiltersExpanded}>
+              <div className="filters-card__header">
+                <h2>{t("filters.card.title")}</h2>
               </div>
-            </div>
-            <div
-              className="filters-card__section"
-              role="group"
-              aria-label={t("aria.optionalItemFilter")}
-            >
-              <span className="filters-card__section-title">{t("identity.filters.optionalTitle")}</span>
               <div
-                className="companion-toggle companion-toggle--item-slots"
+                className="filters-card__section"
+                role="group"
+                aria-label={t("aria.companionSection")}
+              >
+                <span className="filters-card__section-title">{t("identity.companion.sectionTitle")}</span>
+                <div className="companion-toggle" role="group" aria-label={t("aria.companionFilter")}>
+                  {FAMILIER_FILTERS.map((filter) => {
+                    const isActive = familierFilters[filter.key] !== false;
+                    const label = t(filter.labelKey);
+                    const title = isActive
+                      ? t("companions.toggle.hide", { label: label.toLowerCase() })
+                      : t("companions.toggle.show", { label: label.toLowerCase() });
+
+                    return (
+                      <button
+                        key={filter.key}
+                        type="button"
+                        className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
+                        onClick={() => handleFamilierFilterToggle(filter.key)}
+                        aria-pressed={isActive}
+                        title={title}
+                      >
+                        <span className="companion-toggle__indicator" aria-hidden="true">
+                          {isActive ? (
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path
+                                d="M5 10.5 8.2 13.7 15 6.5"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          ) : (
+                            <span className="companion-toggle__dot" />
+                          )}
+                        </span>
+                        <span className="companion-toggle__label">{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {areAllFamilierFiltersDisabled ? (
+                  <p className="companion-toggle__empty" role="status">{t("identity.companion.empty")}</p>
+                ) : null}
+              </div>
+              <div
+                className="filters-card__section"
+                role="group"
+                aria-label={t("aria.itemFlagSection")}
+              >
+                <span className="filters-card__section-title">{t("identity.filters.sectionTitle")}</span>
+                <div
+                  className="companion-toggle companion-toggle--item-flags"
+                  role="group"
+                  aria-label={t("aria.itemFlagFilter")}
+                >
+                  {ITEM_FLAG_FILTERS.map((filter) => {
+                    const isActive = itemFlagFilters[filter.key] !== false;
+                    const label = t(filter.labelKey);
+                    const title = isActive
+                      ? t("companions.toggle.hide", { label: label.toLowerCase() })
+                      : t("companions.toggle.show", { label: label.toLowerCase() });
+
+                    return (
+                      <button
+                        key={filter.key}
+                        type="button"
+                        className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
+                        onClick={() => handleItemFlagFilterToggle(filter.key)}
+                        aria-pressed={isActive}
+                        title={title}
+                      >
+                        <span className="companion-toggle__indicator" aria-hidden="true">
+                          {isActive ? (
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path
+                                d="M5 10.5 8.2 13.7 15 6.5"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          ) : (
+                            <span className="companion-toggle__dot" />
+                          )}
+                        </span>
+                        <span className="companion-toggle__label">{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div
+                className="filters-card__section"
                 role="group"
                 aria-label={t("aria.optionalItemFilter")}
               >
-                {OPTIONAL_ITEM_FILTERS.map((filter) => {
-                  const isActive = itemSlotFilters[filter.key] !== false;
-                  const label = t(filter.labelKey);
-                  const title = isActive
-                    ? t("companions.toggle.hide", { label: label.toLowerCase() })
-                    : t("companions.toggle.show", { label: label.toLowerCase() });
-                  return (
-                    <button
-                      key={filter.key}
-                      type="button"
-                      className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
-                      onClick={() => handleItemSlotFilterToggle(filter.key)}
-                      aria-pressed={isActive}
-                      title={title}
-                    >
-                      <span className="companion-toggle__indicator" aria-hidden="true">
-                        {isActive ? (
-                          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path
-                              d="M5 10.5 8.2 13.7 15 6.5"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        ) : (
-                          <span className="companion-toggle__dot" />
-                        )}
-                      </span>
-                      <span className="companion-toggle__label">{label}</span>
-                    </button>
-                  );
-                })}
+                <span className="filters-card__section-title">{t("identity.filters.optionalTitle")}</span>
+                <div
+                  className="companion-toggle companion-toggle--item-slots"
+                  role="group"
+                  aria-label={t("aria.optionalItemFilter")}
+                >
+                  {OPTIONAL_ITEM_FILTERS.map((filter) => {
+                    const isActive = itemSlotFilters[filter.key] !== false;
+                    const label = t(filter.labelKey);
+                    const title = isActive
+                      ? t("companions.toggle.hide", { label: label.toLowerCase() })
+                      : t("companions.toggle.show", { label: label.toLowerCase() });
+
+                    return (
+                      <button
+                        key={filter.key}
+                        type="button"
+                        className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
+                        onClick={() => handleItemSlotFilterToggle(filter.key)}
+                        aria-pressed={isActive}
+                        title={title}
+                      >
+                        <span className="companion-toggle__indicator" aria-hidden="true">
+                          {isActive ? (
+                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path
+                                d="M5 10.5 8.2 13.7 15 6.5"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          ) : (
+                            <span className="companion-toggle__dot" />
+                          )}
+                        </span>
+                        <span className="companion-toggle__label">{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </aside>
