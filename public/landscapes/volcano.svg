@@ -1,0 +1,34 @@
+<svg width="800" height="600" viewBox="0 0 800 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="volcanoSky" x1="400" y1="0" x2="400" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6F1A1A"/>
+      <stop offset="55%" stop-color="#2E0F1C"/>
+      <stop offset="100%" stop-color="#120812"/>
+    </linearGradient>
+    <linearGradient id="lava" x1="400" y1="260" x2="400" y2="520" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FF8243"/>
+      <stop offset="100%" stop-color="#C4211F"/>
+    </linearGradient>
+    <linearGradient id="volcanoBody" x1="500" y1="260" x2="220" y2="580" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3E1E2A"/>
+      <stop offset="100%" stop-color="#14060E"/>
+    </linearGradient>
+    <linearGradient id="lavaFlow" x1="380" y1="320" x2="420" y2="560" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFB347" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#D63230" stop-opacity="0.6"/>
+    </linearGradient>
+    <radialGradient id="embers" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(420 200) scale(200 180)">
+      <stop offset="0%" stop-color="#FF9A62" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#FF9A62" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#volcanoSky)"/>
+  <circle cx="560" cy="120" r="90" fill="url(#embers)"/>
+  <path d="M60 520L240 240L560 240L740 520H60Z" fill="url(#volcanoBody)"/>
+  <path d="M320 240L360 150H440L480 240H320Z" fill="#5A1E2D"/>
+  <path d="M360 160H440L426 210C410 250 390 260 372 220L360 160Z" fill="url(#lava)"/>
+  <path d="M392 240C366 332 358 360 338 430C320 490 320 520 320 520H392C412 440 436 380 456 312C470 262 470 262 452 240H392Z" fill="url(#lavaFlow)"/>
+  <path d="M0 520H800V600H0V520Z" fill="#1A090E"/>
+  <path d="M120 520C220 480 260 480 360 520H120Z" fill="#250C11"/>
+  <path d="M480 520C620 470 680 470 800 520H480Z" fill="#2F0E16"/>
+</svg>

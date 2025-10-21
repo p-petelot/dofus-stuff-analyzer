@@ -1,0 +1,29 @@
+<svg width="800" height="600" viewBox="0 0 800 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="desertSky" x1="400" y1="0" x2="400" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F2A950"/>
+      <stop offset="55%" stop-color="#C16B3A"/>
+      <stop offset="100%" stop-color="#5B2C1B"/>
+    </linearGradient>
+    <linearGradient id="dunes" x1="400" y1="320" x2="400" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#E7B86A"/>
+      <stop offset="100%" stop-color="#A0622B"/>
+    </linearGradient>
+    <linearGradient id="duneShadow" x1="580" y1="360" x2="200" y2="560" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#B97833" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#6A391A" stop-opacity="0.9"/>
+    </linearGradient>
+    <linearGradient id="foregroundSand" x1="400" y1="460" x2="400" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#C7873C"/>
+      <stop offset="100%" stop-color="#7A431D"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#desertSky)"/>
+  <circle cx="200" cy="140" r="78" fill="#FFF2C6" fill-opacity="0.36"/>
+  <path d="M40 460C160 380 260 360 360 380C460 400 540 460 640 440C720 424 780 396 800 384V520H40V460Z" fill="url(#duneShadow)"/>
+  <path d="M0 480C120 420 240 400 360 420C480 440 580 500 700 480C740 472 780 456 800 448V600H0V480Z" fill="url(#dunes)"/>
+  <path d="M0 520H800V600H0V520Z" fill="url(#foregroundSand)"/>
+  <path d="M80 520C170 500 250 500 340 520H80Z" fill="#9B5C28" opacity="0.82"/>
+  <path d="M420 520C500 500 600 500 760 520H420Z" fill="#874B20" opacity="0.82"/>
+  <path d="M160 420C220 440 280 444 360 430C440 416 520 396 620 400C700 404 760 424 800 440" stroke="#F7D59C" stroke-width="6" stroke-linecap="round" stroke-opacity="0.25"/>
+</svg>

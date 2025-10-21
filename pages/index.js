@@ -915,6 +915,46 @@ const OPTIONAL_ITEM_FILTERS = OPTIONAL_ITEM_TYPES.map((type) => ({
   labelKey: ITEM_TYPE_LABEL_KEYS[type] ?? type,
 }));
 
+const LANDSCAPE_BACKGROUNDS = Object.freeze([
+  {
+    key: "volcano",
+    image: "/landscapes/volcano.svg",
+    hueRanges: [
+      { start: 330, end: 360 },
+      { start: 0, end: 25 },
+    ],
+  },
+  {
+    key: "desert",
+    image: "/landscapes/desert.svg",
+    hueRanges: [{ start: 25, end: 70 }],
+  },
+  {
+    key: "forest",
+    image: "/landscapes/forest.svg",
+    hueRanges: [{ start: 70, end: 150 }],
+  },
+  {
+    key: "coast",
+    image: "/landscapes/coast.svg",
+    hueRanges: [{ start: 150, end: 210 }],
+  },
+  {
+    key: "mountain",
+    image: "/landscapes/mountain.svg",
+    hueRanges: [{ start: 210, end: 330 }],
+  },
+]);
+
+const DEFAULT_LANDSCAPE_BACKGROUND_KEY = "mountain";
+const DEFAULT_LANDSCAPE_BACKGROUND =
+  LANDSCAPE_BACKGROUNDS.find((entry) => entry.key === DEFAULT_LANDSCAPE_BACKGROUND_KEY) ??
+  LANDSCAPE_BACKGROUNDS[LANDSCAPE_BACKGROUNDS.length - 1] ??
+  null;
+const DEFAULT_RENDER_ENHANCEMENTS = Object.freeze({
+  scenicBackground: false,
+});
+
 const DEFAULT_FAMILIER_FILTER_STATE = Object.freeze(
   FAMILIER_FILTERS.reduce((accumulator, filter) => {
     const isDefaultEnabled = filter.key === "pet" || filter.key === "mount";
@@ -1378,6 +1418,150 @@ function buildGradientFromHex(hex) {
   const darker = adjustHexLightness(normalized, -0.2, -0.08);
   const lighter = adjustHexLightness(normalized, 0.18, -0.12);
   return `linear-gradient(135deg, ${darker}, ${normalized}, ${lighter})`;
+}
+
+function toRgbaString(rgb, alpha) {
+  const safeAlpha = Number.isFinite(alpha) ? Math.max(0, Math.min(alpha, 1)) : 1;
+  if (!rgb) {
+    return `rgba(15, 23, 42, ${safeAlpha})`;
+  }
+  const clampChannel = (value) => Math.max(0, Math.min(255, Math.round(value ?? 0)));
+  const r = clampChannel(rgb.r);
+  const g = clampChannel(rgb.g);
+  const b = clampChannel(rgb.b);
+  return `rgba(${r}, ${g}, ${b}, ${safeAlpha})`;
+}
+
+function buildOverlayGradientFromHex(hex) {
+  const normalized = normalizeColorToHex(hex);
+  if (!normalized) {
+    return "linear-gradient(140deg, rgba(15, 23, 42, 0.86), rgba(30, 41, 59, 0.58), rgba(15, 23, 42, 0.42))";
+  }
+
+  const baseRgb = hexToRgb(normalized);
+  if (!baseRgb) {
+    return "linear-gradient(140deg, rgba(15, 23, 42, 0.86), rgba(30, 41, 59, 0.58), rgba(15, 23, 42, 0.42))";
+  }
+
+  const darker = hexToRgb(adjustHexLightness(normalized, -0.24, -0.08)) ?? baseRgb;
+  const lighter = hexToRgb(adjustHexLightness(normalized, 0.16, -0.1)) ?? baseRgb;
+
+  return `linear-gradient(140deg, ${toRgbaString(darker, 0.82)}, ${toRgbaString(baseRgb, 0.58)}, ${toRgbaString(lighter, 0.42)})`;
+}
+
+function computeDominantHueFromPalette(palette) {
+  if (!Array.isArray(palette) || palette.length === 0) {
+    return null;
+  }
+
+  let totalWeight = 0;
+  let sumX = 0;
+  let sumY = 0;
+
+  palette.forEach((hex, index) => {
+    const normalized = normalizeColorToHex(hex);
+    if (!normalized) {
+      return;
+    }
+    const rgb = hexToRgb(normalized);
+    if (!rgb) {
+      return;
+    }
+    const { h, s, l } = rgbToHsl(rgb.r, rgb.g, rgb.b);
+    if (!Number.isFinite(h)) {
+      return;
+    }
+
+    const isNeutral = s < 0.18 || l < 0.16 || l > 0.88;
+    const weight = 1 / (index + 1);
+    if (isNeutral) {
+      return;
+    }
+
+    const radians = (h * Math.PI) / 180;
+    sumX += Math.cos(radians) * weight;
+    sumY += Math.sin(radians) * weight;
+    totalWeight += weight;
+  });
+
+  if (totalWeight <= 0) {
+    const fallbackHex = normalizeColorToHex(palette[0]);
+    if (!fallbackHex) {
+      return null;
+    }
+    const fallbackRgb = hexToRgb(fallbackHex);
+    if (!fallbackRgb) {
+      return null;
+    }
+    const { h } = rgbToHsl(fallbackRgb.r, fallbackRgb.g, fallbackRgb.b);
+    return Number.isFinite(h) ? h : null;
+  }
+
+  const angle = Math.atan2(sumY, sumX);
+  const degrees = (angle * 180) / Math.PI;
+  return (degrees + 360) % 360;
+}
+
+function isHueInRange(hue, start, end) {
+  if (!Number.isFinite(hue)) {
+    return false;
+  }
+
+  const normalizedHue = ((hue % 360) + 360) % 360;
+  const normalizedStart = ((start % 360) + 360) % 360;
+  const normalizedEnd = ((end % 360) + 360) % 360;
+
+  if (normalizedStart <= normalizedEnd) {
+    return normalizedHue >= normalizedStart && normalizedHue < normalizedEnd;
+  }
+
+  return normalizedHue >= normalizedStart || normalizedHue < normalizedEnd;
+}
+
+function pickLandscapeBackgroundForPalette(palette) {
+  const hue = computeDominantHueFromPalette(palette);
+  if (!Number.isFinite(hue)) {
+    return DEFAULT_LANDSCAPE_BACKGROUND;
+  }
+
+  for (const background of LANDSCAPE_BACKGROUNDS) {
+    if (!background?.hueRanges) {
+      continue;
+    }
+    const matchesHue = background.hueRanges.some((range) =>
+      isHueInRange(hue, range.start, range.end)
+    );
+    if (matchesHue) {
+      return background;
+    }
+  }
+
+  return DEFAULT_LANDSCAPE_BACKGROUND;
+}
+
+function buildCanvasBackgroundStyle(primaryHex, palette, enableScenicBackground = false) {
+  const gradient = buildGradientFromHex(primaryHex);
+  if (!enableScenicBackground) {
+    return { style: { backgroundImage: gradient }, landscape: null };
+  }
+
+  const landscape = pickLandscapeBackgroundForPalette(palette);
+  if (!landscape?.image) {
+    return { style: { backgroundImage: gradient }, landscape: null };
+  }
+
+  const overlay = buildOverlayGradientFromHex(primaryHex);
+
+  return {
+    style: {
+      backgroundImage: `${overlay}, url(${landscape.image})`,
+      backgroundSize: "cover, cover",
+      backgroundPosition: "center, center",
+      backgroundRepeat: "no-repeat, no-repeat",
+      backgroundBlendMode: "soft-light, normal",
+    },
+    landscape,
+  };
 }
 
 function getImageDimensions(image) {
@@ -2580,6 +2764,9 @@ export default function Home({ initialBreeds = [] }) {
   const [itemSlotFilters, setItemSlotFilters] = useState(() => ({
     ...DEFAULT_ITEM_SLOT_FILTER_STATE,
   }));
+  const [useLandscapeBackground, setUseLandscapeBackground] = useState(
+    DEFAULT_RENDER_ENHANCEMENTS.scenicBackground
+  );
   const [selectedItemsBySlot, setSelectedItemsBySlot] = useState(() =>
     ITEM_TYPES.reduce((accumulator, type) => {
       accumulator[type] = null;
@@ -2641,8 +2828,14 @@ export default function Home({ initialBreeds = [] }) {
     () =>
       hasFilterDifferences(familierFilters, DEFAULT_FAMILIER_FILTER_STATE) ||
       hasFilterDifferences(itemFlagFilters, DEFAULT_ITEM_FLAG_FILTER_STATE) ||
-      hasFilterDifferences(itemSlotFilters, DEFAULT_ITEM_SLOT_FILTER_STATE),
-    [familierFilters, itemFlagFilters, itemSlotFilters]
+      hasFilterDifferences(itemSlotFilters, DEFAULT_ITEM_SLOT_FILTER_STATE) ||
+      useLandscapeBackground !== DEFAULT_RENDER_ENHANCEMENTS.scenicBackground,
+    [
+      familierFilters,
+      itemFlagFilters,
+      itemSlotFilters,
+      useLandscapeBackground,
+    ]
   );
 
   const [areFiltersExpanded, setFiltersExpanded] = useState(false);
@@ -2811,6 +3004,10 @@ export default function Home({ initialBreeds = [] }) {
       ...previous,
       [key]: previous[key] === false ? true : false,
     }));
+  }, []);
+
+  const handleLandscapeBackgroundToggle = useCallback(() => {
+    setUseLandscapeBackground((previous) => !previous);
   }, []);
 
   const handleOpenItemSlot = useCallback(
@@ -5208,6 +5405,49 @@ export default function Home({ initialBreeds = [] }) {
               <div
                 className="filters-card__section"
                 role="group"
+                aria-label={t("aria.renderBackground")}
+              >
+                <span className="filters-card__section-title">{t("identity.preview.sectionTitle")}</span>
+                <div
+                  className="companion-toggle companion-toggle--render"
+                  role="group"
+                  aria-label={t("aria.renderBackgroundToggle")}
+                >
+                  <button
+                    type="button"
+                    className={`companion-toggle__chip${useLandscapeBackground ? " is-active" : ""}`}
+                    onClick={handleLandscapeBackgroundToggle}
+                    aria-pressed={useLandscapeBackground}
+                    title={
+                      useLandscapeBackground
+                        ? t("identity.preview.disableLandscape")
+                        : t("identity.preview.enableLandscape")
+                    }
+                  >
+                    <span className="companion-toggle__indicator" aria-hidden="true">
+                      {useLandscapeBackground ? (
+                        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path
+                            d="M5 10.5 8.2 13.7 15 6.5"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      ) : (
+                        <span className="companion-toggle__dot" />
+                      )}
+                    </span>
+                    <span className="companion-toggle__label">
+                      {t("identity.preview.landscapeLabel")}
+                    </span>
+                  </button>
+                </div>
+              </div>
+              <div
+                className="filters-card__section"
+                role="group"
                 aria-label={t("aria.optionalItemFilter")}
               >
                 <span className="filters-card__section-title">{t("identity.filters.optionalTitle")}</span>
@@ -5365,7 +5605,15 @@ export default function Home({ initialBreeds = [] }) {
                           >
                             {proposals.map((proposal) => {
                               const primaryColor = proposal.palette[0] ?? "#1f2937";
-                              const canvasBackground = buildGradientFromHex(primaryColor);
+                              const canvasBackground = buildCanvasBackgroundStyle(
+                                primaryColor,
+                                proposal.palette,
+                                useLandscapeBackground
+                              );
+                              const canvasClassNames = ["skin-card__canvas"];
+                              if (canvasBackground.landscape) {
+                                canvasClassNames.push("skin-card__canvas--scenic");
+                              }
                               const lookPreview = lookPreviews?.[proposal.id];
                               const lookLoaded =
                               lookPreview?.status === "loaded" &&
@@ -5383,12 +5631,12 @@ export default function Home({ initialBreeds = [] }) {
                               const previewAlt = t("suggestions.render.alt", { index: proposal.index + 1 });
                               return (
                                 <article key={proposal.id} className="skin-card">
-                                <h3 className="sr-only">{t("suggestions.carousel.proposalTitle", { index: proposal.index + 1 })}</h3>
-                                <div className="skin-card__body">
-                                  <div
-                                    className="skin-card__canvas"
-                                    style={{ backgroundImage: canvasBackground }}
-                                  >
+                                  <h3 className="sr-only">{t("suggestions.carousel.proposalTitle", { index: proposal.index + 1 })}</h3>
+                                  <div className="skin-card__body">
+                                    <div
+                                      className={canvasClassNames.join(" ")}
+                                      style={canvasBackground.style}
+                                    >
                                     <div className="skin-card__render">
                                       {lookLoading ? (
                                             <div className="skin-card__loader" role="status" aria-live="polite">

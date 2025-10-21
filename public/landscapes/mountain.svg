@@ -1,0 +1,28 @@
+<svg width="800" height="600" viewBox="0 0 800 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sky" x1="400" y1="0" x2="400" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2C3E71"/>
+      <stop offset="55%" stop-color="#1D2545"/>
+      <stop offset="100%" stop-color="#111628"/>
+    </linearGradient>
+    <linearGradient id="peak" x1="400" y1="200" x2="400" y2="560" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#C7D7F2"/>
+      <stop offset="100%" stop-color="#4A5F85"/>
+    </linearGradient>
+    <linearGradient id="mountainShadow" x1="520" y1="260" x2="280" y2="540" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#26314A" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#0E1525" stop-opacity="0.9"/>
+    </linearGradient>
+    <linearGradient id="foreground" x1="400" y1="420" x2="400" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1B2B3F"/>
+      <stop offset="100%" stop-color="#091524"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#sky)"/>
+  <circle cx="620" cy="140" r="70" fill="#F3F4F6" fill-opacity="0.18"/>
+  <path d="M120 520L340 180L520 460L640 300L780 520H120Z" fill="url(#mountainShadow)"/>
+  <path d="M120 520L340 200L520 460L640 320L760 520H120Z" fill="url(#peak)" opacity="0.75"/>
+  <path d="M0 520H800V600H0V520Z" fill="url(#foreground)"/>
+  <path d="M60 520C140 470 220 470 300 520H60Z" fill="#0F1C2B" opacity="0.8"/>
+  <path d="M520 520C600 470 700 470 800 520H520Z" fill="#0B1523" opacity="0.85"/>
+</svg>

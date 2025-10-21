@@ -1,0 +1,32 @@
+<svg width="800" height="600" viewBox="0 0 800 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="forestSky" x1="400" y1="0" x2="400" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1E4032"/>
+      <stop offset="60%" stop-color="#10271F"/>
+      <stop offset="100%" stop-color="#091513"/>
+    </linearGradient>
+    <linearGradient id="treeCanopy" x1="400" y1="200" x2="400" y2="520" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4BBF6B"/>
+      <stop offset="100%" stop-color="#1B7A4A"/>
+    </linearGradient>
+    <linearGradient id="treeShadow" x1="520" y1="240" x2="320" y2="560" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0F3B2A" stop-opacity="0.88"/>
+      <stop offset="100%" stop-color="#041913" stop-opacity="0.92"/>
+    </linearGradient>
+    <linearGradient id="ground" x1="400" y1="420" x2="400" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#123222"/>
+      <stop offset="100%" stop-color="#05120D"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#forestSky)"/>
+  <circle cx="220" cy="140" r="80" fill="#A7F3D0" fill-opacity="0.14"/>
+  <path d="M40 520L140 320L220 420L300 260L360 380L440 220L520 380L600 260L680 400L760 320L820 520H40Z" fill="url(#treeShadow)"/>
+  <path d="M60 520L140 340L220 440L300 280L360 380L440 260L520 380L600 280L680 420L760 340L820 520H60Z" fill="url(#treeCanopy)" opacity="0.82"/>
+  <path d="M80 520L120 380L160 520H80Z" fill="#0F3A28"/>
+  <path d="M240 520L280 360L320 520H240Z" fill="#0F3A28" opacity="0.85"/>
+  <path d="M440 520L480 360L520 520H440Z" fill="#0F3A28" opacity="0.9"/>
+  <path d="M620 520L660 380L700 520H620Z" fill="#0F3A28" opacity="0.75"/>
+  <path d="M0 520H800V600H0V520Z" fill="url(#ground)"/>
+  <path d="M120 520C200 500 260 500 320 520H120Z" fill="#0A251A" opacity="0.8"/>
+  <path d="M420 520C520 500 640 500 760 520H420Z" fill="#081E16" opacity="0.85"/>
+</svg>

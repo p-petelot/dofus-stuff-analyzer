@@ -1,0 +1,26 @@
+<svg width="800" height="600" viewBox="0 0 800 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="coastSky" x1="400" y1="0" x2="400" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#164B5F"/>
+      <stop offset="70%" stop-color="#0B2736"/>
+      <stop offset="100%" stop-color="#071520"/>
+    </linearGradient>
+    <linearGradient id="coastWater" x1="400" y1="320" x2="400" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1E6C86"/>
+      <stop offset="100%" stop-color="#08374A"/>
+    </linearGradient>
+    <linearGradient id="shore" x1="400" y1="480" x2="400" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#D4B073"/>
+      <stop offset="100%" stop-color="#8C5C3A"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="400" fill="url(#coastSky)"/>
+  <rect y="400" width="800" height="200" fill="url(#coastWater)"/>
+  <ellipse cx="580" cy="140" rx="70" ry="46" fill="#FDF2D7" fill-opacity="0.26"/>
+  <path d="M0 420C140 380 220 380 360 420C500 460 580 460 720 420C760 408 800 400 800 400V520H0V420Z" fill="#124757"/>
+  <path d="M0 520H800V600H0V520Z" fill="url(#shore)"/>
+  <path d="M80 520C160 500 240 500 320 520H80Z" fill="#BF8E55" opacity="0.85"/>
+  <path d="M420 520C500 500 640 500 760 520H420Z" fill="#B07D47" opacity="0.8"/>
+  <path d="M60 440C120 460 180 468 260 456C340 444 420 420 500 416C580 412 660 428 760 460" stroke="#88D4E3" stroke-opacity="0.32" stroke-width="6" stroke-linecap="round"/>
+  <path d="M80 468C160 486 220 488 300 476C380 464 460 446 560 450C640 454 700 470 760 488" stroke="#B1E6F1" stroke-opacity="0.28" stroke-width="5" stroke-linecap="round"/>
+</svg>
