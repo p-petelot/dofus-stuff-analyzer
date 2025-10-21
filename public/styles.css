@@ -360,7 +360,7 @@ a {
 
 @media (min-width: 1360px) {
   .workspace {
-    grid-template-columns: minmax(520px, 1.46fr) minmax(400px, 1.18fr) minmax(300px, 0.88fr);
+    grid-template-columns: minmax(520px, 2fr) minmax(200px, 1.13fr) minmax(300px, 1.4fr);
   }
 }
 
@@ -1278,16 +1278,26 @@ a {
 }
 
 @media (min-width: 960px) {
-  .palette,
   .identity-card {
-    min-width: 340px;
+    min-width: 400px;
   }
 }
 
 @media (min-width: 1360px) {
-  .palette,
   .identity-card {
-    min-width: 360px;
+    min-width: 500px;
+  }
+}
+
+@media (min-width: 960px) {
+  .palette {
+    min-width: 400px;
+  }
+}
+
+@media (min-width: 1360px) {
+  .palette {
+    min-width: 400px;
   }
 }
 
@@ -2033,7 +2043,7 @@ a {
 
 @media (min-width: 960px) {
   .palette {
-    width: min(100%, 340px);
+    width: min(100%, 40px);
     justify-self: start;
   }
 }
