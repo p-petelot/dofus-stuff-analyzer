@@ -2565,7 +2565,6 @@ export default function Home({ initialBreeds = [] }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [copiedCode, setCopiedCode] = useState(null);
-  const [codeFormat, setCodeFormat] = useState("hex");
   const [toast, setToast] = useState(null);
   const [itemsCatalog, setItemsCatalog] = useState({});
   const [itemsLoading, setItemsLoading] = useState(false);
@@ -2769,19 +2768,6 @@ export default function Home({ initialBreeds = [] }) {
       { key: "items", labelKey: "workspace.mode.items" },
     ],
     []
-  );
-
-  const activeModeIndex = useMemo(() => {
-    const index = analysisModes.findIndex((mode) => mode.key === inputMode);
-    return index >= 0 ? index : 0;
-  }, [analysisModes, inputMode]);
-
-  const inputSwitchStyle = useMemo(
-    () => ({
-      "--option-count": String(analysisModes.length),
-      "--active-index": String(activeModeIndex),
-    }),
-    [analysisModes, activeModeIndex]
   );
 
   const handleFiltersToggle = useCallback(() => {
@@ -4534,11 +4520,6 @@ export default function Home({ initialBreeds = [] }) {
     }
   }, [t]);
 
-  const formatThumbStyle = {
-    transform:
-      codeFormat === "hex" ? "translateX(0%)" : "translateX(calc(100% + 4px))",
-  };
-
   const showProgressBar = isProcessing || analysisProgress > 0;
   const clampedProgress = Math.max(0, Math.min(analysisProgress, 100));
   const safeProgress = Number.isFinite(clampedProgress) ? clampedProgress : 0;
@@ -4637,9 +4618,7 @@ export default function Home({ initialBreeds = [] }) {
                 className="input-switch"
                 role="radiogroup"
                 aria-label={t("aria.analysisMode")}
-                style={inputSwitchStyle}
               >
-                <span className="input-switch__thumb" aria-hidden="true" />
                 {analysisModes.map((mode) => {
                   const isActive = inputMode === mode.key;
                   return (
@@ -4935,61 +4914,39 @@ export default function Home({ initialBreeds = [] }) {
               </div>
               <div className="palette__actions">
                 {isProcessing ? <span className="badge badge--pulse">{t("palette.badge.analyzing")}</span> : null}
-                <div className="format-switch" role="radiogroup" aria-label={t("palette.format.label")}>
-                  <span className="format-switch__thumb" style={formatThumbStyle} aria-hidden="true" />
-                  <button
-                    type="button"
-                    className={`format-switch__option${codeFormat === "hex" ? " is-active" : ""}`}
-                    onClick={() => setCodeFormat("hex")}
-                    role="radio"
-                    aria-checked={codeFormat === "hex"}
+                {colors.length > 0 ? (
+                  <div
+                    className="palette__skin-options"
+                    role="radiogroup"
+                    aria-label={t("palette.skin.groupLabel")}
                   >
-                    {t("palette.format.hex")}
-                  </button>
-                  <button
-                    type="button"
-                    className={`format-switch__option${codeFormat === "rgb" ? " is-active" : ""}`}
-                    onClick={() => setCodeFormat("rgb")}
-                    role="radio"
-                    aria-checked={codeFormat === "rgb"}
-                  >
-                    {t("palette.format.rgb")}
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      className={`palette__skin-option${!useCustomSkinTone ? " is-active" : ""}`}
+                      onClick={() => setUseCustomSkinTone(false)}
+                      role="radio"
+                      aria-checked={!useCustomSkinTone}
+                    >
+                      {t("palette.skin.default")}
+                    </button>
+                    <button
+                      type="button"
+                      className={`palette__skin-option${useCustomSkinTone ? " is-active" : ""}`}
+                      onClick={() => setUseCustomSkinTone(true)}
+                      role="radio"
+                      aria-checked={useCustomSkinTone}
+                    >
+                      {t("palette.skin.custom")}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </div>
-            {colors.length > 0 ? (
-              <div className="palette__skin-control" role="group" aria-label={t("palette.skin.groupLabel")}>
-                <div className="palette__skin-meta">
-                  <span className="palette__skin-label">{t("palette.skin.label")}</span>
-                </div>
-                <div className="palette__skin-options" role="radiogroup" aria-label={t("palette.skin.choicesLabel")}>
-                  <button
-                    type="button"
-                    className={`palette__skin-option${!useCustomSkinTone ? " is-active" : ""}`}
-                    onClick={() => setUseCustomSkinTone(false)}
-                    role="radio"
-                    aria-checked={!useCustomSkinTone}
-                  >
-                    {t("palette.skin.default")}
-                  </button>
-                  <button
-                    type="button"
-                    className={`palette__skin-option${useCustomSkinTone ? " is-active" : ""}`}
-                    onClick={() => setUseCustomSkinTone(true)}
-                    role="radio"
-                    aria-checked={useCustomSkinTone}
-                  >
-                    {t("palette.skin.custom")}
-                  </button>
-                </div>
-              </div>
-            ) : null}
             {error ? <p className="palette__error">{error}</p> : null}
             {colors.length > 0 ? (
               <ul className="palette__list">
                 {colors.map((color, index) => {
-                  const value = codeFormat === "hex" ? color.hex : color.rgb;
+                  const value = color.hex;
                   const isCopied = copiedCode === value;
                   const textColor = getTextColor(color);
                   return (
