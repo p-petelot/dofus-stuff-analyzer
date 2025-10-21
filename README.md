@@ -25,6 +25,10 @@ npm start
 - Extraction rapide des teintes principales avec codes Hex et RGB affichés en anneau hexagonal.
 - Copie en un clic (clic ou tap) pour intégrer les couleurs dans ton outil favori.
 
+## Entraînement de l'IA
+
+Le pipeline d'apprentissage utilisé pour la prédiction automatique des classes, sexes, palettes et items est documenté dans [docs/vision-training.md](docs/vision-training.md). Ce guide explique comment structurer les exports de génération, lancer un entraînement et suivre sa progression via le dashboard intégré.
+
 ## Ressources DofusDB
 
 - L'API publique de DofusDB est disponible via `https://api.dofusdb.fr/` et expose des collections comme `items`, `sets` ou `weapons` (documentation embarquée dans le site officiel).

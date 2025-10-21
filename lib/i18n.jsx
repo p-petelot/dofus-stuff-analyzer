@@ -61,6 +61,7 @@ const LANGUAGE_VARIANT_KEYS = {
 const TRANSLATIONS = {
   fr: {
     "brand.tagline": "",
+    "hero.monitoringLink": "Suivre les entraînements IA",
     "meta.description":
       "KrosPalette extrait les couleurs dominantes de tes images pour composer des skins Dofus harmonieux.",
     "progress.analyzing": "Analyse de l'image en cours",
@@ -230,6 +231,7 @@ const TRANSLATIONS = {
   },
   en: {
     "brand.tagline": "Dofus skin studio",
+    "hero.monitoringLink": "Track AI training progress",
     "meta.description":
       "KrosPalette extracts the dominant colors from your images to craft harmonious Dofus outfits.",
     "progress.analyzing": "Analyzing image",
@@ -397,6 +399,7 @@ const TRANSLATIONS = {
   },
   es: {
     "brand.tagline": "Estudio de skins de Dofus",
+    "hero.monitoringLink": "Seguir el progreso del entrenamiento de la IA",
     "meta.description":
       "KrosPalette extrae los colores dominantes de tus imágenes para crear conjuntos de Dofus armoniosos.",
     "progress.analyzing": "Analizando imagen",
@@ -564,6 +567,7 @@ const TRANSLATIONS = {
   },
   de: {
     "brand.tagline": "Dofus-Skin-Studio",
+    "hero.monitoringLink": "KI-Trainingsfortschritt verfolgen",
     "meta.description":
       "KrosPalette extrahiert die dominanten Farben deiner Bilder und erstellt harmonische Dofus-Outfits.",
     "progress.analyzing": "Bildanalyse läuft",
@@ -732,6 +736,7 @@ const TRANSLATIONS = {
   },
   pt: {
     "brand.tagline": "Estúdio de skins de Dofus",
+    "hero.monitoringLink": "Acompanhar o progresso do treinamento de IA",
     "meta.description":
       "KrosPalette extrai as cores dominantes das suas imagens para criar visuais harmoniosos de Dofus.",
     "progress.analyzing": "Analisando imagem",

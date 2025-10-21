@@ -1,12 +1,14 @@
 import crypto from "crypto";
+import path from "path";
 import type { ImageDataLike } from "../types";
 
-/**
- * Generate a deterministic pseudo-embedding for an image patch.
- * The embedding is derived from the SHA-1 digest of the pixel buffer,
- * ensuring stable retrieval behaviour without external ML dependencies.
- */
-export async function clipEmbedding(patch: ImageDataLike): Promise<number[]> {
+type ClipPipeline = (input: unknown, options?: Record<string, unknown>) => Promise<any>;
+
+let clipExtractorPromise: Promise<{ run: ClipPipeline; modelId: string }> | null = null;
+let clipExtractorFailed = false;
+let warnedAboutFallback = false;
+
+function syntheticEmbedding(patch: ImageDataLike): number[] {
   const hash = crypto.createHash("sha1").update(patch.data).digest();
   const vector: number[] = [];
   for (let i = 0; i < hash.length; i += 4) {
@@ -14,6 +16,126 @@ export async function clipEmbedding(patch: ImageDataLike): Promise<number[]> {
     vector.push(chunk / 0xffffffff);
   }
   return vector;
+}
+
+async function loadClipExtractor(): Promise<{ run: ClipPipeline; modelId: string } | null> {
+  if (clipExtractorFailed) {
+    return null;
+  }
+  if (process.env.VISION_FORCE_STUB === "1") {
+    clipExtractorFailed = true;
+    return null;
+  }
+  if (!clipExtractorPromise) {
+    clipExtractorPromise = (async () => {
+      try {
+        const { pipeline, env } = (await import("@xenova/transformers")) as unknown as {
+          pipeline: (task: string, model: string) => Promise<ClipPipeline>;
+          env?: { allowLocalModels?: boolean; localModelPath?: string };
+        };
+        const cachePath = process.env.TRANSFORMERS_CACHE ?? path.join(process.cwd(), ".cache", "transformers");
+        if (env) {
+          env.allowLocalModels = true;
+          env.localModelPath = cachePath;
+        }
+        const modelId = process.env.VISION_CLIP_MODEL ?? "Xenova/clip-vit-base-patch32";
+        const extractor = await pipeline("feature-extraction", modelId);
+        return { run: extractor, modelId };
+      } catch (error) {
+        clipExtractorFailed = true;
+        if (process.env.NODE_ENV !== "test") {
+          console.warn("Unable to load CLIP backbone, falling back to deterministic embeddings", error);
+        }
+        return null;
+      }
+    })();
+  }
+  return clipExtractorPromise.catch((error) => {
+    clipExtractorFailed = true;
+    if (process.env.NODE_ENV !== "test") {
+      console.warn("CLIP backbone failed to initialise", error);
+    }
+    return null;
+  });
+}
+
+function tensorToArray(result: any): number[] {
+  if (!result) {
+    return [];
+  }
+  const payload = Array.isArray(result) ? result[0] ?? result : result;
+  if (!payload) return [];
+  const data = (payload.data as unknown) ?? payload;
+  if (Array.isArray(data)) {
+    return data.flat(Infinity).map((value) => Number(value) || 0);
+  }
+  if (data instanceof Float32Array || data instanceof Float64Array) {
+    return Array.from(data, (value) => Number(value) || 0);
+  }
+  if (data instanceof Uint8Array || data instanceof Int32Array) {
+    return Array.from(data, (value) => Number(value) || 0);
+  }
+  if (typeof (data as { toArray?: () => number[] }).toArray === "function") {
+    try {
+      return (data as { toArray: () => number[] }).toArray();
+    } catch (error) {
+      console.warn("Failed to convert tensor via toArray", error);
+    }
+  }
+  if (typeof (data as { tolist?: () => number[] }).tolist === "function") {
+    try {
+      return (data as { tolist: () => number[] }).tolist();
+    } catch (error) {
+      console.warn("Failed to convert tensor via tolist", error);
+    }
+  }
+  if (typeof data === "object" && data !== null) {
+    const values = Object.values(data as Record<string, unknown>);
+    if (values.every((value) => typeof value === "number")) {
+      return values.map((value) => Number(value) || 0);
+    }
+  }
+  return [];
+}
+
+function normalizeVector(vector: number[]): number[] {
+  const length = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
+  if (!length) {
+    return vector;
+  }
+  return vector.map((value) => value / length);
+}
+
+function toRawImage(patch: ImageDataLike): { data: Uint8Array; width: number; height: number } {
+  return { data: new Uint8Array(patch.data.buffer, patch.data.byteOffset, patch.data.byteLength), width: patch.width, height: patch.height };
+}
+
+/**
+ * Generate a CLIP embedding for an image patch. If the CLIP backbone is not
+ * available, a deterministic synthetic embedding is used instead so that the
+ * rest of the pipeline keeps functioning.
+ */
+export async function clipEmbedding(patch: ImageDataLike): Promise<number[]> {
+  const extractor = await loadClipExtractor();
+  if (!extractor) {
+    if (!warnedAboutFallback && process.env.NODE_ENV !== "test") {
+      console.warn("Using deterministic embedding fallback");
+      warnedAboutFallback = true;
+    }
+    return syntheticEmbedding(patch);
+  }
+  try {
+    const result = await extractor.run(toRawImage(patch), { pooling: "mean", normalize: true });
+    const vector = tensorToArray(result);
+    if (vector.length) {
+      return normalizeVector(vector);
+    }
+  } catch (error) {
+    if (process.env.NODE_ENV !== "test") {
+      console.warn("CLIP embedding failed, reverting to fallback", error);
+    }
+  }
+  return syntheticEmbedding(patch);
 }
 
 /**

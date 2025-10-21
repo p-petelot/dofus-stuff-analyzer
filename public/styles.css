@@ -198,6 +198,43 @@ a {
   letter-spacing: -0.045em;
 }
 
+.hero__actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: center;
+}
+
+.hero__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.55), rgba(139, 92, 246, 0.78));
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: none;
+  box-shadow:
+    0 18px 34px -24px rgba(15, 23, 42, 0.95),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.hero__link:hover,
+.hero__link:focus-visible {
+  transform: translateY(-1px);
+  box-shadow:
+    0 22px 40px -26px rgba(15, 23, 42, 0.95),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.62), rgba(192, 132, 252, 0.85));
+}
+
+.hero__link:focus-visible {
+  outline: 2px solid rgba(148, 163, 184, 0.6);
+  outline-offset: 3px;
+}
+
 .language-switcher__option {
   display: inline-flex;
   align-items: center;
