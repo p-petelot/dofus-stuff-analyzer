@@ -6209,7 +6209,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                         <span className="companion-toggle__dot" />
                       )}
                     </span>
-                    <span className="companion-toggle__label sr-only">
+                    <span className="companion-toggle__label">
                       {t("identity.previewBackground.toggleLabel")}
                     </span>
                   </button>
