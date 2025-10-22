@@ -3712,10 +3712,6 @@ a {
     gap: 6px;
   }
 
-  .skin-card__body {
-    grid-template-columns: 1fr;
-  }
-
   .skin-card__equipment {
     position: static;
     margin-top: 18px;
