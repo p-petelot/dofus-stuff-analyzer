@@ -3236,7 +3236,26 @@ a {
   list-style: none;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 5px;
+  gap: 8px;
+  align-items: stretch;
+}
+
+@media (max-width: 1280px) {
+  .suggestions__deck {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1024px) {
+  .suggestions__deck {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 840px) {
+  .suggestions__deck {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .suggestions__card {
@@ -3248,6 +3267,8 @@ a {
   border: 1px solid rgba(148, 163, 184, 0.16);
   background: rgba(15, 23, 42, 0.58);
   transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+  min-width: 0;
+  height: 100%;
 }
 
 .suggestions__card--locked {
@@ -3276,8 +3297,8 @@ a {
   display: grid;
   place-items: center;
   overflow: visible;
-  width: clamp(46px, 5.6vw, 66px);
-  height: clamp(46px, 5.6vw, 66px);
+  width: clamp(40px, 5.2vw, 64px);
+  height: clamp(40px, 5.2vw, 64px);
   margin: 0 auto;
 }
 
@@ -3311,6 +3332,7 @@ a {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 
 
@@ -3318,6 +3340,8 @@ a {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .suggestions__badge {
@@ -3482,6 +3506,7 @@ a {
   color: var(--text);
   text-decoration: none;
   transition: color 0.2s ease;
+  overflow-wrap: anywhere;
 }
 
 .suggestions__title:hover,
@@ -3521,23 +3546,123 @@ a {
 }
 
 @media (max-width: 520px) {
+  .skin-carousel {
+    gap: 12px;
+  }
+
+  .skin-carousel__nav {
+    width: 44px;
+    height: 44px;
+  }
+
+  .skin-card {
+    gap: 12px;
+  }
+
+  .skin-card__body {
+    gap: 10px;
+  }
+
+  .skin-card__canvas {
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 0.85fr);
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    min-height: 0;
+  }
+
+  .skin-card__render {
+    width: min(200px, 58vw);
+    min-height: 180px;
+    margin: 0;
+    justify-content: center;
+    justify-self: center;
+  }
+
   .suggestions__deck {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 3px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
   }
 
   .suggestions__card {
-    padding: 4px;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 10px;
+    padding: 8px;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .suggestions__thumb {
+    margin: 0;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+  }
+
+  .suggestions__card-body {
+    flex: 1 1 auto;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .suggestions__card-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .suggestions__title {
+    flex: 1 1 100%;
+    min-width: 0;
+    font-size: 0.85rem;
+    word-break: break-word;
+  }
+
+  .suggestions__badge {
+    font-size: 0.68rem;
+    padding: 2px 6px;
   }
 
   .suggestions__swatches {
+    justify-content: flex-start;
     width: 100%;
-    justify-content: center;
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .suggestions__notes {
+    font-size: 0.72rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
   }
 
   .skin-card__equipment {
     position: static;
-    justify-content: flex-start;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    justify-items: center;
+    gap: 8px;
+    align-content: start;
+    width: 100%;
+  }
+
+  .skin-card__equipment-slot {
+    width: 48px;
+    height: 48px;
+    border-radius: 16px;
+  }
+
+  .skin-card__canvas > .skin-card__equipment {
+    margin-top: 0;
+  }
+
+  .skin-card__preview,
+  .skin-card__hero {
+    max-width: 100%;
+    max-height: 220px;
   }
 }
 
@@ -3551,6 +3676,17 @@ a {
   .page {
     padding-top: 32px;
   }
+
+    .skin-card__body {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.skin-card__list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
 
   .workspace {
     grid-template-columns: 1fr;
@@ -3587,9 +3723,6 @@ a {
     gap: 6px;
   }
 
-  .skin-card__body {
-    grid-template-columns: 1fr;
-  }
 
   .skin-card__equipment {
     position: static;
