@@ -3550,9 +3550,10 @@ a {
 
   .suggestions__card {
     flex-direction: row;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
     padding: 6px;
+    min-width: 0;
   }
 
   .suggestions__thumb {
@@ -3563,11 +3564,22 @@ a {
   }
 
   .suggestions__card-body {
+    flex: 1 1 auto;
     gap: 3px;
+    min-width: 0;
   }
 
   .suggestions__card-header {
     align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .suggestions__title {
+    flex: 1 1 100%;
+    min-width: 0;
+    word-break: break-word;
   }
 
   .suggestions__badge {
