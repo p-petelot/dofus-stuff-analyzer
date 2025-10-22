@@ -81,10 +81,12 @@ a {
 
 @media (max-width: 640px) {
   .language-switcher {
-    top: 14px;
-    right: 12px;
+    position: static;
+    margin: 12px auto 18px;
     padding: 6px 10px;
     gap: 4px;
+    justify-content: center;
+    flex-wrap: wrap;
   }
 }
 
