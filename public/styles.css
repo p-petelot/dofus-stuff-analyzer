@@ -3677,6 +3677,17 @@ a {
     padding-top: 32px;
   }
 
+    .skin-card__body {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.skin-card__list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
   .workspace {
     grid-template-columns: 1fr;
   }
@@ -3711,6 +3722,7 @@ a {
     grid-template-columns: 1fr;
     gap: 6px;
   }
+
 
   .skin-card__equipment {
     position: static;
