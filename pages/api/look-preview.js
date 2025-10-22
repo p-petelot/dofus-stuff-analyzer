@@ -6,6 +6,7 @@ const SOUFF_RENDERER_ENDPOINT = "https://skin.souff.fr/renderer/";
 const DEFAULT_RENDER_SIZE = 512;
 const DEFAULT_LANG = DEFAULT_LANGUAGE;
 const MAX_RENDER_SIZE = 2048;
+const DEFAULT_RENDER_DIRECTION = 1;
 
 function coercePositiveInteger(value, fallback) {
   const numeric = Number(value);
@@ -238,6 +239,8 @@ export function buildSouffLookPayload({
   gender,
   itemIds,
   colors,
+  animation = 0,
+  direction = DEFAULT_RENDER_DIRECTION,
 }) {
   if (!Number.isFinite(breedId) || breedId <= 0) {
     throw new Error("Paramètre breedId invalide");
@@ -278,12 +281,21 @@ export function buildSouffLookPayload({
     )
   );
 
+  const animationValue = Number.isFinite(animation)
+    ? Math.max(0, Math.trunc(animation))
+    : 0;
+  const directionValue = Number.isFinite(direction)
+    ? Math.max(0, Math.min(7, Math.trunc(direction)))
+    : DEFAULT_RENDER_DIRECTION;
+
   return {
     breed: Math.trunc(breedId),
     head: Math.trunc(faceId),
     sex,
     item_id: normalizedItems,
     colors: normalizedColors,
+    animation: animationValue,
+    direction: directionValue,
   };
 }
 
@@ -326,7 +338,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { breedId, classeId, classId, sexe, gender, lang, size } = req.query ?? {};
+    const { breedId, classeId, classId, sexe, gender, lang, size, animation, direction } =
+      req.query ?? {};
 
     const numericBreedId = Number(breedId ?? classId ?? classeId);
     if (!Number.isFinite(numericBreedId) || numericBreedId <= 0) {
@@ -355,6 +368,12 @@ export default async function handler(req, res) {
 
     const normalizedLang = normalizeLanguage(lang) ?? DEFAULT_LANG;
     const resolvedSize = coercePositiveInteger(size, DEFAULT_RENDER_SIZE);
+    const animationValue = Number.isFinite(Number(animation))
+      ? Math.max(0, Math.trunc(Number(animation)))
+      : 0;
+    const directionValue = Number.isFinite(Number(direction))
+      ? Math.max(0, Math.min(7, Math.trunc(Number(direction))))
+      : DEFAULT_RENDER_DIRECTION;
 
     const souffPayload = buildSouffLookPayload({
       breedId: numericBreedId,
@@ -362,6 +381,8 @@ export default async function handler(req, res) {
       gender: normalizedGender,
       itemIds,
       colors,
+      animation: animationValue,
+      direction: directionValue,
     });
 
     warnings = [];
@@ -373,6 +394,8 @@ export default async function handler(req, res) {
       colors,
       lang: normalizedLang,
       size: resolvedSize,
+      animation: animationValue,
+      direction: directionValue,
     };
 
     try {
@@ -406,6 +429,8 @@ export default async function handler(req, res) {
     colors.forEach((value) => {
       searchParams.append("colors[]", String(value));
     });
+    searchParams.set("animation", String(animationValue));
+    searchParams.set("direction", String(directionValue));
 
     const lookUrl = `${DOFUS_LOOK_API_URL}?${searchParams.toString()}`;
 

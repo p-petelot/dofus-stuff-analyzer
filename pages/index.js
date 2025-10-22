@@ -959,6 +959,44 @@ const DEFAULT_PREVIEW_BACKGROUND_STATE = Object.freeze({
   selection: null,
 });
 
+const DEFAULT_LOOK_ANIMATION = 0;
+const DEFAULT_LOOK_DIRECTION = 1;
+
+const LOOK_DIRECTION_OPTIONS = Object.freeze([
+  { value: 0, labelKey: "identity.preview.direction.right", rotation: 90 },
+  { value: 1, labelKey: "identity.preview.direction.bottomRight", rotation: 135 },
+  { value: 2, labelKey: "identity.preview.direction.bottom", rotation: 180 },
+  { value: 3, labelKey: "identity.preview.direction.bottomLeft", rotation: 225 },
+  { value: 4, labelKey: "identity.preview.direction.left", rotation: 270 },
+  { value: 5, labelKey: "identity.preview.direction.topLeft", rotation: 315 },
+  { value: 6, labelKey: "identity.preview.direction.top", rotation: 0 },
+  { value: 7, labelKey: "identity.preview.direction.topRight", rotation: 45 },
+]);
+
+const LOOK_DIRECTION_BY_VALUE = new Map(
+  LOOK_DIRECTION_OPTIONS.map((option) => [option.value, option])
+);
+
+const LOOK_DIRECTION_GRID = Object.freeze([
+  [5, 6, 7],
+  [4, null, 0],
+  [3, 2, 1],
+]);
+
+function normalizeLookDirection(value, fallback = DEFAULT_LOOK_DIRECTION) {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  const numeric = Math.trunc(value);
+  if (numeric < 0) {
+    return 0;
+  }
+  if (numeric > 7) {
+    return 7;
+  }
+  return numeric;
+}
+
 const BARBOFUS_BASE_URL = "https://barbofus.com/skinator";
 const BARBOFUS_EQUIPMENT_SLOTS = ["6", "7", "8", "9", "10", "11", "12"];
 const BARBOFUS_SLOT_BY_TYPE = {
@@ -2616,6 +2654,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const [activeProposal, setActiveProposal] = useState(0);
   const [lookPreviews, setLookPreviews] = useState({});
   const lookPreviewsRef = useRef({});
+  const [lookAnimation, setLookAnimation] = useState(DEFAULT_LOOK_ANIMATION);
+  const [lookDirection, setLookDirection] = useState(DEFAULT_LOOK_DIRECTION);
   const [downloadingPreviewId, setDownloadingPreviewId] = useState(null);
   const [useCustomSkinTone, setUseCustomSkinTone] = useState(false);
   const [showDetailedMatches, setShowDetailedMatches] = useState(false);
@@ -2828,22 +2868,30 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     [familierFilters, itemFlagFilters, itemSlotFilters]
   );
 
-  const hasCustomPreviewBackgroundSettings = useMemo(
+  const hasCustomPreviewSettings = useMemo(
     () =>
+      lookAnimation !== DEFAULT_LOOK_ANIMATION ||
+      normalizeLookDirection(lookDirection) !== DEFAULT_LOOK_DIRECTION ||
       isPreviewBackgroundEnabled !== DEFAULT_PREVIEW_BACKGROUND_STATE.enabled ||
       previewBackgroundMode !== DEFAULT_PREVIEW_BACKGROUND_STATE.mode ||
       (previewBackgroundMode === PREVIEW_BACKGROUND_MODES.MANUAL &&
         selectedPreviewBackgroundId !== DEFAULT_PREVIEW_BACKGROUND_STATE.selection),
-    [isPreviewBackgroundEnabled, previewBackgroundMode, selectedPreviewBackgroundId]
+    [
+      isPreviewBackgroundEnabled,
+      lookAnimation,
+      lookDirection,
+      previewBackgroundMode,
+      selectedPreviewBackgroundId,
+    ]
   );
 
   const filtersPanelClassName = useMemo(() => {
     const classes = ["filters-panel"];
-    if (hasCustomFilters || hasCustomPreviewBackgroundSettings) {
+    if (hasCustomFilters || hasCustomPreviewSettings) {
       classes.push("filters-panel--active");
     }
     return classes.join(" ");
-  }, [hasCustomFilters, hasCustomPreviewBackgroundSettings]);
+  }, [hasCustomFilters, hasCustomPreviewSettings]);
 
   const referenceClassName = useMemo(() => {
     const classes = ["reference"];
@@ -3786,6 +3834,12 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       lookColors.forEach((value) => {
         keyParts.push(`c${value}`);
       });
+      const animationCode = Number.isFinite(lookAnimation)
+        ? Math.trunc(lookAnimation)
+        : DEFAULT_LOOK_ANIMATION;
+      keyParts.push(`a${animationCode}`);
+      const directionCode = normalizeLookDirection(lookDirection);
+      keyParts.push(`d${directionCode}`);
 
       const lookKey = keyParts.length ? keyParts.join("-") : null;
 
@@ -3806,6 +3860,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         lookItemIds,
         lookColors,
         lookKey,
+        lookAnimation: animationCode,
+        lookDirection: directionCode,
       });
     }
 
@@ -3822,6 +3878,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     recommendations,
     selectedItemsBySlot,
     useCustomSkinTone,
+    lookAnimation,
+    lookDirection,
   ]);
 
   const previewBackgroundAutoByProposal = useMemo(() => {
@@ -4027,6 +4085,12 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         params.set("gender", proposal.lookGender ?? "m");
         params.set("lang", language);
         params.set("size", String(LOOK_PREVIEW_SIZE));
+        const animationValue = Number.isFinite(proposal.lookAnimation)
+          ? Math.trunc(proposal.lookAnimation)
+          : DEFAULT_LOOK_ANIMATION;
+        params.set("animation", String(animationValue));
+        const directionValue = normalizeLookDirection(proposal.lookDirection);
+        params.set("direction", String(directionValue));
         if (Number.isFinite(proposal.lookFaceId)) {
           params.set("faceId", String(Math.trunc(proposal.lookFaceId)));
         }
@@ -4120,7 +4184,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       cancelled = true;
       abortController.abort();
     };
-  }, [language, proposals, t]);
+  }, [language, lookAnimation, lookDirection, proposals, t]);
 
   const handleNextProposal = useCallback(() => {
     if (!proposalCount) {
@@ -5471,6 +5535,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                     backgroundColor: primaryColor,
                                   }
                                 : { backgroundImage: canvasBackground };
+                              const activeDirection = normalizeLookDirection(lookDirection);
                               return (
                                 <article key={proposal.id} className="skin-card">
                                   <h3 className="sr-only">{t("suggestions.carousel.proposalTitle", { index: proposal.index + 1 })}</h3>
@@ -5479,41 +5544,120 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                       className="skin-card__canvas"
                                       style={canvasStyle}
                                     >
-                                    <div className="skin-card__render">
-                                      {lookLoading ? (
-                                            <div className="skin-card__loader" role="status" aria-live="polite">
-                                              <span className="skin-card__loader-spinner" aria-hidden="true" />
-                                              <span className="sr-only">{t("suggestions.render.loading")}</span>
+                                      <div className="skin-card__render">
+                                        {lookLoading ? (
+                                          <div className="skin-card__loader" role="status" aria-live="polite">
+                                            <span className="skin-card__loader-spinner" aria-hidden="true" />
+                                            <span className="sr-only">{t("suggestions.render.loading")}</span>
+                                          </div>
+                                        ) : null}
+                                        {lookError && !lookLoading && !lookLoaded ? (
+                                          <div className="skin-card__status skin-card__status--error">
+                                            {lookError}
+                                          </div>
+                                        ) : null}
+                                        <div className="skin-card__glow" aria-hidden="true" />
+                                        <div className="skin-card__preview">
+                                          {previewSrc ? (
+                                            <img
+                                              src={previewSrc}
+                                              alt={previewAlt}
+                                              loading="lazy"
+                                              className="skin-card__preview-image"
+                                              onError={() => handleLookPreviewError(proposal.id)}
+                                            />
+                                          ) : heroSrc ? (
+                                            <img
+                                              src={heroSrc}
+                                              alt={`Aperçu principal de la proposition ${proposal.index + 1}`}
+                                              loading="lazy"
+                                              className="skin-card__hero"
+                                            />
+                                          ) : (
+                                            <div className="skin-card__placeholder" aria-hidden="true">
+                                              Aperçu indisponible
                                             </div>
-                                      ) : null}
-                                      {lookError && !lookLoading && !lookLoaded ? (
-                                        <div className="skin-card__status skin-card__status--error">
-                                          {lookError}
+                                          )}
+                                          <div
+                                            className="skin-card__direction"
+                                            role="group"
+                                            aria-label={t("aria.previewDirectionControl")}
+                                          >
+                                            <span className="sr-only">
+                                              {t("identity.preview.direction.label")}
+                                            </span>
+                                            <div className="skin-card__direction-grid">
+                                              {LOOK_DIRECTION_GRID.map((row, rowIndex) =>
+                                                row.map((value, columnIndex) => {
+                                                  if (!Number.isFinite(value)) {
+                                                    return (
+                                                      <span
+                                                        key={`direction-spacer-${rowIndex}-${columnIndex}`}
+                                                        className="skin-card__direction-spacer"
+                                                        aria-hidden="true"
+                                                      />
+                                                    );
+                                                  }
+
+                                                  const option = LOOK_DIRECTION_BY_VALUE.get(value);
+                                                  if (!option) {
+                                                    return (
+                                                      <span
+                                                        key={`direction-fallback-${value}`}
+                                                        className="skin-card__direction-spacer"
+                                                        aria-hidden="true"
+                                                      />
+                                                    );
+                                                  }
+
+                                                  const label = t(option.labelKey);
+                                                  const isActive = activeDirection === value;
+
+                                                  return (
+                                                    <button
+                                                      key={`direction-${value}`}
+                                                      type="button"
+                                                      className={`skin-card__direction-button${
+                                                        isActive ? " is-active" : ""
+                                                      }`}
+                                                      onClick={() => setLookDirection(value)}
+                                                      aria-pressed={isActive}
+                                                      title={label}
+                                                      aria-label={label}
+                                                    >
+                                                      <span className="sr-only">{label}</span>
+                                                      <svg
+                                                        className="skin-card__direction-icon"
+                                                        viewBox="0 0 20 20"
+                                                        fill="none"
+                                                        xmlns="http://www.w3.org/2000/svg"
+                                                        aria-hidden="true"
+                                                        focusable="false"
+                                                        style={{ transform: `rotate(${option.rotation}deg)` }}
+                                                      >
+                                                        <path
+                                                          d="M10 3.5 10 16.5"
+                                                          stroke="currentColor"
+                                                          strokeWidth="1.6"
+                                                          strokeLinecap="round"
+                                                        />
+                                                        <path
+                                                          d="M6.2 7.3 10 3.5l3.8 3.8"
+                                                          stroke="currentColor"
+                                                          strokeWidth="1.6"
+                                                          strokeLinecap="round"
+                                                          strokeLinejoin="round"
+                                                        />
+                                                      </svg>
+                                                    </button>
+                                                  );
+                                                })
+                                              )}
+                                            </div>
+                                          </div>
                                         </div>
-                                      ) : null}
-                                      <div className="skin-card__glow" aria-hidden="true" />
-                                      {previewSrc ? (
-                                        <img
-                                          src={previewSrc}
-                                          alt={previewAlt}
-                                          loading="lazy"
-                                          className="skin-card__preview"
-                                          onError={() => handleLookPreviewError(proposal.id)}
-                                        />
-                                      ) : heroSrc ? (
-                                        <img
-                                          src={heroSrc}
-                                          alt={`Aperçu principal de la proposition ${proposal.index + 1}`}
-                                          loading="lazy"
-                                          className="skin-card__hero"
-                                        />
-                                      ) : (
-                                        <div className="skin-card__placeholder" aria-hidden="true">
-                                          Aperçu indisponible
-                                        </div>
-                                      )}
-                                    </div>
-                                    <ul className="skin-card__equipment" role="list">
+                                      </div>
+                                      <ul className="skin-card__equipment" role="list">
                                       {proposal.items.map((item) => {
                                         const slotLabelKey = ITEM_TYPE_LABEL_KEYS[item.slotType];
                                         const slotLabel = slotLabelKey ? t(slotLabelKey) : item.slotType;
@@ -6157,7 +6301,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
             </div>
             <div
               className={`filters-panel__group filters-panel__group--preview${
-                hasCustomPreviewBackgroundSettings ? " is-active" : ""
+                hasCustomPreviewSettings ? " is-active" : ""
               }`}
               role="group"
               aria-label={t("aria.previewBackgroundCard")}
@@ -6170,6 +6314,44 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                 <span className="filters-panel__section-title">
                   {t("identity.previewBackground.sectionTitle")}
                 </span>
+                <div
+                  className="companion-toggle companion-toggle--preview-animation"
+                  role="group"
+                  aria-label={t("aria.combatPoseToggle")}
+                >
+                  <button
+                    type="button"
+                    className={`companion-toggle__chip${
+                      lookAnimation === 2 ? " is-active" : ""
+                    }`}
+                    onClick={() =>
+                      setLookAnimation((previous) =>
+                        previous === 2 ? DEFAULT_LOOK_ANIMATION : 2
+                      )
+                    }
+                    aria-pressed={lookAnimation === 2}
+                    title={t("identity.preview.combatPose")}
+                  >
+                    <span className="companion-toggle__indicator" aria-hidden="true">
+                      {lookAnimation === 2 ? (
+                        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path
+                            d="M5 10.5 8.2 13.7 15 6.5"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      ) : (
+                        <span className="companion-toggle__dot" />
+                      )}
+                    </span>
+                    <span className="companion-toggle__label">
+                      {t("identity.preview.combatPose")}
+                    </span>
+                  </button>
+                </div>
                 <div
                   className="companion-toggle companion-toggle--preview-background"
                   role="group"
