@@ -132,6 +132,7 @@ describe("buildSouffLookPayload", () => {
       item_id: [22258, 8632, 8644],
       colors: [0xffffff, 0x123456],
       animation: 0,
+      direction: 1,
     });
   });
 
@@ -146,6 +147,30 @@ describe("buildSouffLookPayload", () => {
     });
 
     expect(payload.animation).toBe(2);
+  });
+
+  it("normalizes the direction value", () => {
+    const payload = buildSouffLookPayload({
+      breedId: 7,
+      faceId: 105,
+      gender: "f",
+      itemIds: [22258],
+      colors: [],
+      direction: 9.2,
+    });
+
+    expect(payload.direction).toBe(7);
+
+    const negative = buildSouffLookPayload({
+      breedId: 7,
+      faceId: 105,
+      gender: "m",
+      itemIds: [22258],
+      colors: [],
+      direction: -3,
+    });
+
+    expect(negative.direction).toBe(0);
   });
 
   it("throws when required properties are missing", () => {
