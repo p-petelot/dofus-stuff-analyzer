@@ -1396,8 +1396,8 @@ a {
 }
 
 .filters-panel--active {
-  border-color: rgba(56, 189, 248, 0.28);
   box-shadow: 0 24px 44px -30px rgba(56, 189, 248, 0.55);
+  outline : 2px solid rgba(56, 189, 248, 0.38);
 }
 
 .filters-panel__group {
