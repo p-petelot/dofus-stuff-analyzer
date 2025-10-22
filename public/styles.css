@@ -2379,6 +2379,22 @@ a {
   color: var(--text);
 }
 
+.skin-card__direction-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  background: rgba(15, 23, 42, 0.38);
+  border-color: rgba(148, 163, 184, 0.24);
+  color: rgba(148, 163, 184, 0.68);
+}
+
+.skin-card__direction-button:disabled:hover,
+.skin-card__direction-button:disabled:focus-visible {
+  background: rgba(15, 23, 42, 0.38);
+  border-color: rgba(148, 163, 184, 0.24);
+  color: rgba(148, 163, 184, 0.68);
+  outline: none;
+}
+
 .skin-card__direction-icon {
   width: 16px;
   height: 16px;
@@ -2956,9 +2972,7 @@ a {
 .suggestions {
   background: var(--card);
   border-radius: var(--radius-lg);
-  border: 1px solid var(--card-border);
   padding: 10px;
-  box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
   gap: 10px;
