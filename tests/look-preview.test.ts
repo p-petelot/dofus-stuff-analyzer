@@ -131,7 +131,21 @@ describe("buildSouffLookPayload", () => {
       sex: 1,
       item_id: [22258, 8632, 8644],
       colors: [0xffffff, 0x123456],
+      animation: 0,
     });
+  });
+
+  it("normalizes the animation value", () => {
+    const payload = buildSouffLookPayload({
+      breedId: 7,
+      faceId: 105,
+      gender: "f",
+      itemIds: [22258],
+      colors: [],
+      animation: 2.7,
+    });
+
+    expect(payload.animation).toBe(2);
   });
 
   it("throws when required properties are missing", () => {

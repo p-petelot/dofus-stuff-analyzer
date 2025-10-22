@@ -959,6 +959,8 @@ const DEFAULT_PREVIEW_BACKGROUND_STATE = Object.freeze({
   selection: null,
 });
 
+const DEFAULT_LOOK_ANIMATION = 0;
+
 const BARBOFUS_BASE_URL = "https://barbofus.com/skinator";
 const BARBOFUS_EQUIPMENT_SLOTS = ["6", "7", "8", "9", "10", "11", "12"];
 const BARBOFUS_SLOT_BY_TYPE = {
@@ -2616,6 +2618,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const [activeProposal, setActiveProposal] = useState(0);
   const [lookPreviews, setLookPreviews] = useState({});
   const lookPreviewsRef = useRef({});
+  const [lookAnimation, setLookAnimation] = useState(DEFAULT_LOOK_ANIMATION);
   const [downloadingPreviewId, setDownloadingPreviewId] = useState(null);
   const [useCustomSkinTone, setUseCustomSkinTone] = useState(false);
   const [showDetailedMatches, setShowDetailedMatches] = useState(false);
@@ -2828,22 +2831,28 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     [familierFilters, itemFlagFilters, itemSlotFilters]
   );
 
-  const hasCustomPreviewBackgroundSettings = useMemo(
+  const hasCustomPreviewSettings = useMemo(
     () =>
+      lookAnimation !== DEFAULT_LOOK_ANIMATION ||
       isPreviewBackgroundEnabled !== DEFAULT_PREVIEW_BACKGROUND_STATE.enabled ||
       previewBackgroundMode !== DEFAULT_PREVIEW_BACKGROUND_STATE.mode ||
       (previewBackgroundMode === PREVIEW_BACKGROUND_MODES.MANUAL &&
         selectedPreviewBackgroundId !== DEFAULT_PREVIEW_BACKGROUND_STATE.selection),
-    [isPreviewBackgroundEnabled, previewBackgroundMode, selectedPreviewBackgroundId]
+    [
+      isPreviewBackgroundEnabled,
+      lookAnimation,
+      previewBackgroundMode,
+      selectedPreviewBackgroundId,
+    ]
   );
 
   const filtersPanelClassName = useMemo(() => {
     const classes = ["filters-panel"];
-    if (hasCustomFilters || hasCustomPreviewBackgroundSettings) {
+    if (hasCustomFilters || hasCustomPreviewSettings) {
       classes.push("filters-panel--active");
     }
     return classes.join(" ");
-  }, [hasCustomFilters, hasCustomPreviewBackgroundSettings]);
+  }, [hasCustomFilters, hasCustomPreviewSettings]);
 
   const referenceClassName = useMemo(() => {
     const classes = ["reference"];
@@ -3786,6 +3795,10 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       lookColors.forEach((value) => {
         keyParts.push(`c${value}`);
       });
+      const animationCode = Number.isFinite(lookAnimation)
+        ? Math.trunc(lookAnimation)
+        : DEFAULT_LOOK_ANIMATION;
+      keyParts.push(`a${animationCode}`);
 
       const lookKey = keyParts.length ? keyParts.join("-") : null;
 
@@ -3806,6 +3819,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         lookItemIds,
         lookColors,
         lookKey,
+        lookAnimation: animationCode,
       });
     }
 
@@ -3822,6 +3836,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     recommendations,
     selectedItemsBySlot,
     useCustomSkinTone,
+    lookAnimation,
   ]);
 
   const previewBackgroundAutoByProposal = useMemo(() => {
@@ -4027,6 +4042,10 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         params.set("gender", proposal.lookGender ?? "m");
         params.set("lang", language);
         params.set("size", String(LOOK_PREVIEW_SIZE));
+        const animationValue = Number.isFinite(proposal.lookAnimation)
+          ? Math.trunc(proposal.lookAnimation)
+          : DEFAULT_LOOK_ANIMATION;
+        params.set("animation", String(animationValue));
         if (Number.isFinite(proposal.lookFaceId)) {
           params.set("faceId", String(Math.trunc(proposal.lookFaceId)));
         }
@@ -4120,7 +4139,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       cancelled = true;
       abortController.abort();
     };
-  }, [language, proposals, t]);
+  }, [language, lookAnimation, proposals, t]);
 
   const handleNextProposal = useCallback(() => {
     if (!proposalCount) {
@@ -6157,7 +6176,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
             </div>
             <div
               className={`filters-panel__group filters-panel__group--preview${
-                hasCustomPreviewBackgroundSettings ? " is-active" : ""
+                hasCustomPreviewSettings ? " is-active" : ""
               }`}
               role="group"
               aria-label={t("aria.previewBackgroundCard")}
@@ -6170,6 +6189,44 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                 <span className="filters-panel__section-title">
                   {t("identity.previewBackground.sectionTitle")}
                 </span>
+                <div
+                  className="companion-toggle companion-toggle--preview-animation"
+                  role="group"
+                  aria-label={t("aria.combatPoseToggle")}
+                >
+                  <button
+                    type="button"
+                    className={`companion-toggle__chip${
+                      lookAnimation === 2 ? " is-active" : ""
+                    }`}
+                    onClick={() =>
+                      setLookAnimation((previous) =>
+                        previous === 2 ? DEFAULT_LOOK_ANIMATION : 2
+                      )
+                    }
+                    aria-pressed={lookAnimation === 2}
+                    title={t("identity.preview.combatPose")}
+                  >
+                    <span className="companion-toggle__indicator" aria-hidden="true">
+                      {lookAnimation === 2 ? (
+                        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path
+                            d="M5 10.5 8.2 13.7 15 6.5"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      ) : (
+                        <span className="companion-toggle__dot" />
+                      )}
+                    </span>
+                    <span className="companion-toggle__label">
+                      {t("identity.preview.combatPose")}
+                    </span>
+                  </button>
+                </div>
                 <div
                   className="companion-toggle companion-toggle--preview-background"
                   role="group"
