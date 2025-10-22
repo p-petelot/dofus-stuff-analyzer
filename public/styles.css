@@ -1462,28 +1462,6 @@ a {
 }
 
 
-.identity-card__gender-wrapper,
-.identity-card__class-wrapper {
-  width: 100%;
-}
-
-.identity-card__gender-wrapper {
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-}
-
-.identity-card__class-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  background: rgba(8, 12, 26, 0.65);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-}
-
 .identity-card__gender {
   position: relative;
   display: grid;
