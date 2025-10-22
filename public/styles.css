@@ -3540,32 +3540,38 @@ a {
 
   .skin-card__canvas {
     padding: 12px;
-    min-height: 180px;
+    min-height: 176px;
+  }
+
+  .skin-card__render {
+    width: min(220px, 68vw);
+    min-height: 176px;
   }
 
   .suggestions__deck {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
   }
 
   .suggestions__card {
     flex-direction: row;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 6px;
+    align-items: stretch;
+    gap: 10px;
+    padding: 8px;
     min-width: 0;
+    width: 100%;
   }
 
   .suggestions__thumb {
     margin: 0;
-    flex: 0 0 42px;
-    width: 42px;
-    height: 42px;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
   }
 
   .suggestions__card-body {
     flex: 1 1 auto;
-    gap: 3px;
+    gap: 6px;
     min-width: 0;
   }
 
@@ -3579,6 +3585,7 @@ a {
   .suggestions__title {
     flex: 1 1 100%;
     min-width: 0;
+    font-size: 0.85rem;
     word-break: break-word;
   }
 
@@ -3591,28 +3598,31 @@ a {
     justify-content: flex-start;
     width: 100%;
     flex-wrap: wrap;
-    row-gap: 3px;
+    row-gap: 4px;
   }
 
   .suggestions__notes {
-    font-size: 0.68rem;
+    font-size: 0.72rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
   }
 
   .skin-card__equipment {
     position: static;
     justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .skin-card__equipment-slot {
+    width: 48px;
+    height: 48px;
+    border-radius: 16px;
   }
 }
 
 @media (max-width: 420px) {
   .companion-toggle__chip {
     flex: 1 1 100%;
-  }
-}
-
-@media (max-width: 360px) {
-  .suggestions__deck {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
