@@ -1359,13 +1359,13 @@ a {
   background: var(--card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--card-border);
-  padding: 16px;
+  padding: 8px;
   box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
   gap: 16px;
   width: 100%;
-  max-height: min(68vh, 540px);
+  max-height: min(68vh, 380px);
   overflow-y: auto;
   scrollbar-gutter: stable both-edges;
   overscroll-behavior: contain;
@@ -1397,7 +1397,7 @@ a {
 
 .filters-panel--active {
   box-shadow: 0 24px 44px -30px rgba(56, 189, 248, 0.55);
-  outline : 2px solid rgba(56, 189, 248, 0.38);
+  /* outline : 2px solid rgba(56, 189, 248, 0.38); */
 }
 
 .filters-panel__group {
