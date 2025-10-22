@@ -515,32 +515,6 @@ a {
   font-size: 1.2rem;
 }
 
-.reference--items {
-  padding: 4px 6px 10px;
-  gap: 4px;
-}
-
-.reference--items .reference__header {
-  gap: 4px;
-}
-
-.reference--items .reference__title {
-  max-width: 320px;
-}
-
-.reference--items .reference__title h2 {
-  font-size: 1rem;
-}
-
-.reference--items .input-switch {
-  gap: 3px;
-  padding: 3px;
-}
-
-.reference--items .input-switch__option {
-  padding: 6px 11px;
-}
-
 .input-switch {
   position: relative;
   display: inline-flex;
