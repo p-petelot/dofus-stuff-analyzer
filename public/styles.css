@@ -366,7 +366,7 @@ a {
   max-width: 1840px;
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(320px, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
     "reference"
     "palette"
@@ -1426,21 +1426,19 @@ a {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 14px;
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(8, 12, 26, 0.62);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
 }
 
 .filters-panel__group.is-active {
-  border-color: rgba(59, 130, 246, 0.45);
-  box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.12),
-    0 16px 32px -28px rgba(56, 189, 248, 0.68);
+  border: none;
+  box-shadow: none;
 }
 
 .filters-panel__group--preview {
-  background: rgba(8, 12, 26, 0.55);
+  background: none;
 }
 
 .filters-panel__header {
@@ -1534,7 +1532,7 @@ a {
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.01em;
-  color: rgba(226, 232, 240, 0.72);
+  color: rgba(248, 250, 252, 0.82);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1546,15 +1544,15 @@ a {
 }
 
 .identity-card__gender-option:hover {
-  color: rgba(226, 232, 240, 0.94);
+  color: rgba(248, 250, 252, 0.98);
 }
 
 .identity-card__gender-option.is-active {
-  color: #0f172a;
+  color: #ffffff;
 }
 
 .identity-card__gender-option.is-active .identity-card__gender-icon {
-  color: #0f172a;
+  color: #ffffff;
 }
 
 .identity-card__gender-option:focus-visible {
@@ -3551,6 +3549,11 @@ a {
 
   .workspace {
     grid-template-columns: 1fr;
+  }
+
+  .filters-panel {
+    padding: 14px;
+    max-height: none;
   }
 
   .dropzone {

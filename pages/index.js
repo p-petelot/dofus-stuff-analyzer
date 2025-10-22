@@ -6015,9 +6015,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
               role="group"
               aria-label={t("aria.filtersCard")}
             >
-              <div className="filters-panel__header">
-                <h2>{t("filters.card.title")}</h2>
-              </div>
               <div
                 className="filters-panel__section"
                 role="group"
@@ -6119,21 +6116,20 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                 aria-label={t("aria.itemSlotSection")}
               >
                 <span className="filters-panel__section-title">{t("identity.filters.optionalTitle")}</span>
-                <div className="item-slot-toggle" role="group" aria-label={t("aria.itemSlotFilter")}>
-                  {ITEM_TYPES.map((type) => {
-                    const labelKey = ITEM_TYPE_LABEL_KEYS[type];
-                    const label = labelKey ? t(labelKey) : type;
-                    const isActive = itemSlotFilters[type] !== false;
+                <div className="item-slot-toggle" role="group" aria-label={t("aria.itemSlotFilter")}> 
+                  {OPTIONAL_ITEM_FILTERS.map((filter) => {
+                    const label = filter.labelKey ? t(filter.labelKey) : filter.key;
+                    const isActive = itemSlotFilters[filter.key] !== false;
                     const title = isActive
                       ? t("companions.toggle.hide", { label: label.toLowerCase() })
                       : t("companions.toggle.show", { label: label.toLowerCase() });
 
                     return (
                       <button
-                        key={type}
+                        key={filter.key}
                         type="button"
                         className={`item-slot-toggle__chip${isActive ? " is-active" : ""}`}
-                        onClick={() => handleItemSlotFilterToggle(type)}
+                        onClick={() => handleItemSlotFilterToggle(filter.key)}
                         aria-pressed={isActive}
                         title={title}
                       >
@@ -6166,9 +6162,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
               role="group"
               aria-label={t("aria.previewBackgroundCard")}
             >
-              <div className="filters-panel__header">
-                <h2>{t("previewBackground.card.title")}</h2>
-              </div>
               <div
                 className="filters-panel__section"
                 role="group"
@@ -6216,7 +6209,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                         <span className="companion-toggle__dot" />
                       )}
                     </span>
-                    <span className="companion-toggle__label">
+                    <span className="companion-toggle__label sr-only">
                       {t("identity.previewBackground.toggleLabel")}
                     </span>
                   </button>
