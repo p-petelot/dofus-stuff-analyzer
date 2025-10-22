@@ -368,35 +368,47 @@ a {
   display: grid;
   gap: 18px;
   grid-template-columns: minmax(320px, 1fr);
+  grid-template-areas:
+    "reference"
+    "palette"
+    "suggestions"
+    "filters";
   align-items: start;
 }
 
+.workspace > .reference {
+  grid-area: reference;
+}
+
+.workspace > .palette {
+  grid-area: palette;
+}
+
 .workspace > .suggestions {
+  grid-area: suggestions;
   margin: 0;
   max-width: none;
+  align-self: start;
+}
+
+.workspace > .filters-card-stack,
+.workspace > .filters-card--preview {
+  grid-area: filters;
 }
 
 @media (min-width: 960px) {
   .workspace {
-    grid-template-columns: minmax(420px, 1fr) minmax(560px, 1.6fr);
-  }
-
-  .workspace > .reference,
-  .workspace > .palette {
-    grid-column: 1 / 2;
-  }
-
-  .workspace > .suggestions,
-  .workspace > .filters-card-stack,
-  .workspace > .filters-card--preview {
-    grid-column: 2 / 3;
-    align-self: stretch;
+    grid-template-columns: minmax(420px, 1.1fr) minmax(640px, 1.9fr);
+    grid-template-areas:
+      "reference suggestions"
+      "palette suggestions"
+      "filters suggestions";
   }
 }
 
 @media (min-width: 1440px) {
   .workspace {
-    grid-template-columns: minmax(460px, 1.15fr) minmax(720px, 1.85fr);
+    grid-template-columns: minmax(440px, 1.2fr) minmax(780px, 2.1fr);
   }
 }
 
@@ -1291,7 +1303,7 @@ a {
   gap: 6px;
   align-self: start;
   width: 100%;
-  max-width: 420px;
+  max-width: 100%;
 }
 
 .palette__header {
@@ -1346,31 +1358,19 @@ a {
 
 @media (min-width: 960px) {
   .palette {
-    min-width: 400px;
+    min-width: 420px;
   }
 }
 
 @media (min-width: 1360px) {
   .palette {
-    min-width: 400px;
-  }
-}
-
-@media (min-width: 960px) {
-  .palette {
-    max-width: 440px;
-  }
-}
-
-@media (min-width: 1360px) {
-  .palette {
-    max-width: 480px;
+    min-width: 460px;
   }
 }
 
 @media (min-width: 1760px) {
   .palette {
-    max-width: 520px;
+    min-width: 500px;
   }
 }
 
@@ -2929,8 +2929,7 @@ a {
   background: var(--card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--card-border);
-  padding: 16px;
-  padding-top: 22px;
+  padding: 18px;
   box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
