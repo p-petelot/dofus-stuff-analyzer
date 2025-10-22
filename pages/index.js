@@ -5288,7 +5288,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
             )}
           </div>
           
-          <section className="suggestions">
+          <div className="suggestions">
             <div
               className="identity-card suggestions__identity-card"
               role="group"
@@ -6033,7 +6033,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
               )}
             </>
           )}
-          </section>
+          </div>
           <div className="filters-card-stack">
             <aside className={filtersCardClassName} role="group" aria-label={t("aria.filtersCard")}>
               <button
