@@ -5262,7 +5262,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                   aria-label={t("aria.genderSection")}
                 >
                   <div
-                    className="identity-card__gender"
+                    className={`identity-card__gender${selectedGender === "female" ? " is-female" : ""}`}
                     role="radiogroup"
                     aria-label={t("aria.genderGroup")}
                   >

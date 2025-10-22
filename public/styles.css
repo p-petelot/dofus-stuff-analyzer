@@ -1465,6 +1465,12 @@ a {
   width: 100%;
 }
 
+.identity-card__gender-wrapper {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+}
+
 .identity-card__class-wrapper {
   display: flex;
   flex-direction: column;
@@ -1477,76 +1483,101 @@ a {
 }
 
 .identity-card__gender {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  padding: 12px;
-  border-radius: var(--radius-md);
+  padding: 6px;
+  border-radius: 999px;
   background: rgba(8, 12, 26, 0.65);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  width: 100%;
+  max-width: 320px;
+  gap: 0;
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.identity-card__gender::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 6px;
+  width: calc((100% - 12px) / 2);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.95), rgba(56, 189, 248, 0.9));
+  box-shadow: 0 16px 32px -26px rgba(56, 189, 248, 0.85);
+  transform: translateX(0);
+  transition: transform 0.25s ease;
+  pointer-events: none;
+}
+
+.identity-card__gender.is-female::before {
+  transform: translateX(100%);
+}
+
+.identity-card__gender:focus-within {
+  border-color: rgba(148, 163, 184, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 18px 36px -28px rgba(59, 130, 246, 0.75);
 }
 
 .identity-card__gender-option {
-  border: 1px solid rgba(148, 163, 184, 0.26);
-  background: rgba(15, 23, 42, 0.6);
-  padding: 12px 10px;
-  border-radius: 16px;
+  position: relative;
+  z-index: 1;
+  border: none;
+  background: none;
+  padding: 10px 12px;
+  border-radius: 999px;
   font: inherit;
-  font-size: 0.82rem;
-  color: rgba(226, 232, 240, 0.82);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: rgba(226, 232, 240, 0.72);
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease,
-    transform 0.2s ease, box-shadow 0.2s ease;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  text-align: center;
-  min-height: 96px;
-  width: 100%;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+  transition: color 0.2s ease;
 }
 
 .identity-card__gender-option:hover {
-  border-color: rgba(148, 163, 184, 0.45);
-  transform: translateY(-1px);
+  color: rgba(226, 232, 240, 0.94);
 }
 
 .identity-card__gender-option.is-active {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.9), rgba(56, 189, 248, 0.82));
-  color: #ffffff;
-  font-weight: 600;
-  border-color: transparent;
-  box-shadow: 0 18px 34px -24px rgba(56, 189, 248, 0.92);
+  color: #0f172a;
+}
+
+.identity-card__gender-option.is-active .identity-card__gender-icon {
+  color: #0f172a;
 }
 
 .identity-card__gender-option:focus-visible {
   outline: 2px solid rgba(248, 250, 252, 0.85);
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
 
 .identity-card__gender-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 999px;
-  background: rgba(8, 12, 26, 0.65);
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  width: 22px;
+  height: 22px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: inherit;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  color: currentColor;
 }
 
 .identity-card__gender-icon svg {
-  width: 60%;
-  height: 60%;
+  width: 100%;
+  height: 100%;
 }
 
 .identity-card__gender-text {
-  font-weight: 600;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   letter-spacing: 0.02em;
 }
 
@@ -2898,8 +2929,7 @@ a {
 }
 
 .suggestions__identity-card .identity-card__gender-wrapper {
-  display: flex;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .suggestions__identity-card .identity-card__class-wrapper {
