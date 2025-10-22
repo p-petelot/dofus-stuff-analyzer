@@ -973,6 +973,8 @@ const LOOK_DIRECTION_OPTIONS = Object.freeze([
   { value: 7, labelKey: "identity.preview.direction.topRight", rotation: 45 },
 ]);
 
+const COMBAT_POSE_DISABLED_DIRECTIONS = Object.freeze([0, 2, 4, 6]);
+
 const LOOK_DIRECTION_BY_VALUE = new Map(
   LOOK_DIRECTION_OPTIONS.map((option) => [option.value, option])
 );
@@ -2657,6 +2659,20 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const [lookAnimation, setLookAnimation] = useState(DEFAULT_LOOK_ANIMATION);
   const [lookDirection, setLookDirection] = useState(DEFAULT_LOOK_DIRECTION);
   const [downloadingPreviewId, setDownloadingPreviewId] = useState(null);
+
+  useEffect(() => {
+    if (lookAnimation !== 2) {
+      return;
+    }
+
+    setLookDirection((previous) => {
+      const normalized = normalizeLookDirection(previous);
+      if (COMBAT_POSE_DISABLED_DIRECTIONS.includes(normalized)) {
+        return DEFAULT_LOOK_DIRECTION;
+      }
+      return previous;
+    });
+  }, [lookAnimation]);
   const [useCustomSkinTone, setUseCustomSkinTone] = useState(false);
   const [showDetailedMatches, setShowDetailedMatches] = useState(false);
   const [breeds, setBreeds] = useState(() =>
@@ -3987,6 +4003,26 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const activeProposalDetails = proposalCount ? proposals[safeActiveProposalIndex] : null;
   const activeProposalSubtitle = activeProposalDetails?.subtitle ?? "";
   const activeProposalClassIcon = activeProposalDetails?.classIcon ?? null;
+  const activeProposalPalette = activeProposalDetails?.palette;
+
+  const suggestionsAccentStyle = useMemo(() => {
+    const palette = Array.isArray(activeProposalPalette)
+      ? activeProposalPalette
+      : [];
+    const paletteHex = palette
+      .map((value) => normalizeColorToHex(value))
+      .find(Boolean);
+    const fallbackHex = colors
+      .map((entry) => normalizeColorToHex(entry?.hex))
+      .find(Boolean);
+    const accentHex = paletteHex ?? fallbackHex ?? null;
+    const accentRgb = accentHex ? hexToRgb(accentHex) : null;
+    const { r, g, b } = accentRgb ?? { r: 56, g: 189, b: 248 };
+    return {
+      boxShadow: `0 24px 44px -30px rgba(${r}, ${g}, ${b}, 0.55)`,
+      outline: `2px solid rgba(${r}, ${g}, ${b}, 0.38)`,
+    };
+  }, [activeProposalPalette, colors]);
 
   useEffect(() => {
     if (!proposalCount) {
@@ -5313,7 +5349,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
             )}
           </div>
           
-          <div className="suggestions">
+          <div className="suggestions" style={suggestionsAccentStyle}>
             <div
               className="identity-card suggestions__identity-card"
               role="group"
@@ -5536,6 +5572,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                   }
                                 : { backgroundImage: canvasBackground };
                               const activeDirection = normalizeLookDirection(lookDirection);
+                              const isCombatPoseActive = lookAnimation === 2;
                               return (
                                 <article key={proposal.id} className="skin-card">
                                   <h3 className="sr-only">{t("suggestions.carousel.proposalTitle", { index: proposal.index + 1 })}</h3>
@@ -5612,6 +5649,9 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
 
                                                   const label = t(option.labelKey);
                                                   const isActive = activeDirection === value;
+                                                  const isDisabled =
+                                                    isCombatPoseActive &&
+                                                    COMBAT_POSE_DISABLED_DIRECTIONS.includes(value);
 
                                                   return (
                                                     <button
@@ -5620,10 +5660,15 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                                       className={`skin-card__direction-button${
                                                         isActive ? " is-active" : ""
                                                       }`}
-                                                      onClick={() => setLookDirection(value)}
+                                                      onClick={() => {
+                                                        if (!isDisabled) {
+                                                          setLookDirection(value);
+                                                        }
+                                                      }}
                                                       aria-pressed={isActive}
                                                       title={label}
                                                       aria-label={label}
+                                                      disabled={isDisabled}
                                                     >
                                                       <span className="sr-only">{label}</span>
                                                       <svg
@@ -6324,11 +6369,12 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                     className={`companion-toggle__chip${
                       lookAnimation === 2 ? " is-active" : ""
                     }`}
-                    onClick={() =>
+                    onClick={() => {
+                      setLookDirection(DEFAULT_LOOK_DIRECTION);
                       setLookAnimation((previous) =>
                         previous === 2 ? DEFAULT_LOOK_ANIMATION : 2
-                      )
-                    }
+                      );
+                    }}
                     aria-pressed={lookAnimation === 2}
                     title={t("identity.preview.combatPose")}
                   >
