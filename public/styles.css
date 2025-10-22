@@ -3276,8 +3276,8 @@ a {
   display: grid;
   place-items: center;
   overflow: visible;
-  width: clamp(46px, 5.6vw, 66px);
-  height: clamp(46px, 5.6vw, 66px);
+  width: clamp(40px, 5.2vw, 64px);
+  height: clamp(40px, 5.2vw, 64px);
   margin: 0 auto;
 }
 
@@ -3521,18 +3521,69 @@ a {
 }
 
 @media (max-width: 520px) {
+  .skin-carousel {
+    gap: 12px;
+  }
+
+  .skin-carousel__nav {
+    width: 44px;
+    height: 44px;
+  }
+
+  .skin-card {
+    gap: 12px;
+  }
+
+  .skin-card__body {
+    gap: 10px;
+  }
+
+  .skin-card__canvas {
+    padding: 12px;
+    min-height: 180px;
+  }
+
   .suggestions__deck {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 3px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
   }
 
   .suggestions__card {
-    padding: 4px;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 6px;
+  }
+
+  .suggestions__thumb {
+    margin: 0;
+    flex: 0 0 42px;
+    width: 42px;
+    height: 42px;
+  }
+
+  .suggestions__card-body {
+    gap: 3px;
+  }
+
+  .suggestions__card-header {
+    align-items: flex-start;
+  }
+
+  .suggestions__badge {
+    font-size: 0.68rem;
+    padding: 2px 6px;
   }
 
   .suggestions__swatches {
+    justify-content: flex-start;
     width: 100%;
-    justify-content: center;
+    flex-wrap: wrap;
+    row-gap: 3px;
+  }
+
+  .suggestions__notes {
+    font-size: 0.68rem;
   }
 
   .skin-card__equipment {
