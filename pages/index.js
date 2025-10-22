@@ -5557,102 +5557,104 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           </div>
                                         ) : null}
                                         <div className="skin-card__glow" aria-hidden="true" />
-                                        {previewSrc ? (
-                                          <img
-                                            src={previewSrc}
-                                            alt={previewAlt}
-                                            loading="lazy"
-                                            className="skin-card__preview"
-                                            onError={() => handleLookPreviewError(proposal.id)}
-                                          />
-                                        ) : heroSrc ? (
-                                          <img
-                                            src={heroSrc}
-                                            alt={`Aperçu principal de la proposition ${proposal.index + 1}`}
-                                            loading="lazy"
-                                            className="skin-card__hero"
-                                          />
-                                        ) : (
-                                          <div className="skin-card__placeholder" aria-hidden="true">
-                                            Aperçu indisponible
-                                          </div>
-                                        )}
-                                      </div>
-                                      <div
-                                        className="skin-card__direction"
-                                        role="group"
-                                        aria-label={t("aria.previewDirectionControl")}
-                                      >
-                                        <span className="sr-only">
-                                          {t("identity.preview.direction.label")}
-                                        </span>
-                                        <div className="skin-card__direction-grid">
-                                          {LOOK_DIRECTION_GRID.map((row, rowIndex) =>
-                                            row.map((value, columnIndex) => {
-                                              if (!Number.isFinite(value)) {
-                                                return (
-                                                  <span
-                                                    key={`direction-spacer-${rowIndex}-${columnIndex}`}
-                                                    className="skin-card__direction-spacer"
-                                                    aria-hidden="true"
-                                                  />
-                                                );
-                                              }
-
-                                              const option = LOOK_DIRECTION_BY_VALUE.get(value);
-                                              if (!option) {
-                                                return (
-                                                  <span
-                                                    key={`direction-fallback-${value}`}
-                                                    className="skin-card__direction-spacer"
-                                                    aria-hidden="true"
-                                                  />
-                                                );
-                                              }
-
-                                              const label = t(option.labelKey);
-                                              const isActive = activeDirection === value;
-
-                                              return (
-                                                <button
-                                                  key={`direction-${value}`}
-                                                  type="button"
-                                                  className={`skin-card__direction-button${
-                                                    isActive ? " is-active" : ""
-                                                  }`}
-                                                  onClick={() => setLookDirection(value)}
-                                                  aria-pressed={isActive}
-                                                  title={label}
-                                                  aria-label={label}
-                                                >
-                                                  <span className="sr-only">{label}</span>
-                                                  <svg
-                                                    className="skin-card__direction-icon"
-                                                    viewBox="0 0 20 20"
-                                                    fill="none"
-                                                    xmlns="http://www.w3.org/2000/svg"
-                                                    aria-hidden="true"
-                                                    focusable="false"
-                                                    style={{ transform: `rotate(${option.rotation}deg)` }}
-                                                  >
-                                                    <path
-                                                      d="M10 3.5 10 16.5"
-                                                      stroke="currentColor"
-                                                      strokeWidth="1.6"
-                                                      strokeLinecap="round"
-                                                    />
-                                                    <path
-                                                      d="M6.2 7.3 10 3.5l3.8 3.8"
-                                                      stroke="currentColor"
-                                                      strokeWidth="1.6"
-                                                      strokeLinecap="round"
-                                                      strokeLinejoin="round"
-                                                    />
-                                                  </svg>
-                                                </button>
-                                              );
-                                            })
+                                        <div className="skin-card__preview">
+                                          {previewSrc ? (
+                                            <img
+                                              src={previewSrc}
+                                              alt={previewAlt}
+                                              loading="lazy"
+                                              className="skin-card__preview-image"
+                                              onError={() => handleLookPreviewError(proposal.id)}
+                                            />
+                                          ) : heroSrc ? (
+                                            <img
+                                              src={heroSrc}
+                                              alt={`Aperçu principal de la proposition ${proposal.index + 1}`}
+                                              loading="lazy"
+                                              className="skin-card__hero"
+                                            />
+                                          ) : (
+                                            <div className="skin-card__placeholder" aria-hidden="true">
+                                              Aperçu indisponible
+                                            </div>
                                           )}
+                                          <div
+                                            className="skin-card__direction"
+                                            role="group"
+                                            aria-label={t("aria.previewDirectionControl")}
+                                          >
+                                            <span className="sr-only">
+                                              {t("identity.preview.direction.label")}
+                                            </span>
+                                            <div className="skin-card__direction-grid">
+                                              {LOOK_DIRECTION_GRID.map((row, rowIndex) =>
+                                                row.map((value, columnIndex) => {
+                                                  if (!Number.isFinite(value)) {
+                                                    return (
+                                                      <span
+                                                        key={`direction-spacer-${rowIndex}-${columnIndex}`}
+                                                        className="skin-card__direction-spacer"
+                                                        aria-hidden="true"
+                                                      />
+                                                    );
+                                                  }
+
+                                                  const option = LOOK_DIRECTION_BY_VALUE.get(value);
+                                                  if (!option) {
+                                                    return (
+                                                      <span
+                                                        key={`direction-fallback-${value}`}
+                                                        className="skin-card__direction-spacer"
+                                                        aria-hidden="true"
+                                                      />
+                                                    );
+                                                  }
+
+                                                  const label = t(option.labelKey);
+                                                  const isActive = activeDirection === value;
+
+                                                  return (
+                                                    <button
+                                                      key={`direction-${value}`}
+                                                      type="button"
+                                                      className={`skin-card__direction-button${
+                                                        isActive ? " is-active" : ""
+                                                      }`}
+                                                      onClick={() => setLookDirection(value)}
+                                                      aria-pressed={isActive}
+                                                      title={label}
+                                                      aria-label={label}
+                                                    >
+                                                      <span className="sr-only">{label}</span>
+                                                      <svg
+                                                        className="skin-card__direction-icon"
+                                                        viewBox="0 0 20 20"
+                                                        fill="none"
+                                                        xmlns="http://www.w3.org/2000/svg"
+                                                        aria-hidden="true"
+                                                        focusable="false"
+                                                        style={{ transform: `rotate(${option.rotation}deg)` }}
+                                                      >
+                                                        <path
+                                                          d="M10 3.5 10 16.5"
+                                                          stroke="currentColor"
+                                                          strokeWidth="1.6"
+                                                          strokeLinecap="round"
+                                                        />
+                                                        <path
+                                                          d="M6.2 7.3 10 3.5l3.8 3.8"
+                                                          stroke="currentColor"
+                                                          strokeWidth="1.6"
+                                                          strokeLinecap="round"
+                                                          strokeLinejoin="round"
+                                                        />
+                                                      </svg>
+                                                    </button>
+                                                  );
+                                                })
+                                              )}
+                                            </div>
+                                          </div>
                                         </div>
                                       </div>
                                       <ul className="skin-card__equipment" role="list">
