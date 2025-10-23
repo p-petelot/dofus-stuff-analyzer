@@ -118,6 +118,9 @@ const TRANSLATIONS = {
     "identity.preview.direction.topRight": "Orienter vers le haut à droite",
     "identity.preview.direction.rotateLeft": "Tourner vers la gauche",
     "identity.preview.direction.rotateRight": "Tourner vers la droite",
+    "identity.preview.direction.hint":
+      "Maintiens le clic ou le doigt et fais glisser pour tourner. Utilise les flèches du clavier pour pivoter.",
+    "identity.preview.direction.announce": "Orientation actuelle : {direction}",
     "identity.previewBackground.sectionTitle": "Arrière-plan du rendu",
     "identity.previewBackground.toggleLabel": "Fond immersif",
     "identity.previewBackground.enable": "Activer l'arrière-plan immersif",
@@ -306,6 +309,9 @@ const TRANSLATIONS = {
     "identity.preview.direction.topRight": "Face up-right",
     "identity.preview.direction.rotateLeft": "Rotate left",
     "identity.preview.direction.rotateRight": "Rotate right",
+    "identity.preview.direction.hint":
+      "Click or press and drag to rotate. Use the arrow keys to change direction.",
+    "identity.preview.direction.announce": "Current facing: {direction}",
     "identity.previewBackground.sectionTitle": "Preview background",
     "identity.previewBackground.toggleLabel": "Immersive background",
     "identity.previewBackground.enable": "Enable immersive preview background",
@@ -492,6 +498,9 @@ const TRANSLATIONS = {
     "identity.preview.direction.topRight": "Orientar hacia arriba a la derecha",
     "identity.preview.direction.rotateLeft": "Girar a la izquierda",
     "identity.preview.direction.rotateRight": "Girar a la derecha",
+    "identity.preview.direction.hint":
+      "Mantén pulsado y arrastra para girar. Usa las flechas del teclado para cambiar la orientación.",
+    "identity.preview.direction.announce": "Orientación actual: {direction}",
     "identity.previewBackground.sectionTitle": "Fondo de la previsualización",
     "identity.previewBackground.toggleLabel": "Fondo inmersivo",
     "identity.previewBackground.enable": "Activar el fondo inmersivo de la previsualización",
@@ -678,6 +687,9 @@ const TRANSLATIONS = {
     "identity.preview.direction.topRight": "Nach oben rechts ausrichten",
     "identity.preview.direction.rotateLeft": "Nach links drehen",
     "identity.preview.direction.rotateRight": "Nach rechts drehen",
+    "identity.preview.direction.hint":
+      "Klicke bzw. tippe und ziehe zum Drehen. Nutze die Pfeiltasten, um die Richtung zu ändern.",
+    "identity.preview.direction.announce": "Aktuelle Ausrichtung: {direction}",
     "identity.previewBackground.sectionTitle": "Vorschau-Hintergrund",
     "identity.previewBackground.toggleLabel": "Stimmungsvoller Hintergrund",
     "identity.previewBackground.enable": "Stimmungsvollen Vorschau-Hintergrund aktivieren",
@@ -865,6 +877,9 @@ const TRANSLATIONS = {
     "identity.preview.direction.topRight": "Virar para cima à direita",
     "identity.preview.direction.rotateLeft": "Girar para a esquerda",
     "identity.preview.direction.rotateRight": "Girar para a direita",
+    "identity.preview.direction.hint":
+      "Clica ou toca e arrasta para girar. Usa as setas do teclado para mudar a direção.",
+    "identity.preview.direction.announce": "Orientação atual: {direction}",
     "identity.previewBackground.sectionTitle": "Fundo da pré-visualização",
     "identity.previewBackground.toggleLabel": "Fundo imersivo",
     "identity.previewBackground.enable": "Ativar o fundo imersivo da pré-visualização",

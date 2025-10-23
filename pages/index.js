@@ -1388,11 +1388,7 @@ const LOOK_DIRECTION_BY_VALUE = new Map(
   LOOK_DIRECTION_OPTIONS.map((option) => [option.value, option])
 );
 
-const LOOK_DIRECTION_GRID = Object.freeze([
-  [5, 6, 7],
-  [4, null, 0],
-  [3, 2, 1],
-]);
+const DIRECTION_DRAG_THRESHOLD = 28;
 
 function normalizeLookDirection(value, fallback = DEFAULT_LOOK_DIRECTION) {
   if (!Number.isFinite(value)) {
@@ -3149,6 +3145,12 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const [lookPreviews, setLookPreviews] = useState({});
   const lookPreviewsRef = useRef({});
   const lookPreviewRequestsRef = useRef(new Map());
+  const directionDragStateRef = useRef({
+    active: false,
+    pointerId: null,
+    lastX: 0,
+    remainder: 0,
+  });
   const isUnmountedRef = useRef(false);
   const [lookAnimation, setLookAnimation] = useState(DEFAULT_LOOK_ANIMATION);
   const [lookDirection, setLookDirection] = useState(DEFAULT_LOOK_DIRECTION);
@@ -4542,6 +4544,12 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const activeDirectionValue = normalizeLookDirection(lookDirection);
   const activeDirectionOption = LOOK_DIRECTION_BY_VALUE.get(activeDirectionValue);
   const activeDirectionLabel = activeDirectionOption ? t(activeDirectionOption.labelKey) : "";
+  const directionAnnouncement = activeDirectionLabel
+    ? t("identity.preview.direction.announce", { direction: activeDirectionLabel })
+    : "";
+  const previewDirectionDescription = `${t("aria.previewDirectionControl")}${
+    activeDirectionLabel ? ` - ${activeDirectionLabel}` : ""
+  }. ${t("identity.preview.direction.hint")}`;
 
   const adaptiveThemePalette = useMemo(() => {
     if (Array.isArray(activeProposalPalette) && activeProposalPalette.length) {
@@ -5050,13 +5058,149 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     [lookAnimation]
   );
 
-  const handleRotateLeft = useCallback(() => {
-    rotateLookDirection(-1);
-  }, [rotateLookDirection]);
+  const resetDirectionDragState = useCallback(() => {
+    directionDragStateRef.current = {
+      active: false,
+      pointerId: null,
+      lastX: 0,
+      remainder: 0,
+    };
+  }, []);
 
-  const handleRotateRight = useCallback(() => {
-    rotateLookDirection(1);
-  }, [rotateLookDirection]);
+  const handleDirectionPointerDown = useCallback((event) => {
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
+
+    const target = event.currentTarget;
+    if (typeof target.focus === "function") {
+      target.focus({ preventScroll: true });
+    }
+
+    if (typeof target.setPointerCapture === "function") {
+      try {
+        target.setPointerCapture(event.pointerId);
+      } catch (_error) {
+        // Ignore capture errors.
+      }
+    }
+
+    directionDragStateRef.current = {
+      active: true,
+      pointerId: event.pointerId,
+      lastX: Number.isFinite(event.clientX) ? event.clientX : 0,
+      remainder: 0,
+    };
+
+    if (event.pointerType === "touch") {
+      event.preventDefault();
+    }
+  }, []);
+
+  const handleDirectionPointerMove = useCallback(
+    (event) => {
+      const state = directionDragStateRef.current;
+      if (!state.active || state.pointerId !== event.pointerId) {
+        return;
+      }
+
+      if (!Number.isFinite(event.clientX)) {
+        return;
+      }
+
+      const deltaX = event.clientX - state.lastX;
+      state.lastX = event.clientX;
+
+      if (!Number.isFinite(deltaX) || deltaX === 0) {
+        return;
+      }
+
+      state.remainder += deltaX;
+      const threshold = DIRECTION_DRAG_THRESHOLD;
+      let steps = 0;
+
+      while (state.remainder >= threshold) {
+        steps += 1;
+        state.remainder -= threshold;
+      }
+
+      while (state.remainder <= -threshold) {
+        steps -= 1;
+        state.remainder += threshold;
+      }
+
+      if (steps !== 0) {
+        rotateLookDirection(steps);
+      }
+
+      if (event.pointerType === "touch") {
+        event.preventDefault();
+      }
+    },
+    [rotateLookDirection]
+  );
+
+  const handleDirectionPointerUp = useCallback(
+    (event) => {
+      const state = directionDragStateRef.current;
+      if (!state.active || state.pointerId !== event.pointerId) {
+        return;
+      }
+
+      const target = event.currentTarget;
+      if (typeof target.releasePointerCapture === "function") {
+        try {
+          target.releasePointerCapture(event.pointerId);
+        } catch (_error) {
+          // Ignore release errors.
+        }
+      }
+
+      resetDirectionDragState();
+
+      if (event.pointerType === "touch") {
+        event.preventDefault();
+      }
+    },
+    [resetDirectionDragState]
+  );
+
+  const handleDirectionPointerCancel = useCallback(
+    (event) => {
+      const state = directionDragStateRef.current;
+      if (!state.active || state.pointerId !== event.pointerId) {
+        return;
+      }
+
+      const target = event.currentTarget;
+      if (typeof target.releasePointerCapture === "function") {
+        try {
+          target.releasePointerCapture(event.pointerId);
+        } catch (_error) {
+          // Ignore release errors.
+        }
+      }
+
+      resetDirectionDragState();
+    },
+    [resetDirectionDragState]
+  );
+
+  const handleDirectionKeyDown = useCallback(
+    (event) => {
+      if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+        event.preventDefault();
+        rotateLookDirection(-1);
+        return;
+      }
+
+      if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+        event.preventDefault();
+        rotateLookDirection(1);
+      }
+    },
+    [rotateLookDirection]
+  );
 
   const toggleDetailedMatches = useCallback(() => {
     setShowDetailedMatches((previous) => !previous);
@@ -6094,6 +6238,11 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
               role="group"
               aria-label={t("aria.identityCard")}
             >
+              {directionAnnouncement ? (
+                <span className="sr-only" aria-live="polite">
+                  {directionAnnouncement}
+                </span>
+              ) : null}
               <div className="identity-card__selectors">
                 <div
                   className="identity-card__gender-wrapper"
@@ -6204,66 +6353,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                   })}
                                         </div>
                                       </div>
-                                      <div
-                                        className="skin-card__direction-controls"
-                                        role="group"
-                                        aria-label={t("aria.previewDirectionControl")}
-                                      >
-                                        <button
-                                          type="button"
-                                          className="skin-card__direction-arrow"
-                                          onClick={handleRotateLeft}
-                                          title={t("identity.preview.direction.rotateLeft")}
-                                          aria-label={t("identity.preview.direction.rotateLeft")}
-                                        >
-                                          <span className="sr-only">
-                                            {t("identity.preview.direction.rotateLeft")}
-                                          </span>
-                                          <img src="/icons/arrow-left.svg" alt="" aria-hidden="true" />
-                                        </button>
-                                        <div className="skin-card__direction-status">
-                                          <span className="skin-card__direction-label">
-                                            {activeDirectionLabel}
-                                          </span>
-                                          <svg
-                                            className="skin-card__direction-indicator"
-                                            viewBox="0 0 20 20"
-                                            fill="none"
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            aria-hidden="true"
-                                            focusable="false"
-                                            style={{
-                                              transform: `rotate(${activeDirectionOption?.rotation ?? 0}deg)`,
-                                            }}
-                                          >
-                                            <path
-                                              d="M10 3.5 10 16.5"
-                                              stroke="currentColor"
-                                              strokeWidth="1.6"
-                                              strokeLinecap="round"
-                                            />
-                                            <path
-                                              d="M6.2 7.3 10 3.5l3.8 3.8"
-                                              stroke="currentColor"
-                                              strokeWidth="1.6"
-                                              strokeLinecap="round"
-                                              strokeLinejoin="round"
-                                            />
-                                          </svg>
-                                        </div>
-                                        <button
-                                          type="button"
-                                          className="skin-card__direction-arrow"
-                                          onClick={handleRotateRight}
-                                          title={t("identity.preview.direction.rotateRight")}
-                                          aria-label={t("identity.preview.direction.rotateRight")}
-                                        >
-                                          <span className="sr-only">
-                                            {t("identity.preview.direction.rotateRight")}
-                                          </span>
-                                          <img src="/icons/arrow-right.svg" alt="" aria-hidden="true" />
-                                        </button>
-                                      </div>
                                     </div>
                                   </div>
           {itemsLoading || (itemsError && !showDetailedMatches) ? (
@@ -6372,7 +6461,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                     backgroundColor: primaryColor,
                                   }
                                 : { backgroundImage: canvasBackground };
-                              const isCombatPoseActive = lookAnimation === 2;
                               return (
                                 <article key={proposal.id} className="skin-card">
                                   <h3 className="sr-only">{t("suggestions.carousel.proposalTitle", { index: proposal.index + 1 })}</h3>
@@ -6394,7 +6482,18 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           </div>
                                         ) : null}
                                         <div className="skin-card__glow" aria-hidden="true" />
-                                        <div className="skin-card__preview">
+                                        <div
+                                          className="skin-card__preview"
+                                          role="group"
+                                          aria-label={previewDirectionDescription}
+                                          title={t("identity.preview.direction.hint")}
+                                          tabIndex={0}
+                                          onPointerDown={handleDirectionPointerDown}
+                                          onPointerMove={handleDirectionPointerMove}
+                                          onPointerUp={handleDirectionPointerUp}
+                                          onPointerCancel={handleDirectionPointerCancel}
+                                          onKeyDown={handleDirectionKeyDown}
+                                        >
                                           {previewSrc ? (
                                             <img
                                               src={previewSrc}
@@ -6404,6 +6503,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                               onError={() =>
                                                 handleLookPreviewError(proposal.lookBaseKey, activeDirectionValue)
                                               }
+                                              draggable={false}
                                             />
                                           ) : heroSrc ? (
                                             <img
@@ -6411,97 +6511,44 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                               alt={`Aperçu principal de la proposition ${proposal.index + 1}`}
                                               loading="lazy"
                                               className="skin-card__hero"
+                                              draggable={false}
                                             />
                                           ) : (
                                             <div className="skin-card__placeholder" aria-hidden="true">
                                               Aperçu indisponible
                                             </div>
                                           )}
-                                          <div
-                                            className="skin-card__direction"
-                                            role="group"
-                                            aria-label={t("aria.previewDirectionControl")}
-                                          >
-                                            <span className="sr-only">
-                                              {t("identity.preview.direction.label")}
-                                            </span>
-                                            <div className="skin-card__direction-grid">
-                                              {LOOK_DIRECTION_GRID.map((row, rowIndex) =>
-                                                row.map((value, columnIndex) => {
-                                                  if (!Number.isFinite(value)) {
-                                                    return (
-                                                      <span
-                                                        key={`direction-spacer-${rowIndex}-${columnIndex}`}
-                                                        className="skin-card__direction-spacer"
-                                                        aria-hidden="true"
-                                                      />
-                                                    );
-                                                  }
-
-                                                  const option = LOOK_DIRECTION_BY_VALUE.get(value);
-                                                  if (!option) {
-                                                    return (
-                                                      <span
-                                                        key={`direction-fallback-${value}`}
-                                                        className="skin-card__direction-spacer"
-                                                        aria-hidden="true"
-                                                      />
-                                                    );
-                                                  }
-
-                                                  const label = t(option.labelKey);
-                                                  const isActive = activeDirectionValue === value;
-                                                  const isDisabled =
-                                                    isCombatPoseActive &&
-                                                    COMBAT_POSE_DISABLED_DIRECTIONS.includes(value);
-
-                                                  return (
-                                                    <button
-                                                      key={`direction-${value}`}
-                                                      type="button"
-                                                      className={`skin-card__direction-button${
-                                                        isActive ? " is-active" : ""
-                                                      }`}
-                                                      onClick={() => {
-                                                        if (!isDisabled) {
-                                                          setLookDirection(value);
-                                                        }
-                                                      }}
-                                                      aria-pressed={isActive}
-                                                      title={label}
-                                                      aria-label={label}
-                                                      disabled={isDisabled}
-                                                    >
-                                                      <span className="sr-only">{label}</span>
-                                                      <svg
-                                                        className="skin-card__direction-icon"
-                                                        viewBox="0 0 20 20"
-                                                        fill="none"
-                                                        xmlns="http://www.w3.org/2000/svg"
-                                                        aria-hidden="true"
-                                                        focusable="false"
-                                                        style={{ transform: `rotate(${option.rotation}deg)` }}
-                                                      >
-                                                        <path
-                                                          d="M10 3.5 10 16.5"
-                                                          stroke="currentColor"
-                                                          strokeWidth="1.6"
-                                                          strokeLinecap="round"
-                                                        />
-                                                        <path
-                                                          d="M6.2 7.3 10 3.5l3.8 3.8"
-                                                          stroke="currentColor"
-                                                          strokeWidth="1.6"
-                                                          strokeLinecap="round"
-                                                          strokeLinejoin="round"
-                                                        />
-                                                      </svg>
-                                                    </button>
-                                                  );
-                                                })
-                                              )}
+                                          {activeDirectionOption ? (
+                                            <div className="skin-card__direction-overlay" aria-hidden="true">
+                                              <span className="skin-card__direction-label">
+                                                {activeDirectionLabel}
+                                              </span>
+                                              <svg
+                                                className="skin-card__direction-indicator"
+                                                viewBox="0 0 20 20"
+                                                fill="none"
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                focusable="false"
+                                                style={{
+                                                  transform: `rotate(${activeDirectionOption.rotation}deg)`,
+                                                }}
+                                              >
+                                                <path
+                                                  d="M10 3.5 10 16.5"
+                                                  stroke="currentColor"
+                                                  strokeWidth="1.6"
+                                                  strokeLinecap="round"
+                                                />
+                                                <path
+                                                  d="M6.2 7.3 10 3.5l3.8 3.8"
+                                                  stroke="currentColor"
+                                                  strokeWidth="1.6"
+                                                  strokeLinecap="round"
+                                                  strokeLinejoin="round"
+                                                />
+                                              </svg>
                                             </div>
-                                          </div>
+                                          ) : null}
                                         </div>
                                       </div>
                                       <ul className="skin-card__equipment" role="list">
