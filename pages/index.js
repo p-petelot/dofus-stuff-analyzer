@@ -4539,6 +4539,9 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const activeProposalSubtitle = activeProposalDetails?.subtitle ?? "";
   const activeProposalClassIcon = activeProposalDetails?.classIcon ?? null;
   const activeProposalPalette = activeProposalDetails?.palette;
+  const activeDirectionValue = normalizeLookDirection(lookDirection);
+  const activeDirectionOption = LOOK_DIRECTION_BY_VALUE.get(activeDirectionValue);
+  const activeDirectionLabel = activeDirectionOption ? t(activeDirectionOption.labelKey) : "";
 
   const adaptiveThemePalette = useMemo(() => {
     if (Array.isArray(activeProposalPalette) && activeProposalPalette.length) {
@@ -6219,7 +6222,9 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           <img src="/icons/arrow-left.svg" alt="" aria-hidden="true" />
                                         </button>
                                         <div className="skin-card__direction-status">
-                                          <span className="skin-card__direction-label">{directionLabel}</span>
+                                          <span className="skin-card__direction-label">
+                                            {activeDirectionLabel}
+                                          </span>
                                           <svg
                                             className="skin-card__direction-indicator"
                                             viewBox="0 0 20 20"
@@ -6228,7 +6233,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                             aria-hidden="true"
                                             focusable="false"
                                             style={{
-                                              transform: `rotate(${directionOption?.rotation ?? 0}deg)`,
+                                              transform: `rotate(${activeDirectionOption?.rotation ?? 0}deg)`,
                                             }}
                                           >
                                             <path
@@ -6317,7 +6322,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                               const lookPreviewGroup = proposal.lookBaseKey
                                 ? lookPreviews?.[proposal.lookBaseKey]
                                 : null;
-                              const lookPreview = lookPreviewGroup?.directions?.[activeDirection] ?? null;
+                              const lookPreview = lookPreviewGroup?.directions?.[activeDirectionValue] ?? null;
                               const previewSrc =
                                 typeof lookPreview?.dataUrl === "string" && lookPreview.dataUrl.length > 0
                                   ? lookPreview.dataUrl
@@ -6367,9 +6372,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                     backgroundColor: primaryColor,
                                   }
                                 : { backgroundImage: canvasBackground };
-                              const activeDirection = normalizeLookDirection(lookDirection);
-                              const directionOption = LOOK_DIRECTION_BY_VALUE.get(activeDirection);
-                              const directionLabel = directionOption ? t(directionOption.labelKey) : "";
                               const isCombatPoseActive = lookAnimation === 2;
                               return (
                                 <article key={proposal.id} className="skin-card">
@@ -6400,7 +6402,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                               loading="lazy"
                                               className="skin-card__preview-image"
                                               onError={() =>
-                                                handleLookPreviewError(proposal.lookBaseKey, activeDirection)
+                                                handleLookPreviewError(proposal.lookBaseKey, activeDirectionValue)
                                               }
                                             />
                                           ) : heroSrc ? (
@@ -6448,7 +6450,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                                   }
 
                                                   const label = t(option.labelKey);
-                                                  const isActive = activeDirection === value;
+                                                  const isActive = activeDirectionValue === value;
                                                   const isDisabled =
                                                     isCombatPoseActive &&
                                                     COMBAT_POSE_DISABLED_DIRECTIONS.includes(value);
