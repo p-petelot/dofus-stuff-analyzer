@@ -1403,6 +1403,60 @@ function normalizeLookDirection(value, fallback = DEFAULT_LOOK_DIRECTION) {
   return numeric;
 }
 
+function normalizePreviewColorValues(values) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  const seen = new Set();
+  const normalized = [];
+
+  values.forEach((value) => {
+    if (!Number.isFinite(value)) {
+      return;
+    }
+    const numeric = Math.trunc(value);
+    if (seen.has(numeric)) {
+      return;
+    }
+    seen.add(numeric);
+    normalized.push(numeric);
+  });
+
+  return normalized.slice(0, MAX_ITEM_PALETTE_COLORS);
+}
+
+function buildBasePreviewConfig({ classId, gender, faceId, animation, colors }) {
+  if (!Number.isFinite(classId)) {
+    return null;
+  }
+
+  const normalizedClassId = Math.trunc(classId);
+  const normalizedGender = gender === "f" ? "f" : "m";
+  const normalizedFaceId = Number.isFinite(faceId) ? Math.trunc(faceId) : null;
+  const normalizedAnimation = Number.isFinite(animation)
+    ? Math.trunc(animation)
+    : DEFAULT_LOOK_ANIMATION;
+  const normalizedColors = normalizePreviewColorValues(colors);
+  const colorKey = normalizedColors.length ? normalizedColors.join("-") : "none";
+  const cacheKey = [
+    normalizedClassId,
+    normalizedGender,
+    normalizedFaceId ?? "none",
+    normalizedAnimation,
+    colorKey,
+  ].join(":");
+
+  return {
+    cacheKey,
+    classId: normalizedClassId,
+    gender: normalizedGender,
+    faceId: normalizedFaceId,
+    animation: normalizedAnimation,
+    colors: normalizedColors,
+  };
+}
+
 function getDirectionFromPointer(event, element) {
   if (!element || typeof element.getBoundingClientRect !== "function") {
     return null;
@@ -3135,6 +3189,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const [inputMode, setInputMode] = useState("image");
   const [selectedColor, setSelectedColor] = useState(null);
   const [activeProposal, setActiveProposal] = useState(0);
+  const [baseLookPreviews, setBaseLookPreviews] = useState({});
+  const baseLookPreviewsRef = useRef({});
   const [lookPreviews, setLookPreviews] = useState({});
   const lookPreviewsRef = useRef({});
   const [lookAnimation, setLookAnimation] = useState(DEFAULT_LOOK_ANIMATION);
@@ -4381,6 +4437,36 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     lookDirection,
   ]);
 
+  const basePreviewCombos = useMemo(() => {
+    if (!proposals.length) {
+      return [];
+    }
+
+    const combos = new Map();
+
+    proposals.forEach((proposal) => {
+      if (!proposal) {
+        return;
+      }
+
+      const config = buildBasePreviewConfig({
+        classId: proposal.classId,
+        gender: proposal.lookGender,
+        faceId: proposal.lookFaceId,
+        animation: proposal.lookAnimation,
+        colors: proposal.lookColors,
+      });
+
+      if (!config || combos.has(config.cacheKey)) {
+        return;
+      }
+
+      combos.set(config.cacheKey, config);
+    });
+
+    return Array.from(combos.values());
+  }, [proposals]);
+
   const previewBackgroundAutoByProposal = useMemo(() => {
     if (!previewBackgroundOptions.length) {
       return new Map();
@@ -4537,8 +4623,184 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   }, [activeProposal, proposalCount]);
 
   useEffect(() => {
+    baseLookPreviewsRef.current = baseLookPreviews;
+  }, [baseLookPreviews]);
+
+  useEffect(() => {
     lookPreviewsRef.current = lookPreviews;
   }, [lookPreviews, t]);
+
+  useEffect(() => {
+    if (!basePreviewCombos.length) {
+      return;
+    }
+
+    let cancelled = false;
+    const abortController = new AbortController();
+    const queue = [];
+
+    setBaseLookPreviews((previous = {}) => {
+      let nextState = previous;
+
+      basePreviewCombos.forEach((combo) => {
+        if (!combo?.cacheKey) {
+          return;
+        }
+
+        const existing = previous[combo.cacheKey];
+        const existingDirections = existing?.directions ?? {};
+        const directions = { ...existingDirections };
+        let changed = false;
+
+        for (let direction = 0; direction < LOOK_DIRECTION_COUNT; direction += 1) {
+          const current = directions[direction];
+          if (current?.dataUrl || current?.status === "loading") {
+            continue;
+          }
+          queue.push({ combo, direction });
+          directions[direction] = {
+            status: "loading",
+            dataUrl: current?.dataUrl ?? null,
+            rendererUrl: current?.rendererUrl ?? null,
+            base64: current?.base64 ?? null,
+            contentType: current?.contentType ?? null,
+            byteLength: current?.byteLength ?? null,
+            error: null,
+          };
+          changed = true;
+        }
+
+        const shouldUpdateEntry = !existing || existing.configKey !== combo.cacheKey || changed;
+
+        if (shouldUpdateEntry) {
+          if (nextState === previous) {
+            nextState = { ...previous };
+          }
+          nextState[combo.cacheKey] = {
+            configKey: combo.cacheKey,
+            request: combo,
+            directions,
+          };
+        }
+      });
+
+      if (nextState !== previous) {
+        baseLookPreviewsRef.current = nextState;
+        return nextState;
+      }
+
+      baseLookPreviewsRef.current = previous;
+      return previous;
+    });
+
+    if (!queue.length) {
+      return () => {
+        abortController.abort();
+      };
+    }
+
+    const fetchDirection = async ({ combo, direction }) => {
+      try {
+        const params = new URLSearchParams();
+        params.set("breedId", String(combo.classId));
+        params.set("gender", combo.gender ?? "m");
+        params.set("lang", language);
+        params.set("size", String(LOOK_PREVIEW_SIZE));
+        params.set("animation", String(combo.animation ?? DEFAULT_LOOK_ANIMATION));
+        params.set("direction", String(direction));
+        if (Number.isFinite(combo.faceId)) {
+          params.set("faceId", String(Math.trunc(combo.faceId)));
+        }
+        combo.colors.forEach((value) => {
+          params.append("colors[]", String(Math.trunc(value)));
+        });
+
+        const response = await fetch(`/api/look-preview?${params.toString()}`, {
+          signal: abortController.signal,
+        });
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error ?? `HTTP ${response.status}`);
+        }
+
+        const payload = await response.json();
+        if (cancelled) {
+          return;
+        }
+
+        const contentType = payload?.contentType ?? "image/png";
+        const base64 = payload?.base64 ?? null;
+        const rendererUrl = payload?.rendererUrl ?? null;
+        const byteLength =
+          typeof payload?.byteLength === "number" && Number.isFinite(payload.byteLength)
+            ? payload.byteLength
+            : null;
+        const dataUrl =
+          payload?.dataUrl ??
+          (base64 ? `data:${contentType};base64,${base64}` : rendererUrl ?? null);
+
+        setBaseLookPreviews((previous = {}) => {
+          const entry = previous[combo.cacheKey];
+          if (!entry || entry.configKey !== combo.cacheKey) {
+            return previous;
+          }
+
+          const directions = { ...entry.directions };
+          directions[direction] = {
+            status: dataUrl ? "loaded" : "error",
+            dataUrl,
+            rendererUrl,
+            base64,
+            contentType,
+            byteLength,
+            error: dataUrl ? null : payload?.error ?? t("errors.previewUnavailable"),
+          };
+
+          const nextEntry = { ...entry, directions };
+          const next = { ...previous, [combo.cacheKey]: nextEntry };
+          baseLookPreviewsRef.current = next;
+          return next;
+        });
+      } catch (error) {
+        if (cancelled || error?.name === "AbortError") {
+          return;
+        }
+
+        setBaseLookPreviews((previous = {}) => {
+          const entry = previous[combo.cacheKey];
+          if (!entry || entry.configKey !== combo.cacheKey) {
+            return previous;
+          }
+
+          const directions = { ...entry.directions };
+          directions[direction] = {
+            status: "error",
+            dataUrl: null,
+            rendererUrl: null,
+            base64: null,
+            contentType: null,
+            byteLength: null,
+            error: error?.message ?? t("errors.previewUnavailable"),
+          };
+
+          const nextEntry = { ...entry, directions };
+          const next = { ...previous, [combo.cacheKey]: nextEntry };
+          baseLookPreviewsRef.current = next;
+          return next;
+        });
+      }
+    };
+
+    queue.forEach((task) => {
+      void fetchDirection(task);
+    });
+
+    return () => {
+      cancelled = true;
+      abortController.abort();
+    };
+  }, [basePreviewCombos, language, t]);
 
   useEffect(() => {
     if (!proposals.length) {
@@ -4567,6 +4829,12 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     const abortController = new AbortController();
     let cancelled = false;
     const pendingLoads = [];
+    const basePreviewByCacheKey = new Map();
+    Object.entries(baseLookPreviews ?? {}).forEach(([key, entry]) => {
+      if (entry?.directions) {
+        basePreviewByCacheKey.set(key, entry.directions);
+      }
+    });
 
     setLookPreviews((previous = {}) => {
       const next = {};
@@ -4585,6 +4853,31 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         const hasMatchingBase = entry?.baseKey === baseKey;
         const cache = hasMatchingBase && entry?.cache ? { ...entry.cache } : {};
         const cachedPreview = hasMatchingBase ? cache?.[directionValue] : null;
+        const fallbackConfig = buildBasePreviewConfig({
+          classId: proposal.classId,
+          gender: proposal.lookGender,
+          faceId: proposal.lookFaceId,
+          animation: proposal.lookAnimation,
+          colors: proposal.lookColors,
+        });
+        const fallbackCacheKey = fallbackConfig?.cacheKey ?? null;
+        const fallbackDirections =
+          fallbackConfig && basePreviewByCacheKey.has(fallbackConfig.cacheKey)
+            ? basePreviewByCacheKey.get(fallbackConfig.cacheKey)
+            : null;
+        const fallbackEntry =
+          fallbackDirections && Number.isFinite(directionValue)
+            ? fallbackDirections[directionValue] ?? null
+            : null;
+        const fallbackStatus = fallbackEntry?.status ?? null;
+        const fallbackDataUrl =
+          fallbackStatus === "loaded" && typeof fallbackEntry?.dataUrl === "string"
+            ? fallbackEntry.dataUrl
+            : null;
+        const fallbackRendererUrl = fallbackDataUrl ? fallbackEntry?.rendererUrl ?? null : null;
+        const fallbackBase64 = fallbackDataUrl ? fallbackEntry?.base64 ?? null : null;
+        const fallbackContentType = fallbackDataUrl ? fallbackEntry?.contentType ?? null : null;
+        const fallbackByteLength = fallbackDataUrl ? fallbackEntry?.byteLength ?? null : null;
 
         if (cachedPreview?.dataUrl) {
           next[proposal.id] = {
@@ -4600,6 +4893,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
             byteLength: cachedPreview.byteLength ?? null,
             error: null,
             cache,
+            basePreviewKey: fallbackCacheKey,
           };
           return;
         }
@@ -4610,30 +4904,40 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
             lookKey,
             direction: directionValue,
             status: "loading",
-            dataUrl: null,
-            rendererUrl: null,
-            base64: null,
-            contentType: null,
-            byteLength: null,
+            dataUrl: fallbackDataUrl,
+            rendererUrl: fallbackDataUrl ? fallbackRendererUrl : null,
+            base64: fallbackDataUrl ? fallbackBase64 : null,
+            contentType: fallbackDataUrl ? fallbackContentType : null,
+            byteLength: fallbackDataUrl ? fallbackByteLength : null,
             error: null,
             cache,
+            basePreviewKey: fallbackCacheKey,
           };
           pendingLoads.push({ proposal, baseKey, direction: directionValue, lookKey });
           return;
         }
 
         if (entry.status === "loading" && entry.lookKey === lookKey) {
-          next[proposal.id] = {
+          const updatedEntry = {
             ...entry,
             baseKey,
             lookKey,
             direction: directionValue,
             cache,
+            basePreviewKey: fallbackCacheKey,
           };
+          if (!updatedEntry.dataUrl && fallbackDataUrl) {
+            updatedEntry.dataUrl = fallbackDataUrl;
+            updatedEntry.rendererUrl = fallbackRendererUrl;
+            updatedEntry.base64 = fallbackBase64;
+            updatedEntry.contentType = fallbackContentType;
+            updatedEntry.byteLength = fallbackByteLength;
+          }
+          next[proposal.id] = updatedEntry;
           return;
         }
 
-        next[proposal.id] = {
+        const nextEntry = {
           ...entry,
           baseKey,
           lookKey,
@@ -4641,7 +4945,22 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           status: "loading",
           error: null,
           cache,
+          basePreviewKey: fallbackCacheKey,
         };
+        if (fallbackDataUrl) {
+          nextEntry.dataUrl = fallbackDataUrl;
+          nextEntry.rendererUrl = fallbackRendererUrl;
+          nextEntry.base64 = fallbackBase64;
+          nextEntry.contentType = fallbackContentType;
+          nextEntry.byteLength = fallbackByteLength;
+        } else {
+          nextEntry.dataUrl = null;
+          nextEntry.rendererUrl = null;
+          nextEntry.base64 = null;
+          nextEntry.contentType = null;
+          nextEntry.byteLength = null;
+        }
+        next[proposal.id] = nextEntry;
         pendingLoads.push({ proposal, baseKey, direction: directionValue, lookKey });
       });
 
@@ -4814,7 +5133,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       cancelled = true;
       abortController.abort();
     };
-  }, [language, lookAnimation, lookDirection, proposals, t]);
+  }, [baseLookPreviews, language, lookAnimation, lookDirection, proposals, t]);
 
   const handleNextProposal = useCallback(() => {
     if (!proposalCount) {
@@ -4870,13 +5189,36 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         };
 
         if (isCurrentDirection) {
-          nextEntry.status = "error";
-          nextEntry.dataUrl = null;
-          nextEntry.rendererUrl = null;
-          nextEntry.base64 = null;
-          nextEntry.contentType = null;
-          nextEntry.byteLength = null;
-          nextEntry.error = entry?.error ?? t("errors.previewUnavailableDetailed");
+          let fallbackData = null;
+          if (entry.basePreviewKey && normalizedDirection !== null) {
+            const baseEntry = baseLookPreviewsRef.current?.[entry.basePreviewKey] ?? null;
+            const directions = baseEntry?.directions ?? null;
+            const fallbackEntry = directions ? directions[normalizedDirection] ?? null : null;
+            if (
+              fallbackEntry?.status === "loaded" &&
+              typeof fallbackEntry?.dataUrl === "string"
+            ) {
+              fallbackData = fallbackEntry;
+            }
+          }
+
+          if (fallbackData) {
+            nextEntry.status = "loading";
+            nextEntry.error = null;
+            nextEntry.dataUrl = fallbackData.dataUrl;
+            nextEntry.rendererUrl = fallbackData.rendererUrl ?? null;
+            nextEntry.base64 = fallbackData.base64 ?? null;
+            nextEntry.contentType = fallbackData.contentType ?? null;
+            nextEntry.byteLength = fallbackData.byteLength ?? null;
+          } else {
+            nextEntry.status = "error";
+            nextEntry.dataUrl = null;
+            nextEntry.rendererUrl = null;
+            nextEntry.base64 = null;
+            nextEntry.contentType = null;
+            nextEntry.byteLength = null;
+            nextEntry.error = entry?.error ?? t("errors.previewUnavailableDetailed");
+          }
         }
 
         const next = { ...previous, [id]: nextEntry };
