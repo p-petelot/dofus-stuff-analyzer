@@ -4802,10 +4802,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         return;
       }
 
-      if (event?.target instanceof Element && event.target.closest?.(".skin-card__direction")) {
-        return;
-      }
-
       const element = event.currentTarget;
       previewRotationStateRef.current = { pointerId: event.pointerId, element };
       setIsPreviewRotating(true);
@@ -6266,97 +6262,121 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                               Aperçu indisponible
                                             </div>
                                           )}
-                                          <div
-                                            className="skin-card__direction"
-                                            role="group"
-                                            aria-label={t("aria.previewDirectionControl")}
-                                          >
-                                            <span className="sr-only">
-                                              {t("identity.preview.direction.label")}
-                                            </span>
-                                            <div className="skin-card__direction-controls">
-                                              <button
-                                                type="button"
-                                                className="skin-card__direction-rotate"
-                                                onClick={() => handleRotateDirection(-1)}
-                                                title={rotateLeftLabel}
-                                                aria-label={rotateLeftLabel}
-                                              >
-                                                <span className="sr-only">{rotateLeftLabel}</span>
-                                                <svg
-                                                  className="skin-card__direction-rotate-icon"
-                                                  viewBox="0 0 20 20"
-                                                  fill="none"
-                                                  xmlns="http://www.w3.org/2000/svg"
-                                                  aria-hidden="true"
-                                                  focusable="false"
-                                                >
-                                                  <path
-                                                    d="M11.6 5.4 7.2 10l4.4 4.6"
-                                                    stroke="currentColor"
-                                                    strokeWidth="1.8"
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                  />
-                                                </svg>
-                                              </button>
-                                              <div className="skin-card__direction-indicator" aria-hidden="true">
-                                                <svg
-                                                  className="skin-card__direction-icon"
-                                                  viewBox="0 0 20 20"
-                                                  fill="none"
-                                                  xmlns="http://www.w3.org/2000/svg"
-                                                  focusable="false"
-                                                  style={{ transform: `rotate(${directionRotation}deg)` }}
-                                                >
-                                                  <path
-                                                    d="M10 3.5 10 16.5"
-                                                    stroke="currentColor"
-                                                    strokeWidth="1.6"
-                                                    strokeLinecap="round"
-                                                  />
-                                                  <path
-                                                    d="M6.2 7.3 10 3.5l3.8 3.8"
-                                                    stroke="currentColor"
-                                                    strokeWidth="1.6"
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                  />
-                                                </svg>
-                                              </div>
-                                              <button
-                                                type="button"
-                                                className="skin-card__direction-rotate"
-                                                onClick={() => handleRotateDirection(1)}
-                                                title={rotateRightLabel}
-                                                aria-label={rotateRightLabel}
-                                              >
-                                                <span className="sr-only">{rotateRightLabel}</span>
-                                                <svg
-                                                  className="skin-card__direction-rotate-icon"
-                                                  viewBox="0 0 20 20"
-                                                  fill="none"
-                                                  xmlns="http://www.w3.org/2000/svg"
-                                                  aria-hidden="true"
-                                                  focusable="false"
-                                                >
-                                                  <path
-                                                    d="M8.4 5.4 12.8 10l-4.4 4.6"
-                                                    stroke="currentColor"
-                                                    strokeWidth="1.8"
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                  />
-                                                </svg>
-                                              </button>
-                                            </div>
-                                            <div className="skin-card__direction-info">
-                                              <span className="skin-card__direction-text" aria-live="polite">
-                                                {directionLabel}
-                                              </span>
-                                              <span className="skin-card__direction-hint">{rotateHint}</span>
-                                            </div>
+                                          <div className="skin-card__direction-badge" aria-hidden="true">
+                                            <svg
+                                              className="skin-card__direction-icon"
+                                              viewBox="0 0 20 20"
+                                              fill="none"
+                                              xmlns="http://www.w3.org/2000/svg"
+                                              focusable="false"
+                                              style={{ transform: `rotate(${directionRotation}deg)` }}
+                                            >
+                                              <path
+                                                d="M10 3.5 10 16.5"
+                                                stroke="currentColor"
+                                                strokeWidth="1.6"
+                                                strokeLinecap="round"
+                                              />
+                                              <path
+                                                d="M6.2 7.3 10 3.5l3.8 3.8"
+                                                stroke="currentColor"
+                                                strokeWidth="1.6"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                              />
+                                            </svg>
                                           </div>
+                                        </div>
+                                      </div>
+                                      <div
+                                        className="skin-card__direction-panel"
+                                        role="group"
+                                        aria-label={t("aria.previewDirectionControl")}
+                                      >
+                                        <span className="sr-only">
+                                          {t("identity.preview.direction.label")}
+                                        </span>
+                                        <div className="skin-card__direction-controls">
+                                          <button
+                                            type="button"
+                                            className="skin-card__direction-rotate"
+                                            onClick={() => handleRotateDirection(-1)}
+                                            title={rotateLeftLabel}
+                                            aria-label={rotateLeftLabel}
+                                          >
+                                            <span className="sr-only">{rotateLeftLabel}</span>
+                                            <svg
+                                              className="skin-card__direction-rotate-icon"
+                                              viewBox="0 0 20 20"
+                                              fill="none"
+                                              xmlns="http://www.w3.org/2000/svg"
+                                              aria-hidden="true"
+                                              focusable="false"
+                                            >
+                                              <path
+                                                d="M11.6 5.4 7.2 10l4.4 4.6"
+                                                stroke="currentColor"
+                                                strokeWidth="1.8"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                              />
+                                            </svg>
+                                          </button>
+                                          <div className="skin-card__direction-indicator" aria-hidden="true">
+                                            <svg
+                                              className="skin-card__direction-icon"
+                                              viewBox="0 0 20 20"
+                                              fill="none"
+                                              xmlns="http://www.w3.org/2000/svg"
+                                              focusable="false"
+                                              style={{ transform: `rotate(${directionRotation}deg)` }}
+                                            >
+                                              <path
+                                                d="M10 3.5 10 16.5"
+                                                stroke="currentColor"
+                                                strokeWidth="1.6"
+                                                strokeLinecap="round"
+                                              />
+                                              <path
+                                                d="M6.2 7.3 10 3.5l3.8 3.8"
+                                                stroke="currentColor"
+                                                strokeWidth="1.6"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                              />
+                                            </svg>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            className="skin-card__direction-rotate"
+                                            onClick={() => handleRotateDirection(1)}
+                                            title={rotateRightLabel}
+                                            aria-label={rotateRightLabel}
+                                          >
+                                            <span className="sr-only">{rotateRightLabel}</span>
+                                            <svg
+                                              className="skin-card__direction-rotate-icon"
+                                              viewBox="0 0 20 20"
+                                              fill="none"
+                                              xmlns="http://www.w3.org/2000/svg"
+                                              aria-hidden="true"
+                                              focusable="false"
+                                            >
+                                              <path
+                                                d="M8.4 5.4 12.8 10l-4.4 4.6"
+                                                stroke="currentColor"
+                                                strokeWidth="1.8"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                              />
+                                            </svg>
+                                          </button>
+                                        </div>
+                                        <div className="skin-card__direction-info">
+                                          <span className="skin-card__direction-text" aria-live="polite">
+                                            {directionLabel}
+                                          </span>
+                                          <span className="skin-card__direction-hint">{rotateHint}</span>
                                         </div>
                                       </div>
                                       <ul className="skin-card__equipment" role="list">
