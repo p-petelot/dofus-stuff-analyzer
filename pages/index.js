@@ -4337,10 +4337,9 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         ? Math.trunc(lookAnimation)
         : DEFAULT_LOOK_ANIMATION;
       keyParts.push(`a${animationCode}`);
+      const baseLookKey = keyParts.length ? keyParts.join("-") : null;
       const directionCode = normalizeLookDirection(lookDirection);
-      keyParts.push(`d${directionCode}`);
-
-      const lookKey = keyParts.length ? keyParts.join("-") : null;
+      const lookKey = baseLookKey ? `${baseLookKey}-d${directionCode}` : `d${directionCode}`;
 
       combos.push({
         id: `proposal-${index}`,
@@ -4359,6 +4358,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         lookItemIds,
         lookColors,
         lookKey,
+        lookSignature: baseLookKey,
         lookAnimation: animationCode,
         lookDirection: directionCode,
       });
@@ -4566,9 +4566,92 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
 
     const abortController = new AbortController();
     let cancelled = false;
+    const pendingLoads = [];
 
-    const loadPreview = async (proposal) => {
+    setLookPreviews((previous = {}) => {
+      const next = {};
+
+      proposals.forEach((proposal) => {
+        if (!proposal?.id) {
+          return;
+        }
+
+        const baseKey = proposal.lookSignature ?? null;
+        const directionValue = Number.isFinite(proposal.lookDirection)
+          ? normalizeLookDirection(proposal.lookDirection)
+          : normalizeLookDirection(lookDirection);
+        const lookKey = proposal.lookKey ?? null;
+        const entry = previous[proposal.id];
+        const hasMatchingBase = entry?.baseKey === baseKey;
+        const cache = hasMatchingBase && entry?.cache ? { ...entry.cache } : {};
+        const cachedPreview = hasMatchingBase ? cache?.[directionValue] : null;
+
+        if (cachedPreview?.dataUrl) {
+          next[proposal.id] = {
+            ...entry,
+            baseKey,
+            lookKey,
+            direction: directionValue,
+            status: "loaded",
+            dataUrl: cachedPreview.dataUrl,
+            rendererUrl: cachedPreview.rendererUrl ?? null,
+            base64: cachedPreview.base64 ?? null,
+            contentType: cachedPreview.contentType ?? null,
+            byteLength: cachedPreview.byteLength ?? null,
+            error: null,
+            cache,
+          };
+          return;
+        }
+
+        if (!entry || !hasMatchingBase) {
+          next[proposal.id] = {
+            baseKey,
+            lookKey,
+            direction: directionValue,
+            status: "loading",
+            dataUrl: null,
+            rendererUrl: null,
+            base64: null,
+            contentType: null,
+            byteLength: null,
+            error: null,
+            cache,
+          };
+          pendingLoads.push({ proposal, baseKey, direction: directionValue, lookKey });
+          return;
+        }
+
+        if (entry.status === "loading" && entry.lookKey === lookKey) {
+          next[proposal.id] = {
+            ...entry,
+            baseKey,
+            lookKey,
+            direction: directionValue,
+            cache,
+          };
+          return;
+        }
+
+        next[proposal.id] = {
+          ...entry,
+          baseKey,
+          lookKey,
+          direction: directionValue,
+          status: "loading",
+          error: null,
+          cache,
+        };
+        pendingLoads.push({ proposal, baseKey, direction: directionValue, lookKey });
+      });
+
+      lookPreviewsRef.current = next;
+      return next;
+    });
+
+    const loadPreview = async ({ proposal, baseKey, direction, lookKey }) => {
       if (
+        cancelled ||
         !proposal ||
         !Array.isArray(proposal.lookItemIds) ||
         proposal.lookItemIds.length === 0 ||
@@ -4578,41 +4661,10 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         return;
       }
 
-      const existing = lookPreviewsRef.current?.[proposal.id];
-      if (
-        existing &&
-        existing.lookKey === proposal.lookKey &&
-        existing.status === "loaded"
-      ) {
+      const currentEntry = lookPreviewsRef.current?.[proposal.id];
+      if (!currentEntry || currentEntry.baseKey !== baseKey) {
         return;
       }
-
-      setLookPreviews((previous = {}) => {
-        const entry = previous[proposal.id];
-        if (
-          entry &&
-          entry.lookKey === proposal.lookKey &&
-          (entry.status === "loaded" || entry.status === "loading")
-        ) {
-          return previous;
-        }
-
-        const next = {
-          ...previous,
-          [proposal.id]: {
-            lookKey: proposal.lookKey,
-            status: "loading",
-            dataUrl: entry?.dataUrl ?? null,
-            rendererUrl: entry?.rendererUrl ?? null,
-            base64: entry?.base64 ?? null,
-            contentType: entry?.contentType ?? null,
-            byteLength: entry?.byteLength ?? null,
-            error: null,
-          },
-        };
-        lookPreviewsRef.current = next;
-        return next;
-      });
 
       try {
         const params = new URLSearchParams();
@@ -4624,8 +4676,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           ? Math.trunc(proposal.lookAnimation)
           : DEFAULT_LOOK_ANIMATION;
         params.set("animation", String(animationValue));
-        const directionValue = normalizeLookDirection(proposal.lookDirection);
-        params.set("direction", String(directionValue));
+        params.set("direction", String(direction));
         if (Number.isFinite(proposal.lookFaceId)) {
           params.set("faceId", String(Math.trunc(proposal.lookFaceId)));
         }
@@ -4670,19 +4721,52 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
             return previous;
           }
 
-          const next = {
-            ...previous,
-            [proposal.id]: {
-              lookKey: proposal.lookKey,
-              status: dataUrl ? "loaded" : "error",
+          const entry = previous[proposal.id];
+          if (!entry || entry.baseKey !== baseKey) {
+            return previous;
+          }
+
+          const cache = { ...(entry.cache ?? {}) };
+          if (dataUrl) {
+            cache[direction] = {
               dataUrl,
               rendererUrl,
               base64,
               contentType,
               byteLength,
-            error: dataUrl ? null : payload?.error ?? t("errors.previewUnavailable"),
-            },
+            };
+          } else {
+            delete cache[direction];
+          }
+
+          const isCurrent = entry.lookKey === lookKey;
+          const nextEntry = {
+            ...entry,
+            cache,
           };
+
+          if (isCurrent) {
+            if (dataUrl) {
+              nextEntry.status = "loaded";
+              nextEntry.direction = direction;
+              nextEntry.dataUrl = dataUrl;
+              nextEntry.rendererUrl = rendererUrl;
+              nextEntry.base64 = base64;
+              nextEntry.contentType = contentType;
+              nextEntry.byteLength = byteLength;
+              nextEntry.error = null;
+            } else {
+              nextEntry.status = "error";
+              nextEntry.error = payload?.error ?? t("errors.previewUnavailable");
+              nextEntry.dataUrl = null;
+              nextEntry.rendererUrl = null;
+              nextEntry.base64 = null;
+              nextEntry.contentType = null;
+              nextEntry.byteLength = null;
+            }
+          }
+
+          const next = { ...previous, [proposal.id]: nextEntry };
           lookPreviewsRef.current = next;
           return next;
         });
@@ -4692,27 +4776,39 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         }
 
         setLookPreviews((previous = {}) => {
-          const next = {
-            ...previous,
-            [proposal.id]: {
-              lookKey: proposal.lookKey,
-              status: "error",
-              dataUrl: null,
-              rendererUrl: null,
-              base64: null,
-              contentType: null,
-              byteLength: null,
-            error: error?.message ?? t("errors.previewUnavailable"),
-            },
+          const entry = previous[proposal.id];
+          if (!entry || entry.baseKey !== baseKey) {
+            return previous;
+          }
+
+          const cache = { ...(entry.cache ?? {}) };
+          delete cache[direction];
+
+          const isCurrent = entry.lookKey === lookKey;
+          const nextEntry = {
+            ...entry,
+            cache,
           };
+
+          if (isCurrent) {
+            nextEntry.status = "error";
+            nextEntry.error = error?.message ?? t("errors.previewUnavailable");
+            nextEntry.dataUrl = null;
+            nextEntry.rendererUrl = null;
+            nextEntry.base64 = null;
+            nextEntry.contentType = null;
+            nextEntry.byteLength = null;
+          }
+
+          const next = { ...previous, [proposal.id]: nextEntry };
           lookPreviewsRef.current = next;
           return next;
         });
       }
     };
 
-    proposals.forEach((proposal) => {
-      void loadPreview(proposal);
+    pendingLoads.forEach((request) => {
+      void loadPreview(request);
     });
 
     return () => {
@@ -4745,33 +4841,52 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     [proposalCount]
   );
 
-  const handleLookPreviewError = useCallback((id) => {
-    if (!id) {
-      return;
-    }
-
-    setLookPreviews((previous = {}) => {
-      const entry = previous[id];
-      if (!entry || entry.status === "error") {
-        return previous;
+  const handleLookPreviewError = useCallback(
+    (id, direction) => {
+      if (!id) {
+        return;
       }
 
-      const nextEntry = {
-        ...entry,
-        status: "error",
-        dataUrl: null,
-        rendererUrl: null,
-        base64: null,
-        contentType: null,
-        byteLength: null,
-        error: entry?.error ?? t("errors.previewUnavailableDetailed"),
-      };
+      const normalizedDirection = Number.isFinite(direction)
+        ? normalizeLookDirection(direction)
+        : null;
 
-      const next = { ...previous, [id]: nextEntry };
-      lookPreviewsRef.current = next;
-      return next;
-    });
-  }, [t]);
+      setLookPreviews((previous = {}) => {
+        const entry = previous[id];
+        if (!entry) {
+          return previous;
+        }
+
+        const cache = { ...(entry.cache ?? {}) };
+        if (normalizedDirection !== null) {
+          delete cache[normalizedDirection];
+        }
+
+        const isCurrentDirection =
+          normalizedDirection !== null && entry.direction === normalizedDirection;
+
+        const nextEntry = {
+          ...entry,
+          cache,
+        };
+
+        if (isCurrentDirection) {
+          nextEntry.status = "error";
+          nextEntry.dataUrl = null;
+          nextEntry.rendererUrl = null;
+          nextEntry.base64 = null;
+          nextEntry.contentType = null;
+          nextEntry.byteLength = null;
+          nextEntry.error = entry?.error ?? t("errors.previewUnavailableDetailed");
+        }
+
+        const next = { ...previous, [id]: nextEntry };
+        lookPreviewsRef.current = next;
+        return next;
+      });
+    },
+    [t]
+  );
 
   const handleRotateDirection = useCallback(
     (step) => {
@@ -6148,19 +6263,23 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                               const primaryColor = proposal.palette[0] ?? "#1f2937";
                               const canvasBackground = buildGradientFromHex(primaryColor);
                               const lookPreview = lookPreviews?.[proposal.id];
-                              const lookLoaded =
-                                lookPreview?.status === "loaded" &&
+                              const previewDataUrl =
                                 typeof lookPreview?.dataUrl === "string" &&
-                                lookPreview.dataUrl.length > 0;
-                              const lookLoading = lookPreview?.status === "loading";
+                                lookPreview.dataUrl.length > 0
+                                  ? lookPreview.dataUrl
+                                  : null;
+                              const lookLoaded =
+                                lookPreview?.status === "loaded" && Boolean(previewDataUrl);
+                              const lookLoading =
+                                lookPreview?.status === "loading" && !previewDataUrl;
                               const lookError =
                                 lookPreview?.status === "error" && lookPreview?.error
                                   ? lookPreview.error
                                   : lookPreview?.status === "error"
                                 ? t("errors.previewUnavailableDetailed")
                                 : null;
-                              const previewSrc = lookLoaded ? lookPreview.dataUrl : null;
-                              const heroSrc = !lookLoaded ? proposal.heroImage ?? null : null;
+                              const previewSrc = previewDataUrl;
+                              const heroSrc = !previewDataUrl ? proposal.heroImage ?? null : null;
                               const previewAlt = t("suggestions.render.alt", { index: proposal.index + 1 });
                               const autoBackgroundId = previewBackgroundAutoByProposal.get(proposal.id);
                               const autoBackground = autoBackgroundId
@@ -6228,7 +6347,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                             <span className="sr-only">{t("suggestions.render.loading")}</span>
                                           </div>
                                         ) : null}
-                                        {lookError && !lookLoading && !lookLoaded ? (
+                                        {lookError && !previewDataUrl ? (
                                           <div className="skin-card__status skin-card__status--error">
                                             {lookError}
                                           </div>
@@ -6243,12 +6362,12 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           onPointerCancel={handlePreviewPointerEnd}
                                         >
                                           {previewSrc ? (
-                                            <img
+                                          <img
                                               src={previewSrc}
                                               alt={previewAlt}
                                               loading="lazy"
                                               className="skin-card__preview-image"
-                                              onError={() => handleLookPreviewError(proposal.id)}
+                                              onError={() => handleLookPreviewError(proposal.id, activeDirection)}
                                             />
                                           ) : heroSrc ? (
                                             <img
