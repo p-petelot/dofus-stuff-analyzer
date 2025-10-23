@@ -4655,8 +4655,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         !proposal ||
         !Array.isArray(proposal.lookItemIds) ||
         proposal.lookItemIds.length === 0 ||
-        !Number.isFinite(proposal.classId) ||
-        !Number.isFinite(proposal.lookFaceId)
+        !Number.isFinite(proposal.classId)
       ) {
         return;
       }
