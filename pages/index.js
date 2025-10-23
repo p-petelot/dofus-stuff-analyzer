@@ -1370,6 +1370,7 @@ const DEFAULT_PREVIEW_BACKGROUND_STATE = Object.freeze({
 const DEFAULT_LOOK_ANIMATION = 0;
 const DEFAULT_LOOK_DIRECTION = 1;
 
+const ALL_LOOK_DIRECTIONS = Object.freeze([0, 1, 2, 3, 4, 5, 6, 7]);
 const LOOK_DIRECTION_OPTIONS = Object.freeze([
   { value: 0, labelKey: "identity.preview.direction.right", rotation: 90 },
   { value: 1, labelKey: "identity.preview.direction.bottomRight", rotation: 135 },
@@ -1387,11 +1388,7 @@ const LOOK_DIRECTION_BY_VALUE = new Map(
   LOOK_DIRECTION_OPTIONS.map((option) => [option.value, option])
 );
 
-const LOOK_DIRECTION_GRID = Object.freeze([
-  [5, 6, 7],
-  [4, null, 0],
-  [3, 2, 1],
-]);
+const DIRECTION_DRAG_THRESHOLD = 28;
 
 function normalizeLookDirection(value, fallback = DEFAULT_LOOK_DIRECTION) {
   if (!Number.isFinite(value)) {
@@ -1405,6 +1402,39 @@ function normalizeLookDirection(value, fallback = DEFAULT_LOOK_DIRECTION) {
     return 7;
   }
   return numeric;
+}
+
+function areNumericArraysEqual(a, b) {
+  if (a === b) {
+    return true;
+  }
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
+    return false;
+  }
+  for (let index = 0; index < a.length; index += 1) {
+    if (a[index] !== b[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function areLookPreviewDescriptorsEqual(a, b) {
+  if (a === b) {
+    return true;
+  }
+  if (!a || !b) {
+    return false;
+  }
+  return (
+    a.baseKey === b.baseKey &&
+    a.classId === b.classId &&
+    a.lookGender === b.lookGender &&
+    a.lookFaceId === b.lookFaceId &&
+    a.lookAnimation === b.lookAnimation &&
+    areNumericArraysEqual(a.lookItemIds, b.lookItemIds) &&
+    areNumericArraysEqual(a.lookColors, b.lookColors)
+  );
 }
 
 const BARBOFUS_BASE_URL = "https://barbofus.com/skinator";
@@ -3114,6 +3144,14 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const [activeProposal, setActiveProposal] = useState(0);
   const [lookPreviews, setLookPreviews] = useState({});
   const lookPreviewsRef = useRef({});
+  const lookPreviewRequestsRef = useRef(new Map());
+  const directionDragStateRef = useRef({
+    active: false,
+    pointerId: null,
+    lastX: 0,
+    remainder: 0,
+  });
+  const isUnmountedRef = useRef(false);
   const [lookAnimation, setLookAnimation] = useState(DEFAULT_LOOK_ANIMATION);
   const [lookDirection, setLookDirection] = useState(DEFAULT_LOOK_DIRECTION);
   const [downloadingPreviewId, setDownloadingPreviewId] = useState(null);
@@ -4295,27 +4333,26 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         return values.slice(0, MAX_ITEM_PALETTE_COLORS);
       })();
 
-      const keyParts = [];
+      const baseKeyParts = [];
       if (Number.isFinite(activeClassId)) {
-        keyParts.push(activeClassId);
+        baseKeyParts.push(activeClassId);
       }
       const lookFaceId = Number.isFinite(activeClassFaceId) ? activeClassFaceId : null;
       if (lookFaceId) {
-        keyParts.push(`head${lookFaceId}`);
+        baseKeyParts.push(`head${lookFaceId}`);
       }
-      keyParts.push(lookGenderCode);
-      keyParts.push(...lookItemIds);
+      baseKeyParts.push(lookGenderCode);
+      baseKeyParts.push(...lookItemIds);
       lookColors.forEach((value) => {
-        keyParts.push(`c${value}`);
+        baseKeyParts.push(`c${value}`);
       });
       const animationCode = Number.isFinite(lookAnimation)
         ? Math.trunc(lookAnimation)
         : DEFAULT_LOOK_ANIMATION;
-      keyParts.push(`a${animationCode}`);
+      baseKeyParts.push(`a${animationCode}`);
       const directionCode = normalizeLookDirection(lookDirection);
-      keyParts.push(`d${directionCode}`);
-
-      const lookKey = keyParts.length ? keyParts.join("-") : null;
+      const lookBaseKey = baseKeyParts.length ? baseKeyParts.join("-") : null;
+      const lookKey = lookBaseKey ? `${lookBaseKey}-d${directionCode}` : null;
 
       combos.push({
         id: `proposal-${index}`,
@@ -4333,6 +4370,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         lookFaceId,
         lookItemIds,
         lookColors,
+        lookBaseKey,
         lookKey,
         lookAnimation: animationCode,
         lookDirection: directionCode,
@@ -4355,6 +4393,47 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     lookAnimation,
     lookDirection,
   ]);
+
+  const lookPreviewDescriptors = useMemo(() => {
+    if (!Array.isArray(proposals) || proposals.length === 0) {
+      return [];
+    }
+
+    const descriptors = [];
+    const seen = new Set();
+
+    proposals.forEach((proposal) => {
+      const baseKey = proposal?.lookBaseKey;
+      if (!baseKey || seen.has(baseKey)) {
+        return;
+      }
+      if (!Number.isFinite(proposal?.classId) || !Number.isFinite(proposal?.lookFaceId)) {
+        return;
+      }
+      const itemIds = Array.isArray(proposal.lookItemIds)
+        ? proposal.lookItemIds.filter((value) => Number.isFinite(value))
+        : [];
+      if (!itemIds.length) {
+        return;
+      }
+      const colors = Array.isArray(proposal.lookColors)
+        ? proposal.lookColors.filter((value) => Number.isFinite(value)).slice(0, MAX_ITEM_PALETTE_COLORS)
+        : [];
+
+      descriptors.push({
+        baseKey,
+        classId: proposal.classId,
+        lookGender: typeof proposal.lookGender === "string" ? proposal.lookGender : "m",
+        lookFaceId: proposal.lookFaceId,
+        lookItemIds: itemIds,
+        lookColors: colors,
+        lookAnimation: proposal.lookAnimation,
+      });
+      seen.add(baseKey);
+    });
+
+    return descriptors;
+  }, [proposals]);
 
   const previewBackgroundAutoByProposal = useMemo(() => {
     if (!previewBackgroundOptions.length) {
@@ -4462,6 +4541,15 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const activeProposalSubtitle = activeProposalDetails?.subtitle ?? "";
   const activeProposalClassIcon = activeProposalDetails?.classIcon ?? null;
   const activeProposalPalette = activeProposalDetails?.palette;
+  const activeDirectionValue = normalizeLookDirection(lookDirection);
+  const activeDirectionOption = LOOK_DIRECTION_BY_VALUE.get(activeDirectionValue);
+  const activeDirectionLabel = activeDirectionOption ? t(activeDirectionOption.labelKey) : "";
+  const directionAnnouncement = activeDirectionLabel
+    ? t("identity.preview.direction.announce", { direction: activeDirectionLabel })
+    : "";
+  const previewDirectionDescription = `${t("aria.previewDirectionControl")}${
+    activeDirectionLabel ? ` - ${activeDirectionLabel}` : ""
+  }. ${t("identity.preview.direction.hint")}`;
 
   const adaptiveThemePalette = useMemo(() => {
     if (Array.isArray(activeProposalPalette) && activeProposalPalette.length) {
@@ -4513,188 +4601,304 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
 
   useEffect(() => {
     lookPreviewsRef.current = lookPreviews;
-  }, [lookPreviews, t]);
+  }, [lookPreviews]);
 
   useEffect(() => {
-    if (!proposals.length) {
-      lookPreviewsRef.current = {};
-      setLookPreviews((previous = {}) => {
-        if (!previous || Object.keys(previous).length === 0) {
-          return previous;
+    isUnmountedRef.current = false;
+    return () => {
+      isUnmountedRef.current = true;
+      lookPreviewRequestsRef.current.forEach((entry) => {
+        try {
+          if (entry?.controller && typeof entry.controller.abort === "function") {
+            entry.controller.abort();
+          }
+        } catch (error) {
+          if (typeof console !== "undefined" && typeof console.error === "function") {
+            console.error(error);
+          }
         }
-        return {};
       });
+      lookPreviewRequestsRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!lookPreviewDescriptors.length) {
       return;
     }
 
-    const activeIds = new Set(proposals.map((proposal) => proposal.id));
     setLookPreviews((previous = {}) => {
-      const entries = Object.entries(previous).filter(([key]) => activeIds.has(key));
-      if (entries.length === Object.keys(previous).length) {
-        lookPreviewsRef.current = previous;
+      let changed = false;
+      const next = { ...previous };
+
+      lookPreviewDescriptors.forEach((descriptor) => {
+        const baseKey = descriptor.baseKey;
+        const existing = next[baseKey];
+        if (!existing) {
+          next[baseKey] = {
+            descriptor: { ...descriptor },
+            directions: {},
+          };
+          changed = true;
+          return;
+        }
+
+        if (!areLookPreviewDescriptorsEqual(existing.descriptor, descriptor)) {
+          next[baseKey] = {
+            ...existing,
+            descriptor: { ...descriptor },
+          };
+          changed = true;
+        }
+      });
+
+      if (!changed) {
         return previous;
       }
-      const next = Object.fromEntries(entries);
+
       lookPreviewsRef.current = next;
       return next;
     });
+  }, [lookPreviewDescriptors]);
 
-    const abortController = new AbortController();
-    let cancelled = false;
-
-    const loadPreview = async (proposal) => {
-      if (
-        !proposal ||
-        !Array.isArray(proposal.lookItemIds) ||
-        proposal.lookItemIds.length === 0 ||
-        !Number.isFinite(proposal.classId) ||
-        !Number.isFinite(proposal.lookFaceId)
-      ) {
-        return;
+  const ensureLookPreviewDirection = useCallback(
+    async (descriptor, direction) => {
+      if (!descriptor || !descriptor.baseKey) {
+        return null;
       }
 
-      const existing = lookPreviewsRef.current?.[proposal.id];
+      const baseKey = descriptor.baseKey;
+      const normalizedDirection = normalizeLookDirection(direction);
+      const currentGroup = lookPreviewsRef.current?.[baseKey];
+      const currentEntry = currentGroup?.directions?.[normalizedDirection];
+
+      if (currentEntry?.status === "loaded") {
+        return currentEntry;
+      }
+
+      const requestKey = `${baseKey}::${normalizedDirection}`;
+      const inflight = lookPreviewRequestsRef.current.get(requestKey);
+      if (inflight?.promise) {
+        return inflight.promise;
+      }
+
       if (
-        existing &&
-        existing.lookKey === proposal.lookKey &&
-        existing.status === "loaded"
+        !Array.isArray(descriptor.lookItemIds) ||
+        descriptor.lookItemIds.length === 0 ||
+        !Number.isFinite(descriptor.classId) ||
+        !Number.isFinite(descriptor.lookFaceId)
       ) {
-        return;
+        return null;
       }
 
       setLookPreviews((previous = {}) => {
-        const entry = previous[proposal.id];
-        if (
-          entry &&
-          entry.lookKey === proposal.lookKey &&
-          (entry.status === "loaded" || entry.status === "loading")
-        ) {
+        const existingGroup = previous[baseKey];
+        const descriptorToStore = existingGroup?.descriptor ?? descriptor;
+        const existingDirections = existingGroup?.directions ?? {};
+        const existingDirectionEntry = existingDirections[normalizedDirection];
+
+        if (existingDirectionEntry?.status === "loading" && inflight?.promise) {
           return previous;
         }
 
-        const next = {
-          ...previous,
-          [proposal.id]: {
-            lookKey: proposal.lookKey,
-            status: "loading",
-            dataUrl: entry?.dataUrl ?? null,
-            rendererUrl: entry?.rendererUrl ?? null,
-            base64: entry?.base64 ?? null,
-            contentType: entry?.contentType ?? null,
-            byteLength: entry?.byteLength ?? null,
-            error: null,
+        const nextDirectionEntry = {
+          status: "loading",
+          dataUrl: existingDirectionEntry?.dataUrl ?? null,
+          rendererUrl: existingDirectionEntry?.rendererUrl ?? null,
+          base64: existingDirectionEntry?.base64 ?? null,
+          contentType: existingDirectionEntry?.contentType ?? null,
+          byteLength: existingDirectionEntry?.byteLength ?? null,
+          error: null,
+          updatedAt: Date.now(),
+        };
+
+        const nextGroup = {
+          baseKey,
+          descriptor: descriptorToStore,
+          directions: {
+            ...existingDirections,
+            [normalizedDirection]: nextDirectionEntry,
           },
         };
+
+        const next = { ...previous, [baseKey]: nextGroup };
         lookPreviewsRef.current = next;
         return next;
       });
 
-      try {
-        const params = new URLSearchParams();
-        params.set("breedId", String(proposal.classId));
-        params.set("gender", proposal.lookGender ?? "m");
-        params.set("lang", language);
-        params.set("size", String(LOOK_PREVIEW_SIZE));
-        const animationValue = Number.isFinite(proposal.lookAnimation)
-          ? Math.trunc(proposal.lookAnimation)
-          : DEFAULT_LOOK_ANIMATION;
-        params.set("animation", String(animationValue));
-        const directionValue = normalizeLookDirection(proposal.lookDirection);
-        params.set("direction", String(directionValue));
-        if (Number.isFinite(proposal.lookFaceId)) {
-          params.set("faceId", String(Math.trunc(proposal.lookFaceId)));
-        }
-        proposal.lookItemIds.forEach((id) => {
-          params.append("itemIds[]", String(id));
+      const params = new URLSearchParams();
+      params.set("breedId", String(descriptor.classId));
+      params.set("gender", descriptor.lookGender ?? "m");
+      params.set("lang", language);
+      params.set("size", String(LOOK_PREVIEW_SIZE));
+      const animationValue = Number.isFinite(descriptor.lookAnimation)
+        ? Math.trunc(descriptor.lookAnimation)
+        : DEFAULT_LOOK_ANIMATION;
+      params.set("animation", String(animationValue));
+      params.set("direction", String(normalizedDirection));
+      if (Number.isFinite(descriptor.lookFaceId)) {
+        params.set("faceId", String(Math.trunc(descriptor.lookFaceId)));
+      }
+      descriptor.lookItemIds.forEach((id) => {
+        params.append("itemIds[]", String(id));
+      });
+      if (Array.isArray(descriptor.lookColors) && descriptor.lookColors.length) {
+        descriptor.lookColors.slice(0, MAX_ITEM_PALETTE_COLORS).forEach((value) => {
+          if (Number.isFinite(value)) {
+            params.append("colors[]", String(Math.trunc(value)));
+          }
         });
-        if (Array.isArray(proposal.lookColors) && proposal.lookColors.length) {
-          proposal.lookColors.slice(0, MAX_ITEM_PALETTE_COLORS).forEach((value) => {
-            if (Number.isFinite(value)) {
-              params.append("colors[]", String(Math.trunc(value)));
-            }
+      }
+
+      const controller = new AbortController();
+      const request = { controller };
+
+      const fetchPromise = (async () => {
+        try {
+          const response = await fetch(`/api/look-preview?${params.toString()}`, {
+            signal: controller.signal,
           });
-        }
-
-        const response = await fetch(`/api/look-preview?${params.toString()}`, {
-          signal: abortController.signal,
-        });
-        if (!response.ok) {
-          const payload = await response.json().catch(() => null);
-          const message = payload?.error ?? `HTTP ${response.status}`;
-          throw new Error(message);
-        }
-
-        const payload = await response.json();
-        if (cancelled) {
-          return;
-        }
-
-        const contentType = payload?.contentType ?? "image/png";
-        const base64 = payload?.base64 ?? null;
-        const rendererUrl = payload?.rendererUrl ?? null;
-        const byteLength =
-          typeof payload?.byteLength === "number" && Number.isFinite(payload.byteLength)
-            ? payload.byteLength
-            : null;
-        const dataUrl =
-          payload?.dataUrl ??
-          (base64 ? `data:${contentType};base64,${base64}` : rendererUrl ?? null);
-
-        setLookPreviews((previous = {}) => {
-          if (cancelled) {
-            return previous;
+          if (!response.ok) {
+            const payload = await response.json().catch(() => null);
+            const message = payload?.error ?? `HTTP ${response.status}`;
+            throw new Error(message);
           }
 
-          const next = {
-            ...previous,
-            [proposal.id]: {
-              lookKey: proposal.lookKey,
+          const payload = await response.json();
+          if (controller.signal.aborted || isUnmountedRef.current) {
+            return null;
+          }
+
+          const contentType = payload?.contentType ?? "image/png";
+          const base64 = payload?.base64 ?? null;
+          const rendererUrl = payload?.rendererUrl ?? null;
+          const byteLength =
+            typeof payload?.byteLength === "number" && Number.isFinite(payload.byteLength)
+              ? payload.byteLength
+              : null;
+          const dataUrl =
+            payload?.dataUrl ??
+            (base64 ? `data:${contentType};base64,${base64}` : rendererUrl ?? null);
+
+          setLookPreviews((previous = {}) => {
+            const existingGroup = previous[baseKey];
+            if (!existingGroup) {
+              return previous;
+            }
+            const existingDirections = existingGroup.directions ?? {};
+            const existingDirectionEntry = existingDirections[normalizedDirection] ?? {};
+            const nextDirectionEntry = {
+              ...existingDirectionEntry,
               status: dataUrl ? "loaded" : "error",
               dataUrl,
               rendererUrl,
               base64,
               contentType,
               byteLength,
-            error: dataUrl ? null : payload?.error ?? t("errors.previewUnavailable"),
-            },
-          };
-          lookPreviewsRef.current = next;
-          return next;
-        });
-      } catch (error) {
-        if (cancelled || error?.name === "AbortError") {
-          return;
-        }
+              error: dataUrl ? null : payload?.error ?? t("errors.previewUnavailable"),
+              updatedAt: Date.now(),
+            };
+            const nextGroup = {
+              ...existingGroup,
+              descriptor: areLookPreviewDescriptorsEqual(existingGroup.descriptor, descriptor)
+                ? existingGroup.descriptor
+                : { ...descriptor },
+              directions: {
+                ...existingDirections,
+                [normalizedDirection]: nextDirectionEntry,
+              },
+            };
+            const next = { ...previous, [baseKey]: nextGroup };
+            lookPreviewsRef.current = next;
+            return next;
+          });
 
-        setLookPreviews((previous = {}) => {
-          const next = {
-            ...previous,
-            [proposal.id]: {
-              lookKey: proposal.lookKey,
+          return dataUrl ? payload : null;
+        } catch (error) {
+          if (controller.signal.aborted || isUnmountedRef.current) {
+            return null;
+          }
+
+          const message = error instanceof Error ? error.message : String(error);
+
+          setLookPreviews((previous = {}) => {
+            const existingGroup = previous[baseKey];
+            if (!existingGroup) {
+              return previous;
+            }
+            const existingDirections = existingGroup.directions ?? {};
+            const existingDirectionEntry = existingDirections[normalizedDirection] ?? {};
+            const nextDirectionEntry = {
+              ...existingDirectionEntry,
               status: "error",
               dataUrl: null,
               rendererUrl: null,
               base64: null,
               contentType: null,
               byteLength: null,
-            error: error?.message ?? t("errors.previewUnavailable"),
-            },
-          };
-          lookPreviewsRef.current = next;
-          return next;
-        });
-      }
-    };
+              error: message || t("errors.previewUnavailable"),
+              updatedAt: Date.now(),
+            };
+            const nextGroup = {
+              ...existingGroup,
+              descriptor: areLookPreviewDescriptorsEqual(existingGroup.descriptor, descriptor)
+                ? existingGroup.descriptor
+                : { ...descriptor },
+              directions: {
+                ...existingDirections,
+                [normalizedDirection]: nextDirectionEntry,
+              },
+            };
+            const next = { ...previous, [baseKey]: nextGroup };
+            lookPreviewsRef.current = next;
+            return next;
+          });
 
-    proposals.forEach((proposal) => {
-      void loadPreview(proposal);
+          return null;
+        } finally {
+          lookPreviewRequestsRef.current.delete(requestKey);
+        }
+      })();
+
+      request.promise = fetchPromise;
+      lookPreviewRequestsRef.current.set(requestKey, request);
+
+      await fetchPromise;
+      return fetchPromise;
+    },
+    [language, t]
+  );
+
+  useEffect(() => {
+    if (!lookPreviewDescriptors.length) {
+      return;
+    }
+
+    const timeoutHandles = [];
+    const activeDirection = normalizeLookDirection(lookDirection);
+
+    lookPreviewDescriptors.forEach((descriptor) => {
+      const orderedDirections = [
+        activeDirection,
+        ...ALL_LOOK_DIRECTIONS.filter((value) => value !== activeDirection),
+      ];
+
+      orderedDirections.forEach((direction, index) => {
+        if (index === 0) {
+          void ensureLookPreviewDirection(descriptor, direction);
+        } else {
+          const handle = setTimeout(() => {
+            void ensureLookPreviewDirection(descriptor, direction);
+          }, index * 120);
+          timeoutHandles.push(handle);
+        }
+      });
     });
 
     return () => {
-      cancelled = true;
-      abortController.abort();
+      timeoutHandles.forEach((handle) => clearTimeout(handle));
     };
-  }, [language, lookAnimation, lookDirection, proposals, t]);
+  }, [ensureLookPreviewDirection, lookPreviewDescriptors, lookDirection]);
 
   const handleNextProposal = useCallback(() => {
     if (!proposalCount) {
@@ -4720,71 +4924,92 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     [proposalCount]
   );
 
-  const handleLookPreviewError = useCallback((id) => {
-    if (!id) {
-      return;
-    }
-
-    setLookPreviews((previous = {}) => {
-      const entry = previous[id];
-      if (!entry || entry.status === "error") {
-        return previous;
+  const handleLookPreviewError = useCallback(
+    (baseKey, direction) => {
+      if (!baseKey) {
+        return;
       }
 
-      const nextEntry = {
-        ...entry,
-        status: "error",
-        dataUrl: null,
-        rendererUrl: null,
-        base64: null,
-        contentType: null,
-        byteLength: null,
-        error: entry?.error ?? t("errors.previewUnavailableDetailed"),
+      const directionValue = normalizeLookDirection(direction);
+
+      setLookPreviews((previous = {}) => {
+        const group = previous[baseKey];
+        if (!group) {
+          return previous;
+        }
+
+        const currentEntry = group.directions?.[directionValue];
+        if (!currentEntry || currentEntry.status === "error") {
+          return previous;
+        }
+
+        const nextDirectionEntry = {
+          ...currentEntry,
+          status: "error",
+          dataUrl: null,
+          rendererUrl: null,
+          base64: null,
+          contentType: null,
+          byteLength: null,
+          error: currentEntry?.error ?? t("errors.previewUnavailableDetailed"),
+          updatedAt: Date.now(),
+        };
+
+        const nextGroup = {
+          ...group,
+          directions: {
+            ...group.directions,
+            [directionValue]: nextDirectionEntry,
+          },
+        };
+
+        const next = { ...previous, [baseKey]: nextGroup };
+        lookPreviewsRef.current = next;
+        return next;
+      });
+    },
+    [t]
+  );
+
+  const handleDownloadPreview = useCallback(
+    async (proposal) => {
+      if (!proposal) {
+        return;
+      }
+
+      const activeDirection = normalizeLookDirection(lookDirection);
+      const lookPreviewGroup = proposal.lookBaseKey
+        ? lookPreviews?.[proposal.lookBaseKey]
+        : null;
+      const lookPreview = lookPreviewGroup?.directions?.[activeDirection] ?? null;
+      const hasLookPreview =
+        typeof lookPreview?.dataUrl === "string" && lookPreview.dataUrl.length > 0;
+
+      if (!hasLookPreview) {
+        return;
+      }
+
+      const resolveExtension = (type) => {
+        if (!type || typeof type !== "string") {
+          return "png";
+        }
+        const normalized = type.toLowerCase();
+        if (normalized.includes("png")) return "png";
+        if (normalized.includes("jpeg") || normalized.includes("jpg")) return "jpg";
+        if (normalized.includes("gif")) return "gif";
+        if (normalized.includes("bmp")) return "bmp";
+        if (normalized.includes("webp")) return "webp";
+        return "png";
       };
 
-      const next = { ...previous, [id]: nextEntry };
-      lookPreviewsRef.current = next;
-      return next;
-    });
-  }, [t]);
+      try {
+        setDownloadingPreviewId(proposal.id);
 
-  const handleDownloadPreview = useCallback(async (proposal) => {
-    if (!proposal) {
-      return;
-    }
+        const defaultLabel = t("suggestions.render.defaultName", { index: proposal.index + 1 });
+        const fallbackName = proposal.className ?? defaultLabel;
+        const baseName =
+          slugify(fallbackName) || slugify(defaultLabel) || `proposition-${proposal.index + 1}`;
 
-    const lookPreview = lookPreviews?.[proposal.id];
-    const hasLookPreview =
-      lookPreview?.status === "loaded" &&
-      typeof lookPreview?.dataUrl === "string" &&
-      lookPreview.dataUrl.length > 0;
-
-    if (!hasLookPreview) {
-      return;
-    }
-
-    const resolveExtension = (type) => {
-      if (!type || typeof type !== "string") {
-        return "png";
-      }
-      const normalized = type.toLowerCase();
-      if (normalized.includes("png")) return "png";
-      if (normalized.includes("jpeg") || normalized.includes("jpg")) return "jpg";
-      if (normalized.includes("gif")) return "gif";
-      if (normalized.includes("bmp")) return "bmp";
-      if (normalized.includes("webp")) return "webp";
-      return "png";
-    };
-
-    try {
-      setDownloadingPreviewId(proposal.id);
-
-      const defaultLabel = t("suggestions.render.defaultName", { index: proposal.index + 1 });
-      const fallbackName = proposal.className ?? defaultLabel;
-      const baseName =
-        slugify(fallbackName) || slugify(defaultLabel) || `proposition-${proposal.index + 1}`;
-
-      if (hasLookPreview) {
         const response = await fetch(lookPreview.dataUrl);
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
@@ -4804,16 +5029,178 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error("Unable to download preview:", error);
+        setError(t("errors.previewDownload"));
+      } finally {
+        setDownloadingPreviewId(null);
+      }
+    },
+    [lookDirection, lookPreviews, t]
+  );
+
+  const rotateLookDirection = useCallback(
+    (step) => {
+      const total = ALL_LOOK_DIRECTIONS.length;
+      setLookDirection((previous) => {
+        const current = normalizeLookDirection(previous);
+        let next = (current + step + total) % total;
+        if (lookAnimation === 2) {
+          let attempts = 0;
+          while (COMBAT_POSE_DISABLED_DIRECTIONS.includes(next) && attempts < total) {
+            next = (next + step + total) % total;
+            attempts += 1;
+          }
+        }
+        return next;
+      });
+    },
+    [lookAnimation]
+  );
+
+  const resetDirectionDragState = useCallback(() => {
+    directionDragStateRef.current = {
+      active: false,
+      pointerId: null,
+      lastX: 0,
+      remainder: 0,
+    };
+  }, []);
+
+  const handleDirectionPointerDown = useCallback((event) => {
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
+
+    const target = event.currentTarget;
+    if (typeof target.focus === "function") {
+      target.focus({ preventScroll: true });
+    }
+
+    if (typeof target.setPointerCapture === "function") {
+      try {
+        target.setPointerCapture(event.pointerId);
+      } catch (_error) {
+        // Ignore capture errors.
+      }
+    }
+
+    directionDragStateRef.current = {
+      active: true,
+      pointerId: event.pointerId,
+      lastX: Number.isFinite(event.clientX) ? event.clientX : 0,
+      remainder: 0,
+    };
+
+    if (event.pointerType === "touch") {
+      event.preventDefault();
+    }
+  }, []);
+
+  const handleDirectionPointerMove = useCallback(
+    (event) => {
+      const state = directionDragStateRef.current;
+      if (!state.active || state.pointerId !== event.pointerId) {
         return;
       }
 
-    } catch (error) {
-      console.error("Unable to download preview:", error);
-      setError(t("errors.previewDownload"));
-    } finally {
-      setDownloadingPreviewId(null);
-    }
-  }, [lookPreviews]);
+      if (!Number.isFinite(event.clientX)) {
+        return;
+      }
+
+      const deltaX = event.clientX - state.lastX;
+      state.lastX = event.clientX;
+
+      if (!Number.isFinite(deltaX) || deltaX === 0) {
+        return;
+      }
+
+      state.remainder += deltaX;
+      const threshold = DIRECTION_DRAG_THRESHOLD;
+      let steps = 0;
+
+      while (state.remainder >= threshold) {
+        steps += 1;
+        state.remainder -= threshold;
+      }
+
+      while (state.remainder <= -threshold) {
+        steps -= 1;
+        state.remainder += threshold;
+      }
+
+      if (steps !== 0) {
+        rotateLookDirection(steps);
+      }
+
+      if (event.pointerType === "touch") {
+        event.preventDefault();
+      }
+    },
+    [rotateLookDirection]
+  );
+
+  const handleDirectionPointerUp = useCallback(
+    (event) => {
+      const state = directionDragStateRef.current;
+      if (!state.active || state.pointerId !== event.pointerId) {
+        return;
+      }
+
+      const target = event.currentTarget;
+      if (typeof target.releasePointerCapture === "function") {
+        try {
+          target.releasePointerCapture(event.pointerId);
+        } catch (_error) {
+          // Ignore release errors.
+        }
+      }
+
+      resetDirectionDragState();
+
+      if (event.pointerType === "touch") {
+        event.preventDefault();
+      }
+    },
+    [resetDirectionDragState]
+  );
+
+  const handleDirectionPointerCancel = useCallback(
+    (event) => {
+      const state = directionDragStateRef.current;
+      if (!state.active || state.pointerId !== event.pointerId) {
+        return;
+      }
+
+      const target = event.currentTarget;
+      if (typeof target.releasePointerCapture === "function") {
+        try {
+          target.releasePointerCapture(event.pointerId);
+        } catch (_error) {
+          // Ignore release errors.
+        }
+      }
+
+      resetDirectionDragState();
+    },
+    [resetDirectionDragState]
+  );
+
+  const handleDirectionKeyDown = useCallback(
+    (event) => {
+      if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+        event.preventDefault();
+        rotateLookDirection(-1);
+        return;
+      }
+
+      if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+        event.preventDefault();
+        rotateLookDirection(1);
+      }
+    },
+    [rotateLookDirection]
+  );
 
   const toggleDetailedMatches = useCallback(() => {
     setShowDetailedMatches((previous) => !previous);
@@ -5851,6 +6238,11 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
               role="group"
               aria-label={t("aria.identityCard")}
             >
+              {directionAnnouncement ? (
+                <span className="sr-only" aria-live="polite">
+                  {directionAnnouncement}
+                </span>
+              ) : null}
               <div className="identity-card__selectors">
                 <div
                   className="identity-card__gender-wrapper"
@@ -5959,10 +6351,10 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                       </button>
                     );
                   })}
-                  </div>
-                </div>
-              </div>
-            </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
           {itemsLoading || (itemsError && !showDetailedMatches) ? (
             <div className="suggestions__header">
               {itemsLoading ? (
@@ -6016,19 +6408,21 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                             {proposals.map((proposal) => {
                               const primaryColor = proposal.palette[0] ?? "#1f2937";
                               const canvasBackground = buildGradientFromHex(primaryColor);
-                              const lookPreview = lookPreviews?.[proposal.id];
-                              const lookLoaded =
-                                lookPreview?.status === "loaded" &&
-                                typeof lookPreview?.dataUrl === "string" &&
-                                lookPreview.dataUrl.length > 0;
-                              const lookLoading = lookPreview?.status === "loading";
-                              const lookError =
-                                lookPreview?.status === "error" && lookPreview?.error
-                                  ? lookPreview.error
-                                  : lookPreview?.status === "error"
-                                ? t("errors.previewUnavailableDetailed")
+                              const lookPreviewGroup = proposal.lookBaseKey
+                                ? lookPreviews?.[proposal.lookBaseKey]
                                 : null;
-                              const previewSrc = lookLoaded ? lookPreview.dataUrl : null;
+                              const lookPreview = lookPreviewGroup?.directions?.[activeDirectionValue] ?? null;
+                              const previewSrc =
+                                typeof lookPreview?.dataUrl === "string" && lookPreview.dataUrl.length > 0
+                                  ? lookPreview.dataUrl
+                                  : null;
+                              const lookLoaded = Boolean(previewSrc);
+                              const lookLoading =
+                                lookPreview?.status === "loading" && !previewSrc;
+                              const lookError =
+                                lookPreview?.status === "error"
+                                  ? lookPreview?.error ?? t("errors.previewUnavailableDetailed")
+                                  : null;
                               const heroSrc = !lookLoaded ? proposal.heroImage ?? null : null;
                               const previewAlt = t("suggestions.render.alt", { index: proposal.index + 1 });
                               const autoBackgroundId = previewBackgroundAutoByProposal.get(proposal.id);
@@ -6067,8 +6461,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                     backgroundColor: primaryColor,
                                   }
                                 : { backgroundImage: canvasBackground };
-                              const activeDirection = normalizeLookDirection(lookDirection);
-                              const isCombatPoseActive = lookAnimation === 2;
                               return (
                                 <article key={proposal.id} className="skin-card">
                                   <h3 className="sr-only">{t("suggestions.carousel.proposalTitle", { index: proposal.index + 1 })}</h3>
@@ -6090,14 +6482,28 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           </div>
                                         ) : null}
                                         <div className="skin-card__glow" aria-hidden="true" />
-                                        <div className="skin-card__preview">
+                                        <div
+                                          className="skin-card__preview"
+                                          role="group"
+                                          aria-label={previewDirectionDescription}
+                                          title={t("identity.preview.direction.hint")}
+                                          tabIndex={0}
+                                          onPointerDown={handleDirectionPointerDown}
+                                          onPointerMove={handleDirectionPointerMove}
+                                          onPointerUp={handleDirectionPointerUp}
+                                          onPointerCancel={handleDirectionPointerCancel}
+                                          onKeyDown={handleDirectionKeyDown}
+                                        >
                                           {previewSrc ? (
                                             <img
                                               src={previewSrc}
                                               alt={previewAlt}
                                               loading="lazy"
                                               className="skin-card__preview-image"
-                                              onError={() => handleLookPreviewError(proposal.id)}
+                                              onError={() =>
+                                                handleLookPreviewError(proposal.lookBaseKey, activeDirectionValue)
+                                              }
+                                              draggable={false}
                                             />
                                           ) : heroSrc ? (
                                             <img
@@ -6105,97 +6511,44 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                               alt={`Aperçu principal de la proposition ${proposal.index + 1}`}
                                               loading="lazy"
                                               className="skin-card__hero"
+                                              draggable={false}
                                             />
                                           ) : (
                                             <div className="skin-card__placeholder" aria-hidden="true">
                                               Aperçu indisponible
                                             </div>
                                           )}
-                                          <div
-                                            className="skin-card__direction"
-                                            role="group"
-                                            aria-label={t("aria.previewDirectionControl")}
-                                          >
-                                            <span className="sr-only">
-                                              {t("identity.preview.direction.label")}
-                                            </span>
-                                            <div className="skin-card__direction-grid">
-                                              {LOOK_DIRECTION_GRID.map((row, rowIndex) =>
-                                                row.map((value, columnIndex) => {
-                                                  if (!Number.isFinite(value)) {
-                                                    return (
-                                                      <span
-                                                        key={`direction-spacer-${rowIndex}-${columnIndex}`}
-                                                        className="skin-card__direction-spacer"
-                                                        aria-hidden="true"
-                                                      />
-                                                    );
-                                                  }
-
-                                                  const option = LOOK_DIRECTION_BY_VALUE.get(value);
-                                                  if (!option) {
-                                                    return (
-                                                      <span
-                                                        key={`direction-fallback-${value}`}
-                                                        className="skin-card__direction-spacer"
-                                                        aria-hidden="true"
-                                                      />
-                                                    );
-                                                  }
-
-                                                  const label = t(option.labelKey);
-                                                  const isActive = activeDirection === value;
-                                                  const isDisabled =
-                                                    isCombatPoseActive &&
-                                                    COMBAT_POSE_DISABLED_DIRECTIONS.includes(value);
-
-                                                  return (
-                                                    <button
-                                                      key={`direction-${value}`}
-                                                      type="button"
-                                                      className={`skin-card__direction-button${
-                                                        isActive ? " is-active" : ""
-                                                      }`}
-                                                      onClick={() => {
-                                                        if (!isDisabled) {
-                                                          setLookDirection(value);
-                                                        }
-                                                      }}
-                                                      aria-pressed={isActive}
-                                                      title={label}
-                                                      aria-label={label}
-                                                      disabled={isDisabled}
-                                                    >
-                                                      <span className="sr-only">{label}</span>
-                                                      <svg
-                                                        className="skin-card__direction-icon"
-                                                        viewBox="0 0 20 20"
-                                                        fill="none"
-                                                        xmlns="http://www.w3.org/2000/svg"
-                                                        aria-hidden="true"
-                                                        focusable="false"
-                                                        style={{ transform: `rotate(${option.rotation}deg)` }}
-                                                      >
-                                                        <path
-                                                          d="M10 3.5 10 16.5"
-                                                          stroke="currentColor"
-                                                          strokeWidth="1.6"
-                                                          strokeLinecap="round"
-                                                        />
-                                                        <path
-                                                          d="M6.2 7.3 10 3.5l3.8 3.8"
-                                                          stroke="currentColor"
-                                                          strokeWidth="1.6"
-                                                          strokeLinecap="round"
-                                                          strokeLinejoin="round"
-                                                        />
-                                                      </svg>
-                                                    </button>
-                                                  );
-                                                })
-                                              )}
+                                          {activeDirectionOption ? (
+                                            <div className="skin-card__direction-overlay" aria-hidden="true">
+                                              <span className="skin-card__direction-label">
+                                                {activeDirectionLabel}
+                                              </span>
+                                              <svg
+                                                className="skin-card__direction-indicator"
+                                                viewBox="0 0 20 20"
+                                                fill="none"
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                focusable="false"
+                                                style={{
+                                                  transform: `rotate(${activeDirectionOption.rotation}deg)`,
+                                                }}
+                                              >
+                                                <path
+                                                  d="M10 3.5 10 16.5"
+                                                  stroke="currentColor"
+                                                  strokeWidth="1.6"
+                                                  strokeLinecap="round"
+                                                />
+                                                <path
+                                                  d="M6.2 7.3 10 3.5l3.8 3.8"
+                                                  stroke="currentColor"
+                                                  strokeWidth="1.6"
+                                                  strokeLinecap="round"
+                                                  strokeLinejoin="round"
+                                                />
+                                              </svg>
                                             </div>
-                                          </div>
+                                          ) : null}
                                         </div>
                                       </div>
                                       <ul className="skin-card__equipment" role="list">
