@@ -427,13 +427,25 @@ export default async function handler(req, res) {
     searchParams.set("sexe", normalizedGender);
     searchParams.set("lang", normalizedLang);
     itemIds.forEach((id) => {
-      searchParams.append("itemIds[]", String(id));
+      const numericId = Number(id);
+      if (!Number.isFinite(numericId)) {
+        return;
+      }
+      const normalizedId = String(Math.trunc(numericId));
+      searchParams.append("itemIds[]", normalizedId);
     });
-    colors.forEach((value) => {
-      searchParams.append("colors[]", String(value));
+    colors.forEach((value, index) => {
+      if (!Number.isFinite(value)) {
+        return;
+      }
+      const normalizedColor = String(Math.trunc(value));
+      searchParams.append("colors[]", normalizedColor);
+      searchParams.append(`colors[${index + 1}]`, normalizedColor);
+      searchParams.append("palette[]", normalizedColor);
     });
     searchParams.set("animation", String(animationValue));
     searchParams.set("direction", String(directionValue));
+    searchParams.set("dir", String(directionValue));
 
     const lookUrl = `${DOFUS_LOOK_API_URL}?${searchParams.toString()}`;
 
