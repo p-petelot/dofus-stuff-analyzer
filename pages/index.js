@@ -1524,128 +1524,160 @@ function SkinCardPreviewComparison({
   onWithError,
   onWithoutError,
 }) {
-  const sliderIdRef = useRef(null);
-  if (!sliderIdRef.current) {
-    sliderIdRef.current = `skin-card-comparison-${Math.random().toString(36).slice(2, 9)}`;
+  const toggleIdRef = useRef(null);
+  if (!toggleIdRef.current) {
+    toggleIdRef.current = `skin-card-comparison-${Math.random().toString(36).slice(2, 9)}`;
   }
 
-  const [sliderValue, setSliderValue] = useState(100);
+  const [showWithout, setShowWithout] = useState(false);
+  const releaseHandlerRef = useRef(null);
 
-  useEffect(() => {
-    setSliderValue(100);
-  }, [withSrc, withoutSrc]);
-
-  const clamp = useCallback((value) => {
-    if (!Number.isFinite(value)) {
-      return 0;
+  const removeWindowListeners = useCallback(() => {
+    if (typeof window === "undefined") {
+      releaseHandlerRef.current = null;
+      return;
     }
-    if (value < 0) {
-      return 0;
+    if (releaseHandlerRef.current) {
+      window.removeEventListener("pointerup", releaseHandlerRef.current);
+      window.removeEventListener("pointercancel", releaseHandlerRef.current);
+      releaseHandlerRef.current = null;
     }
-    if (value > 100) {
-      return 100;
-    }
-    return value;
   }, []);
 
-  const handleSliderChange = useCallback(
+  const endHold = useCallback(() => {
+    setShowWithout(false);
+    removeWindowListeners();
+  }, [removeWindowListeners]);
+
+  useEffect(() => endHold(), [withSrc, withoutSrc, endHold]);
+
+  useEffect(() => () => removeWindowListeners(), [removeWindowListeners]);
+
+  const handlePointerDown = useCallback(
     (event) => {
-      const value = Number(event.target.value);
-      if (!Number.isFinite(value)) {
+      if (event && typeof event.preventDefault === "function") {
+        event.preventDefault();
+      }
+      if (event?.currentTarget && typeof event.currentTarget.focus === "function") {
+        event.currentTarget.focus();
+      }
+
+      removeWindowListeners();
+      setShowWithout(true);
+
+      if (typeof window === "undefined") {
         return;
       }
-      setSliderValue(clamp(value));
+
+      const release = () => {
+        endHold();
+      };
+
+      releaseHandlerRef.current = release;
+      window.addEventListener("pointerup", release, { once: true });
+      window.addEventListener("pointercancel", release, { once: true });
     },
-    [clamp]
+    [endHold, removeWindowListeners]
   );
 
-  const stopPointerPropagation = useCallback((event) => {
-    event.stopPropagation();
-  }, []);
-
-  const safeSliderValue = clamp(sliderValue);
-  const dividerDisplayOffset = Math.max(1.5, Math.min(98.5, safeSliderValue));
-  const withClipPath = `inset(0 ${100 - safeSliderValue}% 0 0)`;
-  const withoutClipPath = `inset(0 0 0 ${safeSliderValue}%)`;
-  const sliderTrackBackground = useMemo(
-    () =>
-      `linear-gradient(90deg, rgba(var(--accent-primary-rgb), 0.85) 0%, rgba(var(--accent-primary-rgb), 0.85) ${safeSliderValue}%, rgba(var(--surface-9-rgb), 0.42) ${safeSliderValue}%, rgba(var(--surface-9-rgb), 0.42) 100%)`,
-    [safeSliderValue]
+  const handleKeyDown = useCallback(
+    (event) => {
+      if (!event) {
+        return;
+      }
+      if (event.key === " " || event.key === "Enter") {
+        event.preventDefault();
+        setShowWithout(true);
+      }
+    },
+    []
   );
-  const sliderLabelText =
-    typeof sliderLabel === "string" && sliderLabel.trim().length ? sliderLabel : undefined;
-  const sliderLabelId = sliderLabelText ? `${sliderIdRef.current}-label` : undefined;
-  const leftSliderLabel = typeof withoutLabel === "string" ? withoutLabel : "";
-  const rightSliderLabel = typeof withLabel === "string" ? withLabel : "";
+
+  const handleKeyUp = useCallback(
+    (event) => {
+      if (!event) {
+        return;
+      }
+      if (event.key === " " || event.key === "Enter") {
+        event.preventDefault();
+        endHold();
+      }
+    },
+    [endHold]
+  );
+
+  const buttonLabelText =
+    typeof sliderLabel === "string" && sliderLabel.trim().length
+      ? sliderLabel.trim()
+      : undefined;
+
+  const fallbackLabelParts = [];
+  if (typeof withoutLabel === "string" && withoutLabel.trim().length) {
+    fallbackLabelParts.push(withoutLabel.trim());
+  }
+  if (typeof withLabel === "string" && withLabel.trim().length) {
+    fallbackLabelParts.push(withLabel.trim());
+  }
+
+  const fallbackLabel = fallbackLabelParts.length
+    ? fallbackLabelParts.join(" → ")
+    : "Afficher sans stuff";
+
+  const accessibleLabel = buttonLabelText ?? fallbackLabel;
 
   return (
-    <>
-      <div className="skin-card__comparison">
-        <div className="skin-card__comparison-base">
-          <img
-            src={withoutSrc}
-            alt={withoutAlt}
-            className="skin-card__preview-image skin-card__preview-image--without"
-            draggable={false}
-            onError={onWithoutError}
-            style={{ clipPath: withoutClipPath, WebkitClipPath: withoutClipPath }}
-          />
-        </div>
-        <div
-          className="skin-card__comparison-overlay"
-          style={{ clipPath: withClipPath, WebkitClipPath: withClipPath }}
+    <div className={`skin-card__comparison${showWithout ? " skin-card__comparison--without" : ""}`}>
+      <div className="skin-card__comparison-stage">
+        <img
+          src={withSrc}
+          alt={withAlt}
+          className="skin-card__preview-image skin-card__preview-image--with"
+          draggable={false}
+          onError={onWithError}
+        />
+        <img
+          src={withoutSrc}
+          alt={withoutAlt}
+          className="skin-card__preview-image skin-card__preview-image--without"
+          draggable={false}
+          onError={onWithoutError}
+        />
+      </div>
+      <div className="skin-card__comparison-toggle">
+        <button
+          id={toggleIdRef.current}
+          type="button"
+          title={accessibleLabel}
+          className={`skin-card__comparison-toggle-button${
+            showWithout ? " skin-card__comparison-toggle-button--active" : ""
+          }`}
+          onPointerDown={handlePointerDown}
+          onPointerUp={endHold}
+          onPointerCancel={endHold}
+          onKeyDown={handleKeyDown}
+          onKeyUp={handleKeyUp}
+          onBlur={endHold}
+          aria-pressed={showWithout}
         >
-          <img
-            src={withSrc}
-            alt={withAlt}
-            className="skin-card__preview-image skin-card__preview-image--with"
-            draggable={false}
-            onError={onWithError}
-            style={{ clipPath: withClipPath, WebkitClipPath: withClipPath }}
-          />
-        </div>
-        <div
-          className="skin-card__comparison-divider"
-          aria-hidden="true"
-          style={{ left: `${dividerDisplayOffset}%` }}
-        />
+          <span className="skin-card__comparison-toggle-icon" aria-hidden="true">
+            <svg
+              className="skin-card__comparison-toggle-eye"
+              viewBox="0 0 24 16"
+              xmlns="http://www.w3.org/2000/svg"
+              focusable="false"
+            >
+              <path
+                d="M12 1.5c-4.87 0-9.1 3-11.21 7.37a.9.9 0 0 0 0 .76C2.9 13.99 7.13 17 12 17s9.1-3.01 11.21-7.37a.9.9 0 0 0 0-.76C21.1 4.5 16.87 1.5 12 1.5Zm0 13.1c-3.77 0-7.24-2.17-9.13-5.57C4.76 5.63 8.23 3.5 12 3.5s7.24 2.13 9.13 5.53C19.24 12.43 15.77 14.6 12 14.6Zm0-9.1a3.6 3.6 0 1 0 3.6 3.6A3.6 3.6 0 0 0 12 5.5Zm0 5.4a1.8 1.8 0 1 1 1.8-1.8A1.8 1.8 0 0 1 12 10.9Z"
+                fill="currentColor"
+                fillRule="evenodd"
+                clipRule="evenodd"
+              />
+            </svg>
+          </span>
+          <span className="sr-only">{accessibleLabel}</span>
+        </button>
       </div>
-      <div
-        className="skin-card__comparison-slider"
-        role="group"
-        aria-labelledby={sliderLabelId}
-        onPointerDown={stopPointerPropagation}
-        onPointerMove={stopPointerPropagation}
-        onPointerUp={stopPointerPropagation}
-        onPointerCancel={stopPointerPropagation}
-        onClick={stopPointerPropagation}
-      >
-        {sliderLabelText ? (
-          <label id={sliderLabelId} htmlFor={sliderIdRef.current} className="sr-only">
-            {sliderLabelText}
-          </label>
-        ) : null}
-        <input
-          id={sliderIdRef.current}
-          type="range"
-          min="0"
-          max="100"
-          step="1"
-          value={safeSliderValue}
-          onChange={handleSliderChange}
-          onInput={handleSliderChange}
-          className="skin-card__comparison-slider-input"
-          style={{ background: sliderTrackBackground }}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(safeSliderValue)}
-        />
-        <div className="skin-card__comparison-slider-labels" aria-hidden="true">
-          <span className="skin-card__comparison-slider-label">{leftSliderLabel}</span>
-          <span className="skin-card__comparison-slider-label">{rightSliderLabel}</span>
-        </div>
-      </div>
-    </>
+    </div>
   );
 }
 
@@ -6652,7 +6684,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                       style={canvasStyle}
                                     >
                                       <div
-                                        className={`skin-card__render${showComparison ? " skin-card__render--with-slider" : ""}`}
+                                        className={`skin-card__render${showComparison ? " skin-card__render--with-toggle" : ""}`}
                                       >
                                         {lookLoading ? (
                                           <div className="skin-card__loader" role="status" aria-live="polite">
