@@ -2688,18 +2688,9 @@ a {
   display: grid;
   place-items: center;
   border-radius: var(--radius-md);
-  background:
-    radial-gradient(
-      circle at 50% 45%,
-      rgba(var(--surface-6-rgb), 0.78) 0%,
-      rgba(var(--surface-4-rgb), 0.64) 45%,
-      rgba(var(--surface-2-rgb), 0.42) 70%,
-      rgba(var(--surface-1-rgb), 0.28) 100%
-    );
-  backdrop-filter: blur(18px) saturate(120%);
-  box-shadow:
-    0 24px 48px -28px rgba(var(--surface-10-rgb), 0.6),
-    inset 0 0 0 1px rgba(var(--surface-11-rgb), 0.14);
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
   animation: skin-card-loader-fade 0.35s ease-out;
 }
 
