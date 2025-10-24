@@ -2518,45 +2518,33 @@ a {
   overflow: visible;
 }
 
+.skin-card__hero-stage::before {
+  content: "";
+  position: absolute;
+  inset: -12% -18% -4%;
+  border-radius: 50% 50% 48% 52% / 56% 54% 46% 44%;
+  background: transparent;
+  box-shadow:
+    0 0 0 1px rgba(var(--surface-8-rgb), 0.3),
+    0 18px 44px rgba(var(--surface-1-rgb), 0.35);
+  opacity: 0;
+  transition: opacity 180ms ease;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.skin-card__hero-stage.is-loading::before {
+  opacity: 1;
+}
+
 .skin-card__hero-stage.is-loading .skin-card__hero {
   animation: skin-card-hero-breathe 1.6s ease-in-out infinite;
   filter:
-    drop-shadow(0 22px 44px rgba(var(--surface-1-rgb), 0.7))
+    drop-shadow(0 24px 46px rgba(var(--surface-1-rgb), 0.72))
     saturate(1.18)
-    brightness(1.08);
+    brightness(1.1);
   will-change: transform, filter;
   transform-origin: center bottom;
-}
-
-.skin-card__hero-aurora {
-  position: absolute;
-  inset: -26% -32% -10%;
-  border-radius: 999px;
-  background: conic-gradient(
-    from 45deg,
-    rgba(34, 211, 238, 0.8),
-    rgba(250, 204, 21, 0.6),
-    rgba(251, 146, 60, 0.65),
-    rgba(168, 85, 247, 0.75),
-    rgba(27, 221, 141, 0.8),
-    rgba(34, 211, 238, 0.8)
-  );
-  filter: blur(32px);
-  opacity: 0;
-  mix-blend-mode: screen;
-  pointer-events: none;
-  z-index: 0;
-  transition: opacity 0.24s ease;
-  animation: skin-card-hero-aurora 2.8s linear infinite;
-}
-
-.skin-card__hero-stage.is-loading .skin-card__hero-aurora {
-  opacity: 1;
-  animation-play-state: running;
-}
-
-.skin-card__hero-aurora {
-  animation-play-state: paused;
 }
 
 @keyframes skin-card-hero-breathe {
@@ -2573,22 +2561,6 @@ a {
   }
 }
 
-@keyframes skin-card-hero-aurora {
-  0% {
-    transform: rotate(0deg) scale(1);
-    opacity: 0.85;
-  }
-
-  50% {
-    transform: rotate(180deg) scale(1.04);
-    opacity: 1;
-  }
-
-  100% {
-    transform: rotate(360deg) scale(1);
-    opacity: 0.85;
-  }
-}
 
 .skin-card__comparison {
   position: relative;

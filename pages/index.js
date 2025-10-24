@@ -6861,12 +6861,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                                 className="skin-card__hero"
                                                 draggable={false}
                                               />
-                                              {lookLoading ? (
-                                                <span
-                                                  className="skin-card__hero-aurora"
-                                                  aria-hidden="true"
-                                                />
-                                              ) : null}
                                             </div>
                                           ) : (
                                             <div className="skin-card__placeholder" aria-hidden="true">
