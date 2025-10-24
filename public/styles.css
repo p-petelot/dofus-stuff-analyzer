@@ -2517,6 +2517,7 @@ a {
   pointer-events: none;
   z-index: 4;
   gap: 16px;
+  padding-top: 8px;
 }
 
 .skin-card__comparison-stage {
@@ -2526,6 +2527,7 @@ a {
   width: 100%;
   min-height: 210px;
   pointer-events: none;
+  margin-top: 4px;
 }
 
 .skin-card__comparison-stage .skin-card__preview-image {
@@ -2557,6 +2559,7 @@ a {
   width: 100%;
   pointer-events: auto;
   transition: opacity 160ms ease, transform 200ms ease;
+  margin-top: 2px;
 }
 
 .skin-card__comparison-toggle-button {
