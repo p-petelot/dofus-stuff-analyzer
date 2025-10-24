@@ -2455,6 +2455,8 @@ a {
   filter: blur(14px);
   mix-blend-mode: normal;
   opacity: 0.22;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .skin-card__preview {
@@ -2467,6 +2469,7 @@ a {
   cursor: grab;
   user-select: none;
   touch-action: none;
+  z-index: 0;
 }
 
 .skin-card__preview:active {
@@ -2490,12 +2493,15 @@ a {
 }
 
 .skin-card__comparison {
-  position: relative;
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   height: 100%;
+  pointer-events: none;
+  z-index: 4;
 }
 
 .skin-card__comparison-base,
@@ -2550,6 +2556,7 @@ a {
   transform: translateX(-50%);
   cursor: ew-resize;
   touch-action: none;
+  pointer-events: auto;
   z-index: 3;
 }
 
