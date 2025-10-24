@@ -4945,14 +4945,13 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         return inflight.promise;
       }
 
-      if (
-        !Array.isArray(descriptor.lookItemIds) ||
-        descriptor.lookItemIds.length === 0 ||
-        !Number.isFinite(descriptor.classId) ||
-        !Number.isFinite(descriptor.lookFaceId)
-      ) {
+      if (!Number.isFinite(descriptor.classId) || !Number.isFinite(descriptor.lookFaceId)) {
         return null;
       }
+
+      const itemIds = Array.isArray(descriptor.lookItemIds)
+        ? descriptor.lookItemIds.filter((value) => Number.isFinite(value))
+        : [];
 
       setLookPreviews((previous = {}) => {
         const existingGroup = previous[baseKey];
@@ -5002,7 +5001,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       if (Number.isFinite(descriptor.lookFaceId)) {
         params.set("faceId", String(Math.trunc(descriptor.lookFaceId)));
       }
-      descriptor.lookItemIds.forEach((id) => {
+      itemIds.forEach((id) => {
         params.append("itemIds[]", String(id));
       });
       if (Array.isArray(descriptor.lookColors) && descriptor.lookColors.length) {
