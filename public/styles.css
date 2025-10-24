@@ -2513,6 +2513,29 @@ a {
   transition: width 160ms ease, left 160ms ease;
 }
 
+.skin-card__comparison-divider {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(var(--surface-11-rgb), 0) 0%,
+      rgba(var(--surface-11-rgb), 0.75) 16%,
+      rgba(var(--surface-11-rgb), 0.85) 50%,
+      rgba(var(--surface-11-rgb), 0.75) 84%,
+      rgba(var(--surface-11-rgb), 0) 100%
+    );
+  box-shadow:
+    0 0 0 1px rgba(var(--surface-1-rgb), 0.72),
+    0 14px 28px rgba(var(--surface-1-rgb), 0.45);
+  pointer-events: none;
+  z-index: 2;
+}
+
 .skin-card__comparison-handle {
   position: absolute;
   top: 0;

@@ -1676,6 +1676,7 @@ function SkinCardPreviewComparison({
   const overlayWidth = Math.max(0, Math.min(100, 100 - safeSliderValue));
   const handleOffset = Math.max(0, Math.min(100, safeSliderValue));
   const handleDisplayOffset = Math.max(4, Math.min(96, handleOffset));
+  const dividerDisplayOffset = Math.max(1.5, Math.min(98.5, handleOffset));
 
   return (
     <div className="skin-card__comparison" ref={containerRef}>
@@ -1700,6 +1701,11 @@ function SkinCardPreviewComparison({
           onError={onWithError}
         />
       </div>
+      <div
+        className="skin-card__comparison-divider"
+        aria-hidden="true"
+        style={{ left: `${dividerDisplayOffset}%` }}
+      />
       <div
         className="skin-card__comparison-handle"
         role="slider"
