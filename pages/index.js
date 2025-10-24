@@ -1524,14 +1524,10 @@ function SkinCardPreviewComparison({
   onWithError,
   onWithoutError,
 }) {
-  const toggleIdRef = useRef(null);
-  if (!toggleIdRef.current) {
-    toggleIdRef.current = `skin-card-comparison-${Math.random().toString(36).slice(2, 9)}`;
-  }
-
   const [showWithout, setShowWithout] = useState(false);
   const releaseListenersRef = useRef(null);
   const activeInputRef = useRef(null);
+  const toggleButtonRef = useRef(null);
 
   const removeWindowListeners = useCallback(() => {
     if (typeof window === "undefined") {
@@ -1546,22 +1542,33 @@ function SkinCardPreviewComparison({
     releaseListenersRef.current = null;
   }, []);
 
-  const endHold = useCallback(() => {
-    setShowWithout(false);
-    activeInputRef.current = null;
-    removeWindowListeners();
-  }, [removeWindowListeners]);
+  const endHold = useCallback(
+    (options) => {
+      const inputSource = activeInputRef.current;
 
-  useEffect(() => endHold(), [withSrc, withoutSrc, endHold]);
+      setShowWithout(false);
+      activeInputRef.current = null;
+      removeWindowListeners();
+
+      if (
+        options?.shouldBlur !== false &&
+        inputSource &&
+        inputSource !== "keyboard" &&
+        toggleButtonRef.current &&
+        typeof toggleButtonRef.current.blur === "function"
+      ) {
+        toggleButtonRef.current.blur();
+      }
+    },
+    [removeWindowListeners]
+  );
+
+  useEffect(() => endHold({ shouldBlur: false }), [withSrc, withoutSrc, endHold]);
 
   useEffect(() => () => removeWindowListeners(), [removeWindowListeners]);
 
   const startHold = useCallback(
     (event, source) => {
-      if (event?.currentTarget && typeof event.currentTarget.focus === "function") {
-        event.currentTarget.focus();
-      }
-
       if (activeInputRef.current && activeInputRef.current !== source) {
         return;
       }
@@ -1658,6 +1665,7 @@ function SkinCardPreviewComparison({
       }
       if (event.key === " " || event.key === "Enter") {
         event.preventDefault();
+        activeInputRef.current = "keyboard";
         setShowWithout(true);
       }
     },
@@ -1671,7 +1679,7 @@ function SkinCardPreviewComparison({
       }
       if (event.key === " " || event.key === "Enter") {
         event.preventDefault();
-        endHold();
+        endHold({ shouldBlur: false });
       }
     },
     [endHold]
@@ -1716,23 +1724,23 @@ function SkinCardPreviewComparison({
       </div>
       <div className="skin-card__comparison-toggle">
         <button
-          id={toggleIdRef.current}
+          ref={toggleButtonRef}
           type="button"
           title={accessibleLabel}
           className={`skin-card__comparison-toggle-button${
             showWithout ? " skin-card__comparison-toggle-button--active" : ""
           }`}
           onPointerDown={handlePointerDown}
-          onPointerUp={endHold}
-          onPointerCancel={endHold}
+          onPointerUp={() => endHold()}
+          onPointerCancel={() => endHold()}
           onMouseDown={handleMouseDown}
-          onMouseUp={endHold}
+          onMouseUp={() => endHold()}
           onTouchStart={handleTouchStart}
-          onTouchEnd={endHold}
-          onTouchCancel={endHold}
+          onTouchEnd={() => endHold()}
+          onTouchCancel={() => endHold()}
           onKeyDown={handleKeyDown}
           onKeyUp={handleKeyUp}
-          onBlur={endHold}
+          onBlur={() => endHold({ shouldBlur: false })}
           aria-pressed={showWithout}
         >
           <span className="skin-card__comparison-toggle-icon" aria-hidden="true">

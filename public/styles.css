@@ -2628,8 +2628,9 @@ a {
   }
 
   .skin-card__preview:hover .skin-card__comparison-toggle,
-  .skin-card__preview:focus-within .skin-card__comparison-toggle,
-  .skin-card__comparison-toggle:focus-within {
+  .skin-card__comparison-toggle-button:focus-visible,
+  .skin-card__comparison-toggle-button--active,
+  .skin-card__comparison-toggle-button:active {
     opacity: 1;
     transform: translateY(0);
     pointer-events: auto;
