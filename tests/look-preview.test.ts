@@ -203,15 +203,17 @@ describe("buildSouffLookPayload", () => {
         colors: [],
       })
     ).toThrowError("Paramètre sexe/gender invalide");
+  });
 
-    expect(() =>
-      buildSouffLookPayload({
-        breedId: 7,
-        faceId: 105,
-        gender: "m",
-        itemIds: [],
-        colors: [],
-      })
-    ).toThrowError("Au moins un identifiant d'objet est requis");
+  it("authorizes empty item sets for base look renders", () => {
+    const payload = buildSouffLookPayload({
+      breedId: 7,
+      faceId: 105,
+      gender: "m",
+      itemIds: [],
+      colors: [],
+    });
+
+    expect(payload.item_id).toEqual([]);
   });
 });

@@ -1513,6 +1513,258 @@ function getUriSafeCharFromInt(value) {
   return LZ_KEY_STR_URI_SAFE.charAt(value);
 }
 
+function SkinCardPreviewComparison({
+  withSrc,
+  withoutSrc,
+  withAlt,
+  withoutAlt,
+  sliderLabel,
+  withLabel,
+  withoutLabel,
+  onWithError,
+  onWithoutError,
+}) {
+  const [showWithout, setShowWithout] = useState(false);
+  const releaseListenersRef = useRef(null);
+  const activeInputRef = useRef(null);
+  const toggleButtonRef = useRef(null);
+
+  const removeWindowListeners = useCallback(() => {
+    if (typeof window === "undefined") {
+      releaseListenersRef.current = null;
+      return;
+    }
+    if (Array.isArray(releaseListenersRef.current)) {
+      releaseListenersRef.current.forEach(({ target = window, type, listener, options }) => {
+        target.removeEventListener(type, listener, options);
+      });
+    }
+    releaseListenersRef.current = null;
+  }, []);
+
+  const endHold = useCallback(
+    (options) => {
+      const inputSource = activeInputRef.current;
+
+      setShowWithout(false);
+      activeInputRef.current = null;
+      removeWindowListeners();
+
+      if (
+        options?.shouldBlur !== false &&
+        inputSource &&
+        inputSource !== "keyboard" &&
+        toggleButtonRef.current &&
+        typeof toggleButtonRef.current.blur === "function"
+      ) {
+        toggleButtonRef.current.blur();
+      }
+    },
+    [removeWindowListeners]
+  );
+
+  useEffect(() => endHold({ shouldBlur: false }), [withSrc, withoutSrc, endHold]);
+
+  useEffect(() => () => removeWindowListeners(), [removeWindowListeners]);
+
+  const startHold = useCallback(
+    (event, source) => {
+      if (activeInputRef.current && activeInputRef.current !== source) {
+        return;
+      }
+
+      activeInputRef.current = source;
+
+      if (
+        source === "pointer" &&
+        typeof event?.currentTarget?.setPointerCapture === "function" &&
+        typeof event?.pointerId === "number"
+      ) {
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } catch (error) {
+          // Some browsers may throw if the pointer is already captured; ignore.
+        }
+      }
+
+      removeWindowListeners();
+      setShowWithout(true);
+
+      if (typeof window === "undefined") {
+        return;
+      }
+
+      const release = () => {
+        endHold();
+      };
+
+      const listeners = [];
+      const captureOptions = { capture: true };
+
+      if (source === "pointer") {
+        listeners.push({ type: "pointerup", listener: release, options: captureOptions });
+        listeners.push({ type: "pointercancel", listener: release, options: captureOptions });
+      } else if (source === "touch") {
+        listeners.push({ type: "touchend", listener: release, options: captureOptions });
+        listeners.push({ type: "touchcancel", listener: release, options: captureOptions });
+      } else {
+        listeners.push({ type: "mouseup", listener: release, options: captureOptions });
+        listeners.push({ type: "mouseleave", listener: release, options: captureOptions });
+      }
+
+      listeners.push({ type: "blur", listener: release });
+
+      if (typeof document !== "undefined") {
+        listeners.push({ target: document, type: "visibilitychange", listener: () => {
+          if (document.visibilityState === "hidden") {
+            release();
+          }
+        }});
+      }
+
+      listeners.forEach(({ target = window, type, listener, options }) => {
+        target.addEventListener(type, listener, options);
+      });
+
+      releaseListenersRef.current = listeners;
+    },
+    [endHold, removeWindowListeners]
+  );
+
+  const handlePointerDown = useCallback(
+    (event) => {
+      if (typeof event?.button === "number" && event.button !== 0) {
+        return;
+      }
+      startHold(event, "pointer");
+    },
+    [startHold]
+  );
+
+  const handleMouseDown = useCallback(
+    (event) => {
+      if (typeof event?.button === "number" && event.button !== 0) {
+        return;
+      }
+      startHold(event, "mouse");
+    },
+    [startHold]
+  );
+
+  const handleTouchStart = useCallback(
+    (event) => {
+      startHold(event, "touch");
+    },
+    [startHold]
+  );
+
+  const handleKeyDown = useCallback(
+    (event) => {
+      if (!event) {
+        return;
+      }
+      if (event.key === " " || event.key === "Enter") {
+        event.preventDefault();
+        activeInputRef.current = "keyboard";
+        setShowWithout(true);
+      }
+    },
+    []
+  );
+
+  const handleKeyUp = useCallback(
+    (event) => {
+      if (!event) {
+        return;
+      }
+      if (event.key === " " || event.key === "Enter") {
+        event.preventDefault();
+        endHold({ shouldBlur: false });
+      }
+    },
+    [endHold]
+  );
+
+  const buttonLabelText =
+    typeof sliderLabel === "string" && sliderLabel.trim().length
+      ? sliderLabel.trim()
+      : undefined;
+
+  const fallbackLabelParts = [];
+  if (typeof withoutLabel === "string" && withoutLabel.trim().length) {
+    fallbackLabelParts.push(withoutLabel.trim());
+  }
+  if (typeof withLabel === "string" && withLabel.trim().length) {
+    fallbackLabelParts.push(withLabel.trim());
+  }
+
+  const fallbackLabel = fallbackLabelParts.length
+    ? fallbackLabelParts.join(" → ")
+    : "Afficher sans stuff";
+
+  const accessibleLabel = buttonLabelText ?? fallbackLabel;
+
+  return (
+    <div className={`skin-card__comparison${showWithout ? " skin-card__comparison--without" : ""}`}>
+      <div className="skin-card__comparison-stage">
+        <img
+          src={withSrc}
+          alt={withAlt}
+          className="skin-card__preview-image skin-card__preview-image--with"
+          draggable={false}
+          onError={onWithError}
+        />
+        <img
+          src={withoutSrc}
+          alt={withoutAlt}
+          className="skin-card__preview-image skin-card__preview-image--without"
+          draggable={false}
+          onError={onWithoutError}
+        />
+      </div>
+      <div className="skin-card__comparison-toggle">
+        <button
+          ref={toggleButtonRef}
+          type="button"
+          title={accessibleLabel}
+          className={`skin-card__comparison-toggle-button${
+            showWithout ? " skin-card__comparison-toggle-button--active" : ""
+          }`}
+          onPointerDown={handlePointerDown}
+          onPointerUp={() => endHold()}
+          onPointerCancel={() => endHold()}
+          onMouseDown={handleMouseDown}
+          onMouseUp={() => endHold()}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={() => endHold()}
+          onTouchCancel={() => endHold()}
+          onKeyDown={handleKeyDown}
+          onKeyUp={handleKeyUp}
+          onBlur={() => endHold({ shouldBlur: false })}
+          aria-pressed={showWithout}
+        >
+          <span className="skin-card__comparison-toggle-icon" aria-hidden="true">
+            <svg
+              className="skin-card__comparison-toggle-eye"
+              viewBox="0 0 24 16"
+              xmlns="http://www.w3.org/2000/svg"
+              focusable="false"
+            >
+              <path
+                d="M12 1.5c-4.87 0-9.1 3-11.21 7.37a.9.9 0 0 0 0 .76C2.9 13.99 7.13 17 12 17s9.1-3.01 11.21-7.37a.9.9 0 0 0 0-.76C21.1 4.5 16.87 1.5 12 1.5Zm0 13.1c-3.77 0-7.24-2.17-9.13-5.57C4.76 5.63 8.23 3.5 12 3.5s7.24 2.13 9.13 5.53C19.24 12.43 15.77 14.6 12 14.6Zm0-9.1a3.6 3.6 0 1 0 3.6 3.6A3.6 3.6 0 0 0 12 5.5Zm0 5.4a1.8 1.8 0 1 1 1.8-1.8A1.8 1.8 0 0 1 12 10.9Z"
+                fill="currentColor"
+                fillRule="evenodd"
+                clipRule="evenodd"
+              />
+            </svg>
+          </span>
+          <span className="sr-only">{accessibleLabel}</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function _compress(uncompressed, bitsPerChar, getCharFromInt) {
   if (uncompressed == null) {
     return "";
@@ -4342,17 +4594,25 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         baseKeyParts.push(`head${lookFaceId}`);
       }
       baseKeyParts.push(lookGenderCode);
-      baseKeyParts.push(...lookItemIds);
+      const itemKeyParts = lookItemIds.map((value) => String(value));
+      const colorKeyParts = [];
       lookColors.forEach((value) => {
-        baseKeyParts.push(`c${value}`);
+        colorKeyParts.push(`c${value}`);
       });
       const animationCode = Number.isFinite(lookAnimation)
         ? Math.trunc(lookAnimation)
         : DEFAULT_LOOK_ANIMATION;
-      baseKeyParts.push(`a${animationCode}`);
+      const baseWithoutItemsParts = [...baseKeyParts, ...colorKeyParts, `a${animationCode}`];
+      const lookBaseKeyNoStuff = baseWithoutItemsParts.length
+        ? baseWithoutItemsParts.join("-")
+        : null;
+      const baseWithItemsParts = [...baseKeyParts, ...itemKeyParts, ...colorKeyParts, `a${animationCode}`];
+      const lookBaseKey = baseWithItemsParts.length
+        ? baseWithItemsParts.join("-")
+        : lookBaseKeyNoStuff;
       const directionCode = normalizeLookDirection(lookDirection);
-      const lookBaseKey = baseKeyParts.length ? baseKeyParts.join("-") : null;
       const lookKey = lookBaseKey ? `${lookBaseKey}-d${directionCode}` : null;
+      const lookKeyNoStuff = lookBaseKeyNoStuff ? `${lookBaseKeyNoStuff}-d${directionCode}` : null;
 
       combos.push({
         id: `proposal-${index}`,
@@ -4372,6 +4632,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         lookColors,
         lookBaseKey,
         lookKey,
+        lookBaseKeyNoStuff,
+        lookKeyNoStuff,
         lookAnimation: animationCode,
         lookDirection: directionCode,
       });
@@ -4403,33 +4665,43 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     const seen = new Set();
 
     proposals.forEach((proposal) => {
-      const baseKey = proposal?.lookBaseKey;
-      if (!baseKey || seen.has(baseKey)) {
-        return;
-      }
       if (!Number.isFinite(proposal?.classId) || !Number.isFinite(proposal?.lookFaceId)) {
         return;
       }
-      const itemIds = Array.isArray(proposal.lookItemIds)
-        ? proposal.lookItemIds.filter((value) => Number.isFinite(value))
-        : [];
-      if (!itemIds.length) {
-        return;
-      }
+
       const colors = Array.isArray(proposal.lookColors)
         ? proposal.lookColors.filter((value) => Number.isFinite(value)).slice(0, MAX_ITEM_PALETTE_COLORS)
         : [];
+      const normalizedItemIds = Array.isArray(proposal.lookItemIds)
+        ? proposal.lookItemIds.filter((value) => Number.isFinite(value))
+        : [];
 
-      descriptors.push({
-        baseKey,
-        classId: proposal.classId,
-        lookGender: typeof proposal.lookGender === "string" ? proposal.lookGender : "m",
-        lookFaceId: proposal.lookFaceId,
-        lookItemIds: itemIds,
-        lookColors: colors,
-        lookAnimation: proposal.lookAnimation,
+      const descriptorEntries = [];
+
+      if (proposal?.lookBaseKeyNoStuff) {
+        descriptorEntries.push({ baseKey: proposal.lookBaseKeyNoStuff, itemIds: [] });
+      }
+
+      if (proposal?.lookBaseKey && normalizedItemIds.length) {
+        descriptorEntries.push({ baseKey: proposal.lookBaseKey, itemIds: normalizedItemIds });
+      }
+
+      descriptorEntries.forEach((entry) => {
+        if (!entry.baseKey || seen.has(entry.baseKey)) {
+          return;
+        }
+
+        descriptors.push({
+          baseKey: entry.baseKey,
+          classId: proposal.classId,
+          lookGender: typeof proposal.lookGender === "string" ? proposal.lookGender : "m",
+          lookFaceId: proposal.lookFaceId,
+          lookItemIds: entry.itemIds,
+          lookColors: colors,
+          lookAnimation: proposal.lookAnimation,
+        });
+        seen.add(entry.baseKey);
       });
-      seen.add(baseKey);
     });
 
     return descriptors;
@@ -4550,6 +4822,19 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const previewDirectionDescription = `${t("aria.previewDirectionControl")}${
     activeDirectionLabel ? ` - ${activeDirectionLabel}` : ""
   }. ${t("identity.preview.direction.hint")}`;
+  const comparisonSliderLabelRaw = t("suggestions.render.comparisonAria");
+  const comparisonSliderLabel =
+    typeof comparisonSliderLabelRaw === "string" && comparisonSliderLabelRaw.trim().length
+      ? comparisonSliderLabelRaw
+      : "Drag to compare without gear and with gear";
+  const noStuffLabelRaw = t("suggestions.render.noStuffLabel");
+  const noStuffLabel =
+    typeof noStuffLabelRaw === "string" && noStuffLabelRaw.trim().length
+      ? noStuffLabelRaw
+      : "No Stuff";
+  const stuffLabelRaw = t("suggestions.render.stuffLabel");
+  const stuffLabel =
+    typeof stuffLabelRaw === "string" && stuffLabelRaw.trim().length ? stuffLabelRaw : "Stuff";
 
   const adaptiveThemePalette = useMemo(() => {
     if (Array.isArray(activeProposalPalette) && activeProposalPalette.length) {
@@ -4682,14 +4967,13 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         return inflight.promise;
       }
 
-      if (
-        !Array.isArray(descriptor.lookItemIds) ||
-        descriptor.lookItemIds.length === 0 ||
-        !Number.isFinite(descriptor.classId) ||
-        !Number.isFinite(descriptor.lookFaceId)
-      ) {
+      if (!Number.isFinite(descriptor.classId) || !Number.isFinite(descriptor.lookFaceId)) {
         return null;
       }
+
+      const itemIds = Array.isArray(descriptor.lookItemIds)
+        ? descriptor.lookItemIds.filter((value) => Number.isFinite(value))
+        : [];
 
       setLookPreviews((previous = {}) => {
         const existingGroup = previous[baseKey];
@@ -4739,7 +5023,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       if (Number.isFinite(descriptor.lookFaceId)) {
         params.set("faceId", String(Math.trunc(descriptor.lookFaceId)));
       }
-      descriptor.lookItemIds.forEach((id) => {
+      itemIds.forEach((id) => {
         params.append("itemIds[]", String(id));
       });
       if (Array.isArray(descriptor.lookColors) && descriptor.lookColors.length) {
@@ -6425,6 +6709,20 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                   : null;
                               const heroSrc = !lookLoaded ? proposal.heroImage ?? null : null;
                               const previewAlt = t("suggestions.render.alt", { index: proposal.index + 1 });
+                              const baseLookPreviewGroup = proposal.lookBaseKeyNoStuff
+                                ? lookPreviews?.[proposal.lookBaseKeyNoStuff]
+                                : null;
+                              const baseLookPreview =
+                                baseLookPreviewGroup?.directions?.[activeDirectionValue] ?? null;
+                              const noStuffSrc =
+                                typeof baseLookPreview?.dataUrl === "string" &&
+                                baseLookPreview.dataUrl.length > 0
+                                  ? baseLookPreview.dataUrl
+                                  : null;
+                              const showComparison = Boolean(previewSrc && noStuffSrc);
+                              const noStuffAlt = showComparison
+                                ? `${previewAlt} — ${noStuffLabel}`
+                                : previewAlt;
                               const autoBackgroundId = previewBackgroundAutoByProposal.get(proposal.id);
                               const autoBackground = autoBackgroundId
                                 ? previewBackgroundById.get(autoBackgroundId)
@@ -6469,7 +6767,9 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                       className="skin-card__canvas"
                                       style={canvasStyle}
                                     >
-                                      <div className="skin-card__render">
+                                      <div
+                                        className={`skin-card__render${showComparison ? " skin-card__render--with-toggle" : ""}`}
+                                      >
                                         {lookLoading ? (
                                           <div className="skin-card__loader" role="status" aria-live="polite">
                                             <span className="skin-card__loader-spinner" aria-hidden="true" />
@@ -6494,12 +6794,37 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           onPointerCancel={handleDirectionPointerCancel}
                                           onKeyDown={handleDirectionKeyDown}
                                         >
-                                          {previewSrc ? (
+                                          {showComparison ? (
+                                            <SkinCardPreviewComparison
+                                              withSrc={previewSrc}
+                                              withoutSrc={noStuffSrc}
+                                              withAlt={previewAlt}
+                                              withoutAlt={noStuffAlt}
+                                              sliderLabel={comparisonSliderLabel}
+                                              withLabel={stuffLabel}
+                                              withoutLabel={noStuffLabel}
+                                              onWithError={() =>
+                                                handleLookPreviewError(
+                                                  proposal.lookBaseKey,
+                                                  activeDirectionValue
+                                                )
+                                              }
+                                              onWithoutError={
+                                                proposal.lookBaseKeyNoStuff
+                                                  ? () =>
+                                                      handleLookPreviewError(
+                                                        proposal.lookBaseKeyNoStuff,
+                                                        activeDirectionValue
+                                                      )
+                                                  : undefined
+                                              }
+                                            />
+                                          ) : previewSrc ? (
                                             <img
                                               src={previewSrc}
                                               alt={previewAlt}
                                               loading="lazy"
-                                              className="skin-card__preview-image"
+                                              className="skin-card__preview-image skin-card__preview-image--standalone"
                                               onError={() =>
                                                 handleLookPreviewError(proposal.lookBaseKey, activeDirectionValue)
                                               }
