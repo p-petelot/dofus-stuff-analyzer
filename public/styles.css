@@ -2497,6 +2497,7 @@ a {
 
 .skin-card__preview-image--with {
   filter: none;
+  box-shadow: none;
 }
 
 .skin-card__preview-image--without,
