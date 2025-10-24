@@ -1565,7 +1565,8 @@ function SkinCardPreviewComparison({
 
   const safeSliderValue = clamp(sliderValue);
   const dividerDisplayOffset = Math.max(1.5, Math.min(98.5, safeSliderValue));
-  const overlayClipPath = `inset(0 ${100 - safeSliderValue}% 0 0)`;
+  const withClipPath = `inset(0 ${100 - safeSliderValue}% 0 0)`;
+  const withoutClipPath = `inset(0 0 0 ${safeSliderValue}%)`;
   const sliderTrackBackground = useMemo(
     () =>
       `linear-gradient(90deg, rgba(var(--accent-primary-rgb), 0.85) 0%, rgba(var(--accent-primary-rgb), 0.85) ${safeSliderValue}%, rgba(var(--surface-9-rgb), 0.42) ${safeSliderValue}%, rgba(var(--surface-9-rgb), 0.42) 100%)`,
@@ -1587,11 +1588,12 @@ function SkinCardPreviewComparison({
             className="skin-card__preview-image skin-card__preview-image--without"
             draggable={false}
             onError={onWithoutError}
+            style={{ clipPath: withoutClipPath, WebkitClipPath: withoutClipPath }}
           />
         </div>
         <div
           className="skin-card__comparison-overlay"
-          style={{ clipPath: overlayClipPath, WebkitClipPath: overlayClipPath }}
+          style={{ clipPath: withClipPath, WebkitClipPath: withClipPath }}
         >
           <img
             src={withSrc}
@@ -1599,6 +1601,7 @@ function SkinCardPreviewComparison({
             className="skin-card__preview-image skin-card__preview-image--with"
             draggable={false}
             onError={onWithError}
+            style={{ clipPath: withClipPath, WebkitClipPath: withClipPath }}
           />
         </div>
         <div

@@ -2531,10 +2531,13 @@ a {
 }
 
 .skin-card__comparison-base {
+  position: relative;
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  width: 100%;
   pointer-events: none;
+  overflow: hidden;
 }
 
 .skin-card__comparison-overlay {
