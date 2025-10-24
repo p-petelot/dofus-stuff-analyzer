@@ -2533,8 +2533,9 @@ a {
 
 .skin-card__comparison-stage .skin-card__preview-image {
   grid-area: 1 / 1;
-  width: min(74%, 260px);
-  max-width: none;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
   transition: opacity 160ms ease;
 }
 
