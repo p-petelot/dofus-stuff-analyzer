@@ -3452,75 +3452,129 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
   width: 100%;
+}
+
+.palette-loader__art {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
 }
 
 .palette-loader__palette {
   position: relative;
-  width: 90px;
-  height: 66px;
-  border-radius: 55% 60% 50% 45%;
-  background: linear-gradient(135deg, rgba(var(--surface-12-rgb), 0.85), rgba(var(--surface-6-rgb), 0.95));
-  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.18);
+  width: 108px;
+  height: 78px;
+  border-radius: 60% 50% 45% 65% / 55% 45% 60% 50%;
+  background: radial-gradient(circle at 28% 42%, rgba(0, 0, 0, 0.12), transparent 38%),
+    linear-gradient(135deg, #f2d9b5, #f3c49b 55%, #f9e2c4 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.25),
+    inset 0 -4px 12px rgba(0, 0, 0, 0.12),
+    0 10px 22px rgba(15, 23, 42, 0.22);
   transform-origin: center;
-  animation: palette-loader-breathe 2.6s ease-in-out infinite;
+  animation: palette-loader-breathe 2.8s ease-in-out infinite;
 }
 
 .palette-loader__hole {
   position: absolute;
-  top: 44%;
-  left: 18%;
-  width: 20px;
-  height: 20px;
+  top: 46%;
+  left: 20%;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  background: rgba(var(--text-muted-rgb), 0.25);
-  box-shadow: inset 0 0 0 2px rgba(var(--surface-1-rgb), 0.6);
+  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.45), transparent 68%),
+    rgba(15, 23, 42, 0.22);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.2), inset 0 0 0 4px rgba(15, 23, 42, 0.45);
 }
 
 .palette-loader__swatch {
   position: absolute;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  background: var(--palette-loader-color, rgba(var(--accent-warm-rgb), 0.9));
-  box-shadow: 0 6px 12px rgba(15, 23, 42, 0.25);
-  animation: palette-loader-swatch-shift 2.4s ease-in-out infinite;
-  animation-delay: calc(var(--palette-loader-index, 0) * 0.25s);
+  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.55), transparent 70%),
+    var(--palette-loader-color, rgba(var(--accent-primary-rgb), 0.9));
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.3);
+  animation: palette-loader-swatch-shift 2.6s ease-in-out infinite;
+  animation-delay: calc(var(--palette-loader-index, 0) * 0.22s);
 }
 
 .palette-loader__swatch--0 {
-  top: 16px;
-  right: 18px;
+  top: 14px;
+  right: 28px;
 }
 
 .palette-loader__swatch--1 {
-  top: 32px;
-  right: 8px;
+  top: 34px;
+  right: 12px;
 }
 
 .palette-loader__swatch--2 {
-  bottom: 12px;
-  right: 24px;
+  bottom: 18px;
+  right: 28px;
 }
 
 .palette-loader__swatch--3 {
-  bottom: 18px;
-  left: 28px;
+  bottom: 16px;
+  left: 36px;
 }
 
 .palette-loader__swatch--4 {
-  top: 14px;
-  left: 32px;
+  top: 12px;
+  left: 38px;
+}
+
+.palette-loader__brush {
+  position: absolute;
+  right: -12px;
+  bottom: -6px;
+  width: 112px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  transform-origin: 10% 50%;
+  transform: rotate(-12deg);
+  animation: palette-loader-brush-sway 2.8s ease-in-out infinite;
+}
+
+.palette-loader__brush-handle {
+  flex: 1;
+  height: 8px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #3f2c14 0%, #7c4f1f 48%, #b57c42 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.palette-loader__brush-ferrule {
+  width: 16px;
+  height: 12px;
+  margin-left: 6px;
+  border-radius: 4px 6px 6px 4px;
+  background: linear-gradient(135deg, #d8dce2, #9da3b2);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.6), inset 0 -1px 2px rgba(15, 23, 42, 0.35);
+}
+
+.palette-loader__brush-tip {
+  width: 18px;
+  height: 18px;
+  margin-left: 2px;
+  border-radius: 10px 60% 60% 10px;
+  background: radial-gradient(circle at 40% 35%, rgba(255, 255, 255, 0.4), transparent 70%),
+    linear-gradient(135deg, #f97316, #facc15);
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.25);
 }
 
 @keyframes palette-loader-breathe {
   0%,
   100% {
-    transform: scale(0.98) rotate(-2deg);
+    transform: scale(0.97) rotate(-4deg);
   }
   50% {
-    transform: scale(1.02) rotate(2deg);
+    transform: scale(1.03) rotate(3deg);
   }
 }
 
@@ -3531,8 +3585,18 @@ a {
     filter: hue-rotate(0deg);
   }
   50% {
-    transform: scale(1.2) translateY(-3px);
-    filter: hue-rotate(160deg);
+    transform: scale(1.18) translateY(-3px);
+    filter: hue-rotate(140deg);
+  }
+}
+
+@keyframes palette-loader-brush-sway {
+  0%,
+  100% {
+    transform: rotate(-12deg) translateY(0);
+  }
+  50% {
+    transform: rotate(-2deg) translateY(-3px);
   }
 }
 

@@ -123,18 +123,25 @@ const PALETTE_LOADER_COLORS = ["#f97316", "#f43f5e", "#22d3ee", "#a855f7", "#fde
 const PaletteLoader = ({ label }) => (
   <div className="palette-loader" role="status" aria-live="polite">
     <span className="sr-only">{label}</span>
-    <div className="palette-loader__palette">
-      <div className="palette-loader__hole" />
-      {PALETTE_LOADER_COLORS.map((color, index) => (
-        <span
-          key={`${color}-${index}`}
-          className={`palette-loader__swatch palette-loader__swatch--${index}`}
-          style={{
-            "--palette-loader-color": color,
-            "--palette-loader-index": String(index),
-          }}
-        />
-      ))}
+    <div className="palette-loader__art">
+      <div className="palette-loader__palette">
+        <div className="palette-loader__hole" />
+        {PALETTE_LOADER_COLORS.map((color, index) => (
+          <span
+            key={`${color}-${index}`}
+            className={`palette-loader__swatch palette-loader__swatch--${index}`}
+            style={{
+              "--palette-loader-color": color,
+              "--palette-loader-index": String(index),
+            }}
+          />
+        ))}
+      </div>
+      <div className="palette-loader__brush" aria-hidden="true">
+        <span className="palette-loader__brush-handle" />
+        <span className="palette-loader__brush-ferrule" />
+        <span className="palette-loader__brush-tip" />
+      </div>
     </div>
   </div>
 );
