@@ -2556,6 +2556,7 @@ a {
   justify-content: center;
   width: 100%;
   pointer-events: auto;
+  transition: opacity 160ms ease, transform 200ms ease;
 }
 
 .skin-card__comparison-toggle-button {
@@ -2617,6 +2618,22 @@ a {
 
 .skin-card__comparison:hover .skin-card__comparison-toggle-button {
   color: rgba(var(--accent-primary-rgb), 0.9);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .skin-card__comparison-toggle {
+    opacity: 0;
+    transform: translateY(8px);
+    pointer-events: none;
+  }
+
+  .skin-card__preview:hover .skin-card__comparison-toggle,
+  .skin-card__preview:focus-within .skin-card__comparison-toggle,
+  .skin-card__comparison-toggle:focus-within {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
 }
 
 .skin-card__render--with-toggle {

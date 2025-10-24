@@ -1558,7 +1558,11 @@ function SkinCardPreviewComparison({
 
   const startHold = useCallback(
     (event, source) => {
-      if (event && typeof event.preventDefault === "function") {
+      if (
+        event &&
+        typeof event.preventDefault === "function" &&
+        (event.cancelable === undefined || event.cancelable)
+      ) {
         event.preventDefault();
       }
       if (event?.currentTarget && typeof event.currentTarget.focus === "function") {
