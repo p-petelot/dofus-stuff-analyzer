@@ -2508,15 +2508,15 @@ a {
 
 .skin-card__comparison {
   position: relative;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: auto auto;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   width: 100%;
   min-height: 210px;
   pointer-events: none;
   z-index: 4;
-  gap: 16px;
+  column-gap: 16px;
   padding-top: 8px;
 }
 
@@ -2524,10 +2524,12 @@ a {
   position: relative;
   display: grid;
   place-items: end center;
-  width: 100%;
+  width: min(74%, 260px);
+  max-width: 260px;
   min-height: 210px;
   pointer-events: none;
   margin-top: 4px;
+  justify-self: center;
 }
 
 .skin-card__comparison-stage .skin-card__preview-image {
@@ -2556,10 +2558,10 @@ a {
 .skin-card__comparison-toggle {
   display: flex;
   justify-content: center;
-  width: 100%;
   pointer-events: auto;
   transition: opacity 160ms ease, transform 200ms ease;
-  margin-top: 2px;
+  margin-top: 0;
+  align-self: center;
 }
 
 .skin-card__comparison-toggle-button {
@@ -2626,7 +2628,7 @@ a {
 @media (hover: hover) and (pointer: fine) {
   .skin-card__comparison-toggle {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateX(8px);
     pointer-events: none;
   }
 
@@ -2635,7 +2637,7 @@ a {
   .skin-card__comparison-toggle-button--active,
   .skin-card__comparison-toggle-button:active {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateX(0);
     pointer-events: auto;
   }
 }
