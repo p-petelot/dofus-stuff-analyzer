@@ -1513,6 +1513,230 @@ function getUriSafeCharFromInt(value) {
   return LZ_KEY_STR_URI_SAFE.charAt(value);
 }
 
+function SkinCardPreviewComparison({
+  withSrc,
+  withoutSrc,
+  withAlt,
+  withoutAlt,
+  sliderLabel,
+  withLabel,
+  withoutLabel,
+  onWithError,
+  onWithoutError,
+}) {
+  const containerRef = useRef(null);
+  const dragStateRef = useRef({ active: false, pointerId: null });
+  const [sliderValue, setSliderValue] = useState(0);
+
+  useEffect(() => {
+    setSliderValue(0);
+  }, [withSrc, withoutSrc]);
+
+  const clamp = useCallback((value) => {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+    if (value < 0) {
+      return 0;
+    }
+    if (value > 100) {
+      return 100;
+    }
+    return value;
+  }, []);
+
+  const setValueFromClientX = useCallback(
+    (clientX) => {
+      const container = containerRef.current;
+      if (!container) {
+        return;
+      }
+      const rect = container.getBoundingClientRect();
+      if (!rect || rect.width <= 0) {
+        return;
+      }
+      const rawValue = ((clientX - rect.left) / rect.width) * 100;
+      setSliderValue(clamp(rawValue));
+    },
+    [clamp]
+  );
+
+  const endDrag = useCallback(() => {
+    dragStateRef.current = { active: false, pointerId: null };
+  }, []);
+
+  const handlePointerDown = useCallback(
+    (event) => {
+      event.stopPropagation();
+      if (event.pointerType === "touch") {
+        event.preventDefault();
+      }
+
+      const target = event.currentTarget;
+      dragStateRef.current = { active: true, pointerId: event.pointerId };
+
+      if (typeof target.setPointerCapture === "function") {
+        try {
+          target.setPointerCapture(event.pointerId);
+        } catch (_error) {
+          // Ignore pointer capture errors.
+        }
+      }
+
+      setValueFromClientX(event.clientX);
+    },
+    [setValueFromClientX]
+  );
+
+  const handlePointerMove = useCallback(
+    (event) => {
+      const state = dragStateRef.current;
+      if (!state.active || state.pointerId !== event.pointerId) {
+        return;
+      }
+      event.stopPropagation();
+      if (event.pointerType === "touch") {
+        event.preventDefault();
+      }
+      setValueFromClientX(event.clientX);
+    },
+    [setValueFromClientX]
+  );
+
+  const handlePointerUp = useCallback((event) => {
+    const state = dragStateRef.current;
+    if (!state.active || state.pointerId !== event.pointerId) {
+      return;
+    }
+
+    event.stopPropagation();
+    if (event.pointerType === "touch") {
+      event.preventDefault();
+    }
+
+    const target = event.currentTarget;
+    if (typeof target.releasePointerCapture === "function") {
+      try {
+        target.releasePointerCapture(event.pointerId);
+      } catch (_error) {
+        // Ignore pointer capture release errors.
+      }
+    }
+
+    endDrag();
+  }, [endDrag]);
+
+  const handlePointerCancel = useCallback(
+    (event) => {
+      const state = dragStateRef.current;
+      if (!state.active || state.pointerId !== event.pointerId) {
+        return;
+      }
+
+      const target = event.currentTarget;
+      if (typeof target.releasePointerCapture === "function") {
+        try {
+          target.releasePointerCapture(event.pointerId);
+        } catch (_error) {
+          // Ignore pointer capture release errors.
+        }
+      }
+
+      endDrag();
+    },
+    [endDrag]
+  );
+
+  const handleKeyDown = useCallback(
+    (event) => {
+      let delta = 0;
+      if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+        delta = -10;
+      } else if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+        delta = 10;
+      } else if (event.key === "Home") {
+        event.preventDefault();
+        setSliderValue(0);
+        return;
+      } else if (event.key === "End") {
+        event.preventDefault();
+        setSliderValue(100);
+        return;
+      } else {
+        return;
+      }
+
+      event.preventDefault();
+      setSliderValue((previous) => clamp(previous + delta));
+    },
+    [clamp]
+  );
+
+  const safeSliderValue = clamp(sliderValue);
+  const overlayWidth = Math.max(0, Math.min(100, 100 - safeSliderValue));
+  const handleOffset = Math.max(0, Math.min(100, safeSliderValue));
+  const handleDisplayOffset = Math.max(4, Math.min(96, handleOffset));
+
+  return (
+    <div className="skin-card__comparison" ref={containerRef}>
+      <div className="skin-card__comparison-base">
+        <img
+          src={withoutSrc}
+          alt={withoutAlt}
+          className="skin-card__preview-image"
+          draggable={false}
+          onError={onWithoutError}
+        />
+      </div>
+      <div
+        className="skin-card__comparison-overlay"
+        style={{ width: `${overlayWidth}%`, left: `${safeSliderValue}%` }}
+      >
+        <img
+          src={withSrc}
+          alt={withAlt}
+          className="skin-card__preview-image"
+          draggable={false}
+          onError={onWithError}
+        />
+      </div>
+      <div
+        className="skin-card__comparison-handle"
+        role="slider"
+        tabIndex={0}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(safeSliderValue)}
+        aria-label={sliderLabel}
+        style={{ left: `${handleDisplayOffset}%` }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onKeyDown={handleKeyDown}
+      >
+        <div className="skin-card__comparison-handle-thumb" aria-hidden="true">
+          <svg
+            viewBox="0 0 20 20"
+            xmlns="http://www.w3.org/2000/svg"
+            className="skin-card__comparison-handle-icon"
+            aria-hidden="true"
+          >
+            <path d="M7.5 6.5 4.5 9.5l3 3" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M12.5 6.5 15.5 9.5l-3 3" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+      </div>
+      {withoutLabel ? (
+        <span className="skin-card__comparison-tag skin-card__comparison-tag--left">{withoutLabel}</span>
+      ) : null}
+      {withLabel ? (
+        <span className="skin-card__comparison-tag skin-card__comparison-tag--right">{withLabel}</span>
+      ) : null}
+    </div>
+  );
+}
+
 function _compress(uncompressed, bitsPerChar, getCharFromInt) {
   if (uncompressed == null) {
     return "";
@@ -4342,17 +4566,25 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         baseKeyParts.push(`head${lookFaceId}`);
       }
       baseKeyParts.push(lookGenderCode);
-      baseKeyParts.push(...lookItemIds);
+      const itemKeyParts = lookItemIds.map((value) => String(value));
+      const colorKeyParts = [];
       lookColors.forEach((value) => {
-        baseKeyParts.push(`c${value}`);
+        colorKeyParts.push(`c${value}`);
       });
       const animationCode = Number.isFinite(lookAnimation)
         ? Math.trunc(lookAnimation)
         : DEFAULT_LOOK_ANIMATION;
-      baseKeyParts.push(`a${animationCode}`);
+      const baseWithoutItemsParts = [...baseKeyParts, ...colorKeyParts, `a${animationCode}`];
+      const lookBaseKeyNoStuff = baseWithoutItemsParts.length
+        ? baseWithoutItemsParts.join("-")
+        : null;
+      const baseWithItemsParts = [...baseKeyParts, ...itemKeyParts, ...colorKeyParts, `a${animationCode}`];
+      const lookBaseKey = baseWithItemsParts.length
+        ? baseWithItemsParts.join("-")
+        : lookBaseKeyNoStuff;
       const directionCode = normalizeLookDirection(lookDirection);
-      const lookBaseKey = baseKeyParts.length ? baseKeyParts.join("-") : null;
       const lookKey = lookBaseKey ? `${lookBaseKey}-d${directionCode}` : null;
+      const lookKeyNoStuff = lookBaseKeyNoStuff ? `${lookBaseKeyNoStuff}-d${directionCode}` : null;
 
       combos.push({
         id: `proposal-${index}`,
@@ -4372,6 +4604,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         lookColors,
         lookBaseKey,
         lookKey,
+        lookBaseKeyNoStuff,
+        lookKeyNoStuff,
         lookAnimation: animationCode,
         lookDirection: directionCode,
       });
@@ -4403,33 +4637,43 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     const seen = new Set();
 
     proposals.forEach((proposal) => {
-      const baseKey = proposal?.lookBaseKey;
-      if (!baseKey || seen.has(baseKey)) {
-        return;
-      }
       if (!Number.isFinite(proposal?.classId) || !Number.isFinite(proposal?.lookFaceId)) {
         return;
       }
-      const itemIds = Array.isArray(proposal.lookItemIds)
-        ? proposal.lookItemIds.filter((value) => Number.isFinite(value))
-        : [];
-      if (!itemIds.length) {
-        return;
-      }
+
       const colors = Array.isArray(proposal.lookColors)
         ? proposal.lookColors.filter((value) => Number.isFinite(value)).slice(0, MAX_ITEM_PALETTE_COLORS)
         : [];
+      const normalizedItemIds = Array.isArray(proposal.lookItemIds)
+        ? proposal.lookItemIds.filter((value) => Number.isFinite(value))
+        : [];
 
-      descriptors.push({
-        baseKey,
-        classId: proposal.classId,
-        lookGender: typeof proposal.lookGender === "string" ? proposal.lookGender : "m",
-        lookFaceId: proposal.lookFaceId,
-        lookItemIds: itemIds,
-        lookColors: colors,
-        lookAnimation: proposal.lookAnimation,
+      const descriptorEntries = [];
+
+      if (proposal?.lookBaseKeyNoStuff) {
+        descriptorEntries.push({ baseKey: proposal.lookBaseKeyNoStuff, itemIds: [] });
+      }
+
+      if (proposal?.lookBaseKey && normalizedItemIds.length) {
+        descriptorEntries.push({ baseKey: proposal.lookBaseKey, itemIds: normalizedItemIds });
+      }
+
+      descriptorEntries.forEach((entry) => {
+        if (!entry.baseKey || seen.has(entry.baseKey)) {
+          return;
+        }
+
+        descriptors.push({
+          baseKey: entry.baseKey,
+          classId: proposal.classId,
+          lookGender: typeof proposal.lookGender === "string" ? proposal.lookGender : "m",
+          lookFaceId: proposal.lookFaceId,
+          lookItemIds: entry.itemIds,
+          lookColors: colors,
+          lookAnimation: proposal.lookAnimation,
+        });
+        seen.add(entry.baseKey);
       });
-      seen.add(baseKey);
     });
 
     return descriptors;
@@ -4550,6 +4794,19 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const previewDirectionDescription = `${t("aria.previewDirectionControl")}${
     activeDirectionLabel ? ` - ${activeDirectionLabel}` : ""
   }. ${t("identity.preview.direction.hint")}`;
+  const comparisonSliderLabelRaw = t("suggestions.render.comparisonAria");
+  const comparisonSliderLabel =
+    typeof comparisonSliderLabelRaw === "string" && comparisonSliderLabelRaw.trim().length
+      ? comparisonSliderLabelRaw
+      : "Drag to compare without gear and with gear";
+  const noStuffLabelRaw = t("suggestions.render.noStuffLabel");
+  const noStuffLabel =
+    typeof noStuffLabelRaw === "string" && noStuffLabelRaw.trim().length
+      ? noStuffLabelRaw
+      : "No Stuff";
+  const stuffLabelRaw = t("suggestions.render.stuffLabel");
+  const stuffLabel =
+    typeof stuffLabelRaw === "string" && stuffLabelRaw.trim().length ? stuffLabelRaw : "Stuff";
 
   const adaptiveThemePalette = useMemo(() => {
     if (Array.isArray(activeProposalPalette) && activeProposalPalette.length) {
@@ -6425,6 +6682,20 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                   : null;
                               const heroSrc = !lookLoaded ? proposal.heroImage ?? null : null;
                               const previewAlt = t("suggestions.render.alt", { index: proposal.index + 1 });
+                              const baseLookPreviewGroup = proposal.lookBaseKeyNoStuff
+                                ? lookPreviews?.[proposal.lookBaseKeyNoStuff]
+                                : null;
+                              const baseLookPreview =
+                                baseLookPreviewGroup?.directions?.[activeDirectionValue] ?? null;
+                              const noStuffSrc =
+                                typeof baseLookPreview?.dataUrl === "string" &&
+                                baseLookPreview.dataUrl.length > 0
+                                  ? baseLookPreview.dataUrl
+                                  : null;
+                              const showComparison = Boolean(previewSrc && noStuffSrc);
+                              const noStuffAlt = showComparison
+                                ? `${previewAlt} — ${noStuffLabel}`
+                                : previewAlt;
                               const autoBackgroundId = previewBackgroundAutoByProposal.get(proposal.id);
                               const autoBackground = autoBackgroundId
                                 ? previewBackgroundById.get(autoBackgroundId)
@@ -6494,7 +6765,32 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           onPointerCancel={handleDirectionPointerCancel}
                                           onKeyDown={handleDirectionKeyDown}
                                         >
-                                          {previewSrc ? (
+                                          {showComparison ? (
+                                            <SkinCardPreviewComparison
+                                              withSrc={previewSrc}
+                                              withoutSrc={noStuffSrc}
+                                              withAlt={previewAlt}
+                                              withoutAlt={noStuffAlt}
+                                              sliderLabel={comparisonSliderLabel}
+                                              withLabel={stuffLabel}
+                                              withoutLabel={noStuffLabel}
+                                              onWithError={() =>
+                                                handleLookPreviewError(
+                                                  proposal.lookBaseKey,
+                                                  activeDirectionValue
+                                                )
+                                              }
+                                              onWithoutError={
+                                                proposal.lookBaseKeyNoStuff
+                                                  ? () =>
+                                                      handleLookPreviewError(
+                                                        proposal.lookBaseKeyNoStuff,
+                                                        activeDirectionValue
+                                                      )
+                                                  : undefined
+                                              }
+                                            />
+                                          ) : previewSrc ? (
                                             <img
                                               src={previewSrc}
                                               alt={previewAlt}

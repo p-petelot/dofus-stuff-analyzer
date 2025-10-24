@@ -2489,6 +2489,105 @@ a {
   z-index: 1;
 }
 
+.skin-card__comparison {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.skin-card__comparison-base,
+.skin-card__comparison-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.skin-card__comparison-overlay {
+  overflow: hidden;
+  transition: width 160ms ease, left 160ms ease;
+}
+
+.skin-card__comparison-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  background: linear-gradient(180deg, rgba(var(--surface-2-rgb), 0.92), rgba(var(--surface-3-rgb), 0.82));
+  box-shadow: 0 0 0 1px rgba(var(--surface-10-rgb), 0.26), 0 14px 30px rgba(var(--surface-1-rgb), 0.4);
+  border-radius: 999px;
+  transform: translateX(-50%);
+  cursor: ew-resize;
+  touch-action: none;
+  z-index: 3;
+}
+
+.skin-card__comparison-handle::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(var(--surface-11-rgb), 0.42);
+}
+
+.skin-card__comparison-handle:focus-visible {
+  outline: 2px solid rgba(var(--accent-primary-rgb), 0.9);
+  outline-offset: 4px;
+}
+
+.skin-card__comparison-handle-thumb {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(var(--surface-2-rgb), 0.96);
+  box-shadow: inset 0 0 0 1px rgba(var(--surface-9-rgb), 0.32), 0 10px 20px rgba(var(--surface-1-rgb), 0.5);
+  pointer-events: none;
+}
+
+.skin-card__comparison-handle-icon {
+  width: 16px;
+  height: 16px;
+  stroke: rgba(var(--text-soft-rgb), 0.86);
+}
+
+.skin-card__comparison-tag {
+  position: absolute;
+  top: 12px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(var(--surface-2-rgb), 0.86);
+  color: var(--text);
+  border-radius: 999px;
+  box-shadow: 0 8px 20px rgba(var(--surface-1-rgb), 0.4);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.skin-card__comparison-tag--left {
+  left: 12px;
+}
+
+.skin-card__comparison-tag--right {
+  right: 12px;
+}
+
 .skin-card__placeholder {
   position: relative;
   z-index: 1;
