@@ -1529,10 +1529,10 @@ function SkinCardPreviewComparison({
     sliderIdRef.current = `skin-card-comparison-${Math.random().toString(36).slice(2, 9)}`;
   }
 
-  const [sliderValue, setSliderValue] = useState(0);
+  const [sliderValue, setSliderValue] = useState(100);
 
   useEffect(() => {
-    setSliderValue(0);
+    setSliderValue(100);
   }, [withSrc, withoutSrc]);
 
   const clamp = useCallback((value) => {
@@ -1565,7 +1565,7 @@ function SkinCardPreviewComparison({
 
   const safeSliderValue = clamp(sliderValue);
   const dividerDisplayOffset = Math.max(1.5, Math.min(98.5, safeSliderValue));
-  const overlayClipPath = `inset(0 ${safeSliderValue}% 0 0)`;
+  const overlayClipPath = `inset(0 ${100 - safeSliderValue}% 0 0)`;
   const sliderTrackBackground = useMemo(
     () =>
       `linear-gradient(90deg, rgba(var(--accent-primary-rgb), 0.85) 0%, rgba(var(--accent-primary-rgb), 0.85) ${safeSliderValue}%, rgba(var(--surface-9-rgb), 0.42) ${safeSliderValue}%, rgba(var(--surface-9-rgb), 0.42) 100%)`,
