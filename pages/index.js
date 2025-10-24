@@ -118,6 +118,27 @@ const IMAGE_REFERENCE_KEYS = [
   "src",
 ];
 
+const PALETTE_LOADER_COLORS = ["#f97316", "#f43f5e", "#22d3ee", "#a855f7", "#fde047"];
+
+const PaletteLoader = ({ label }) => (
+  <div className="palette-loader" role="status" aria-live="polite">
+    <span className="sr-only">{label}</span>
+    <div className="palette-loader__palette">
+      <div className="palette-loader__hole" />
+      {PALETTE_LOADER_COLORS.map((color, index) => (
+        <span
+          key={`${color}-${index}`}
+          className={`palette-loader__swatch palette-loader__swatch--${index}`}
+          style={{
+            "--palette-loader-color": color,
+            "--palette-loader-index": String(index),
+          }}
+        />
+      ))}
+    </div>
+  </div>
+);
+
 const THEME_KEYS = Object.freeze({
   DARK: "dark",
   LIGHT: "light",
@@ -6665,10 +6686,10 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
             <div className="suggestions__status suggestions__status--empty">
               <p>{t("suggestions.empty.identity")}</p>
             </div>
-          ) : !hasCatalogData && itemsLoading ? (
-            <div className="suggestions__status suggestions__status--loading">
-              {t("suggestions.loading.items")}
-            </div>
+        ) : !hasCatalogData && itemsLoading ? (
+          <div className="suggestions__status suggestions__status--loading">
+            <PaletteLoader label={t("suggestions.loading.items")} />
+          </div>
           ) : !hasCatalogData && itemsError ? (
             <div className="suggestions__status suggestions__status--error">{itemsError}</div>
           ) : !hasCatalogData ? (
