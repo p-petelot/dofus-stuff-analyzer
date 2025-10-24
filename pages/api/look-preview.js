@@ -250,24 +250,23 @@ export function buildSouffLookPayload({
     throw new Error("Paramètre faceId invalide");
   }
 
-  if (!Array.isArray(itemIds) || itemIds.length === 0) {
-    throw new Error("Au moins un identifiant d'objet est requis");
-  }
-
   const sex = genderToSouffSexCode(gender);
   if (sex === null) {
     throw new Error("Paramètre sexe/gender invalide");
   }
 
+  const hasItemIds = Array.isArray(itemIds) && itemIds.length > 0;
   const normalizedItems = Array.from(
     new Set(
-      itemIds
-        .map((value) => (Number.isFinite(value) ? Math.trunc(value) : null))
-        .filter((value) => Number.isFinite(value) && value > 0)
+      Array.isArray(itemIds)
+        ? itemIds
+            .map((value) => (Number.isFinite(value) ? Math.trunc(value) : null))
+            .filter((value) => Number.isFinite(value) && value > 0)
+        : []
     )
   );
 
-  if (!normalizedItems.length) {
+  if (hasItemIds && !normalizedItems.length) {
     throw new Error("Au moins un identifiant d'objet valide est requis");
   }
 
@@ -361,11 +360,6 @@ export default async function handler(req, res) {
 
     const itemIds = extractItemIdsFromQuery(req.query);
     const colors = extractColorsFromQuery(req.query);
-    if (!itemIds.length) {
-      res.status(400).json({ error: "Au moins un identifiant d'objet est requis" });
-      return;
-    }
-
     const normalizedLang = normalizeLanguage(lang) ?? DEFAULT_LANG;
     const resolvedSize = coercePositiveInteger(size, DEFAULT_RENDER_SIZE);
     const animationValue = Number.isFinite(Number(animation))
