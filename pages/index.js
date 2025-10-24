@@ -1584,7 +1584,7 @@ function SkinCardPreviewComparison({
           <img
             src={withoutSrc}
             alt={withoutAlt}
-            className="skin-card__preview-image"
+            className="skin-card__preview-image skin-card__preview-image--without"
             draggable={false}
             onError={onWithoutError}
           />
@@ -1596,7 +1596,7 @@ function SkinCardPreviewComparison({
           <img
             src={withSrc}
             alt={withAlt}
-            className="skin-card__preview-image"
+            className="skin-card__preview-image skin-card__preview-image--with"
             draggable={false}
             onError={onWithError}
           />
@@ -6705,7 +6705,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                               src={previewSrc}
                                               alt={previewAlt}
                                               loading="lazy"
-                                              className="skin-card__preview-image"
+                                              className="skin-card__preview-image skin-card__preview-image--standalone"
                                               onError={() =>
                                                 handleLookPreviewError(proposal.lookBaseKey, activeDirectionValue)
                                               }

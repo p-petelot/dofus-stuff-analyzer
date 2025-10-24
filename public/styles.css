@@ -2485,19 +2485,30 @@ a {
 .skin-card__preview-image,
 .skin-card__hero {
   position: relative;
+  display: block;
   max-width: 74%;
   max-height: 260px;
   width: auto;
   height: auto;
   object-fit: contain;
-  filter: drop-shadow(0 18px 34px rgba(var(--surface-1-rgb), 0.66));
+  object-position: center bottom;
   z-index: 1;
+}
+
+.skin-card__preview-image--with {
+  filter: none;
+}
+
+.skin-card__preview-image--without,
+.skin-card__preview-image--standalone,
+.skin-card__hero {
+  filter: drop-shadow(0 18px 34px rgba(var(--surface-1-rgb), 0.66));
 }
 
 .skin-card__comparison {
   position: relative;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
   width: 100%;
   min-height: 210px;
@@ -2509,14 +2520,14 @@ a {
   position: absolute;
   inset: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
   pointer-events: none;
 }
 
 .skin-card__comparison-base {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
   pointer-events: none;
 }
