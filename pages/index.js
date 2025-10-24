@@ -118,18 +118,20 @@ const IMAGE_REFERENCE_KEYS = [
   "src",
 ];
 
-const PALETTE_LOADER_COLORS = ["#f97316", "#f43f5e", "#22d3ee", "#a855f7", "#fde047"];
+const PALETTE_LOADER_COLORS = ["#1bdd8d", "#22d3ee", "#facc15", "#fb923c", "#a855f7"];
 
 const PaletteLoader = ({ label }) => (
   <div className="palette-loader" role="status" aria-live="polite">
     <span className="sr-only">{label}</span>
-    <div className="palette-loader__art">
-      <div className="palette-loader__palette">
-        <div className="palette-loader__hole" />
+    <div className="palette-loader__aurora" aria-hidden="true">
+      <span className="palette-loader__halo" />
+      <div className="palette-loader__spectrum">
+        <span className="palette-loader__ring palette-loader__ring--outer" />
+        <span className="palette-loader__ring palette-loader__ring--inner" />
         {PALETTE_LOADER_COLORS.map((color, index) => (
           <span
             key={`${color}-${index}`}
-            className={`palette-loader__swatch palette-loader__swatch--${index}`}
+            className={`palette-loader__pulse palette-loader__pulse--${index}`}
             style={{
               "--palette-loader-color": color,
               "--palette-loader-index": String(index),
@@ -137,11 +139,7 @@ const PaletteLoader = ({ label }) => (
           />
         ))}
       </div>
-      <div className="palette-loader__brush" aria-hidden="true">
-        <span className="palette-loader__brush-handle" />
-        <span className="palette-loader__brush-ferrule" />
-        <span className="palette-loader__brush-tip" />
-      </div>
+      <span className="palette-loader__core" />
     </div>
   </div>
 );
