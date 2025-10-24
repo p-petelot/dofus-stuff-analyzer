@@ -1524,8 +1524,11 @@ function SkinCardPreviewComparison({
   onWithError,
   onWithoutError,
 }) {
-  const containerRef = useRef(null);
-  const dragStateRef = useRef({ active: false, pointerId: null });
+  const sliderIdRef = useRef(null);
+  if (!sliderIdRef.current) {
+    sliderIdRef.current = `skin-card-comparison-${Math.random().toString(36).slice(2, 9)}`;
+  }
+
   const [sliderValue, setSliderValue] = useState(0);
 
   useEffect(() => {
@@ -1545,201 +1548,106 @@ function SkinCardPreviewComparison({
     return value;
   }, []);
 
-  const setValueFromClientX = useCallback(
-    (clientX) => {
-      const container = containerRef.current;
-      if (!container) {
+  const handleSliderChange = useCallback(
+    (event) => {
+      const value = Number(event.target.value);
+      if (!Number.isFinite(value)) {
         return;
       }
-      const rect = container.getBoundingClientRect();
-      if (!rect || rect.width <= 0) {
-        return;
-      }
-      const rawValue = ((clientX - rect.left) / rect.width) * 100;
-      setSliderValue(clamp(rawValue));
+      setSliderValue(clamp(value));
     },
     [clamp]
   );
 
-  const endDrag = useCallback(() => {
-    dragStateRef.current = { active: false, pointerId: null };
-  }, []);
-
-  const handlePointerDown = useCallback(
-    (event) => {
-      event.stopPropagation();
-      if (event.pointerType === "touch") {
-        event.preventDefault();
-      }
-
-      const target = event.currentTarget;
-      dragStateRef.current = { active: true, pointerId: event.pointerId };
-
-      if (typeof target.setPointerCapture === "function") {
-        try {
-          target.setPointerCapture(event.pointerId);
-        } catch (_error) {
-          // Ignore pointer capture errors.
-        }
-      }
-
-      setValueFromClientX(event.clientX);
-    },
-    [setValueFromClientX]
-  );
-
-  const handlePointerMove = useCallback(
-    (event) => {
-      const state = dragStateRef.current;
-      if (!state.active || state.pointerId !== event.pointerId) {
-        return;
-      }
-      event.stopPropagation();
-      if (event.pointerType === "touch") {
-        event.preventDefault();
-      }
-      setValueFromClientX(event.clientX);
-    },
-    [setValueFromClientX]
-  );
-
-  const handlePointerUp = useCallback((event) => {
-    const state = dragStateRef.current;
-    if (!state.active || state.pointerId !== event.pointerId) {
-      return;
-    }
-
+  const stopPointerPropagation = useCallback((event) => {
     event.stopPropagation();
-    if (event.pointerType === "touch") {
-      event.preventDefault();
-    }
-
-    const target = event.currentTarget;
-    if (typeof target.releasePointerCapture === "function") {
-      try {
-        target.releasePointerCapture(event.pointerId);
-      } catch (_error) {
-        // Ignore pointer capture release errors.
-      }
-    }
-
-    endDrag();
-  }, [endDrag]);
-
-  const handlePointerCancel = useCallback(
-    (event) => {
-      const state = dragStateRef.current;
-      if (!state.active || state.pointerId !== event.pointerId) {
-        return;
-      }
-
-      const target = event.currentTarget;
-      if (typeof target.releasePointerCapture === "function") {
-        try {
-          target.releasePointerCapture(event.pointerId);
-        } catch (_error) {
-          // Ignore pointer capture release errors.
-        }
-      }
-
-      endDrag();
-    },
-    [endDrag]
-  );
-
-  const handleKeyDown = useCallback(
-    (event) => {
-      let delta = 0;
-      if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
-        delta = -10;
-      } else if (event.key === "ArrowRight" || event.key === "ArrowUp") {
-        delta = 10;
-      } else if (event.key === "Home") {
-        event.preventDefault();
-        setSliderValue(0);
-        return;
-      } else if (event.key === "End") {
-        event.preventDefault();
-        setSliderValue(100);
-        return;
-      } else {
-        return;
-      }
-
-      event.preventDefault();
-      setSliderValue((previous) => clamp(previous + delta));
-    },
-    [clamp]
-  );
+  }, []);
 
   const safeSliderValue = clamp(sliderValue);
   const overlayWidth = Math.max(0, Math.min(100, 100 - safeSliderValue));
-  const handleOffset = Math.max(0, Math.min(100, safeSliderValue));
-  const handleDisplayOffset = Math.max(4, Math.min(96, handleOffset));
-  const dividerDisplayOffset = Math.max(1.5, Math.min(98.5, handleOffset));
+  const dividerDisplayOffset = Math.max(1.5, Math.min(98.5, safeSliderValue));
+  const sliderTrackBackground = useMemo(
+    () =>
+      `linear-gradient(90deg, rgba(var(--accent-primary-rgb), 0.85) 0%, rgba(var(--accent-primary-rgb), 0.85) ${safeSliderValue}%, rgba(var(--surface-9-rgb), 0.42) ${safeSliderValue}%, rgba(var(--surface-9-rgb), 0.42) 100%)`,
+    [safeSliderValue]
+  );
+  const sliderLabelText =
+    typeof sliderLabel === "string" && sliderLabel.trim().length ? sliderLabel : undefined;
+  const sliderLabelId = sliderLabelText ? `${sliderIdRef.current}-label` : undefined;
+  const leftSliderLabel = typeof withoutLabel === "string" ? withoutLabel : "";
+  const rightSliderLabel = typeof withLabel === "string" ? withLabel : "";
 
   return (
-    <div className="skin-card__comparison" ref={containerRef}>
-      <div className="skin-card__comparison-base">
-        <img
-          src={withoutSrc}
-          alt={withoutAlt}
-          className="skin-card__preview-image"
-          draggable={false}
-          onError={onWithoutError}
+    <>
+      <div className="skin-card__comparison">
+        <div className="skin-card__comparison-base">
+          <img
+            src={withoutSrc}
+            alt={withoutAlt}
+            className="skin-card__preview-image"
+            draggable={false}
+            onError={onWithoutError}
+          />
+        </div>
+        <div
+          className="skin-card__comparison-overlay"
+          style={{ width: `${overlayWidth}%`, left: `${safeSliderValue}%` }}
+        >
+          <img
+            src={withSrc}
+            alt={withAlt}
+            className="skin-card__preview-image"
+            draggable={false}
+            onError={onWithError}
+          />
+        </div>
+        <div
+          className="skin-card__comparison-divider"
+          aria-hidden="true"
+          style={{ left: `${dividerDisplayOffset}%` }}
         />
+        {withoutLabel ? (
+          <span className="skin-card__comparison-tag skin-card__comparison-tag--left">{withoutLabel}</span>
+        ) : null}
+        {withLabel ? (
+          <span className="skin-card__comparison-tag skin-card__comparison-tag--right">{withLabel}</span>
+        ) : null}
       </div>
       <div
-        className="skin-card__comparison-overlay"
-        style={{ width: `${overlayWidth}%`, left: `${safeSliderValue}%` }}
+        className="skin-card__comparison-slider"
+        role="group"
+        aria-labelledby={sliderLabelId}
+        onPointerDown={stopPointerPropagation}
+        onPointerMove={stopPointerPropagation}
+        onPointerUp={stopPointerPropagation}
+        onPointerCancel={stopPointerPropagation}
+        onClick={stopPointerPropagation}
       >
-        <img
-          src={withSrc}
-          alt={withAlt}
-          className="skin-card__preview-image"
-          draggable={false}
-          onError={onWithError}
+        {sliderLabelText ? (
+          <label id={sliderLabelId} htmlFor={sliderIdRef.current} className="sr-only">
+            {sliderLabelText}
+          </label>
+        ) : null}
+        <input
+          id={sliderIdRef.current}
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          value={safeSliderValue}
+          onChange={handleSliderChange}
+          className="skin-card__comparison-slider-input"
+          style={{ background: sliderTrackBackground }}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(safeSliderValue)}
         />
-      </div>
-      <div
-        className="skin-card__comparison-divider"
-        aria-hidden="true"
-        style={{ left: `${dividerDisplayOffset}%` }}
-      />
-      <div
-        className="skin-card__comparison-handle"
-        role="slider"
-        tabIndex={0}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(safeSliderValue)}
-        aria-label={sliderLabel}
-        style={{ left: `${handleDisplayOffset}%` }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerCancel}
-        onKeyDown={handleKeyDown}
-      >
-        <div className="skin-card__comparison-handle-thumb" aria-hidden="true">
-          <svg
-            viewBox="0 0 20 20"
-            xmlns="http://www.w3.org/2000/svg"
-            className="skin-card__comparison-handle-icon"
-            aria-hidden="true"
-          >
-            <path d="M7.5 6.5 4.5 9.5l3 3" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M12.5 6.5 15.5 9.5l-3 3" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+        <div className="skin-card__comparison-slider-labels" aria-hidden="true">
+          <span className="skin-card__comparison-slider-label">{leftSliderLabel}</span>
+          <span className="skin-card__comparison-slider-label">{rightSliderLabel}</span>
         </div>
       </div>
-      {withoutLabel ? (
-        <span className="skin-card__comparison-tag skin-card__comparison-tag--left">{withoutLabel}</span>
-      ) : null}
-      {withLabel ? (
-        <span className="skin-card__comparison-tag skin-card__comparison-tag--right">{withLabel}</span>
-      ) : null}
-    </div>
+    </>
   );
 }
 
@@ -6745,7 +6653,9 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                       className="skin-card__canvas"
                                       style={canvasStyle}
                                     >
-                                      <div className="skin-card__render">
+                                      <div
+                                        className={`skin-card__render${showComparison ? " skin-card__render--with-slider" : ""}`}
+                                      >
                                         {lookLoading ? (
                                           <div className="skin-card__loader" role="status" aria-live="polite">
                                             <span className="skin-card__loader-spinner" aria-hidden="true" />
