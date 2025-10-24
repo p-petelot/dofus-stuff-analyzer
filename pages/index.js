@@ -1564,8 +1564,8 @@ function SkinCardPreviewComparison({
   }, []);
 
   const safeSliderValue = clamp(sliderValue);
-  const overlayWidth = Math.max(0, Math.min(100, 100 - safeSliderValue));
   const dividerDisplayOffset = Math.max(1.5, Math.min(98.5, safeSliderValue));
+  const overlayClipPath = `inset(0 ${safeSliderValue}% 0 0)`;
   const sliderTrackBackground = useMemo(
     () =>
       `linear-gradient(90deg, rgba(var(--accent-primary-rgb), 0.85) 0%, rgba(var(--accent-primary-rgb), 0.85) ${safeSliderValue}%, rgba(var(--surface-9-rgb), 0.42) ${safeSliderValue}%, rgba(var(--surface-9-rgb), 0.42) 100%)`,
@@ -1591,7 +1591,7 @@ function SkinCardPreviewComparison({
         </div>
         <div
           className="skin-card__comparison-overlay"
-          style={{ width: `${overlayWidth}%`, left: `${safeSliderValue}%` }}
+          style={{ clipPath: overlayClipPath, WebkitClipPath: overlayClipPath }}
         >
           <img
             src={withSrc}
@@ -1636,6 +1636,7 @@ function SkinCardPreviewComparison({
           step="1"
           value={safeSliderValue}
           onChange={handleSliderChange}
+          onInput={handleSliderChange}
           className="skin-card__comparison-slider-input"
           style={{ background: sliderTrackBackground }}
           aria-valuemin={0}

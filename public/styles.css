@@ -2520,7 +2520,9 @@ a {
 
 .skin-card__comparison-overlay {
   overflow: hidden;
-  transition: width 160ms ease, left 160ms ease;
+  transition: clip-path 160ms ease;
+  clip-path: inset(0 0 0 0);
+  -webkit-clip-path: inset(0 0 0 0);
 }
 
 .skin-card__comparison-divider {
