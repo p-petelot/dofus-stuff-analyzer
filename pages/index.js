@@ -6721,8 +6721,9 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           </div>
                                         ) : null}
                                         <div className="skin-card__glow" aria-hidden="true" />
-                                        <div
-                                          className="skin-card__preview"
+                                        <div className="skin-card__preview-wrapper">
+                                          <div
+                                            className="skin-card__preview"
                                           role="group"
                                           aria-label={previewDirectionDescription}
                                           title={t("identity.preview.direction.hint")}
@@ -6757,50 +6758,53 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                               Aperçu indisponible
                                             </div>
                                           )}
+                                          </div>
                                           {canShowUnequipped ? (
-                                            <button
-                                              type="button"
-                                              className={`skin-card__preview-toggle${
-                                                isBarePreviewActive ? " is-active" : ""
-                                              }`}
-                                              aria-pressed={isBarePreviewActive}
-                                              aria-label={toggleLabel ?? undefined}
-                                              title={toggleLabel ?? undefined}
-                                              onPointerDown={handlePreviewTogglePointerDown}
-                                              onPointerUp={handlePreviewTogglePointerUp}
-                                              onPointerCancel={handlePreviewTogglePointerCancel}
-                                              onPointerLeave={handlePreviewTogglePointerLeave}
-                                              onKeyDown={handlePreviewToggleKeyDown}
-                                              onKeyUp={handlePreviewToggleKeyUp}
-                                              onBlur={handlePreviewToggleBlur}
-                                            >
-                                              <span className="sr-only">
-                                                {toggleHint ?? toggleLabel ?? ""}
-                                              </span>
-                                              <svg
-                                                className="skin-card__preview-toggle-icon"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                aria-hidden="true"
+                                            <div className="skin-card__preview-actions">
+                                              <button
+                                                type="button"
+                                                className={`skin-card__preview-toggle${
+                                                  isBarePreviewActive ? " is-active" : ""
+                                                }`}
+                                                aria-pressed={isBarePreviewActive}
+                                                aria-label={toggleLabel ?? undefined}
+                                                title={toggleLabel ?? undefined}
+                                                onPointerDown={handlePreviewTogglePointerDown}
+                                                onPointerUp={handlePreviewTogglePointerUp}
+                                                onPointerCancel={handlePreviewTogglePointerCancel}
+                                                onPointerLeave={handlePreviewTogglePointerLeave}
+                                                onKeyDown={handlePreviewToggleKeyDown}
+                                                onKeyUp={handlePreviewToggleKeyUp}
+                                                onBlur={handlePreviewToggleBlur}
                                               >
-                                                <path
-                                                  d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6Z"
-                                                  stroke="currentColor"
-                                                  strokeWidth="1.6"
-                                                  strokeLinecap="round"
-                                                  strokeLinejoin="round"
-                                                />
-                                                <circle
-                                                  cx="12"
-                                                  cy="12"
-                                                  r="3"
-                                                  stroke="currentColor"
-                                                  strokeWidth="1.6"
+                                                <span className="sr-only">
+                                                  {toggleHint ?? toggleLabel ?? ""}
+                                                </span>
+                                                <svg
+                                                  className="skin-card__preview-toggle-icon"
+                                                  viewBox="0 0 24 24"
                                                   fill="none"
-                                                />
-                                              </svg>
-                                            </button>
+                                                  xmlns="http://www.w3.org/2000/svg"
+                                                  aria-hidden="true"
+                                                >
+                                                  <path
+                                                    d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6Z"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.6"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                  />
+                                                  <circle
+                                                    cx="12"
+                                                    cy="12"
+                                                    r="3"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.6"
+                                                    fill="none"
+                                                  />
+                                                </svg>
+                                              </button>
+                                            </div>
                                           ) : null}
                                           {activeDirectionOption ? (
                                             <div className="skin-card__direction-overlay" aria-hidden="true">

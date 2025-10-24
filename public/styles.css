@@ -2457,6 +2457,23 @@ a {
   opacity: 0.22;
 }
 
+.skin-card__preview-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 20px;
+}
+
+.skin-card__preview-actions {
+  height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  pointer-events: none;
+}
+
 .skin-card__preview {
   position: relative;
   display: flex;
@@ -2478,33 +2495,30 @@ a {
 }
 
 .skin-card__preview-toggle {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 40px;
-  height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 44px;
+  height: 44px;
   border: none;
   border-radius: 999px;
   background: rgba(var(--surface-1-rgb), 0.82);
   color: var(--text);
   box-shadow: 0 14px 28px -20px rgba(var(--surface-1-rgb), 0.95);
   opacity: 0;
-  transform: scale(0.92);
+  transform: translateY(8px) scale(0.96);
   transition: opacity 160ms ease, transform 160ms ease, background 160ms ease,
     box-shadow 160ms ease;
   pointer-events: none;
-  z-index: 3;
   cursor: pointer;
+  margin-top: 14px;
 }
 
-.skin-card__preview:hover .skin-card__preview-toggle,
-.skin-card__preview:focus-within .skin-card__preview-toggle,
+.skin-card__preview-wrapper:hover .skin-card__preview-toggle,
+.skin-card__preview-wrapper:focus-within .skin-card__preview-toggle,
 .skin-card__preview-toggle.is-active {
   opacity: 1;
-  transform: scale(1);
+  transform: translateY(0) scale(1);
   pointer-events: auto;
 }
 
@@ -2520,7 +2534,7 @@ a {
 }
 
 .skin-card__preview-toggle:active {
-  transform: scale(0.96);
+  transform: translateY(0) scale(0.96);
 }
 
 .skin-card__preview-toggle-icon {

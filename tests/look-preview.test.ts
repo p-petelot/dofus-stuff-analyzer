@@ -204,14 +204,19 @@ describe("buildSouffLookPayload", () => {
       })
     ).toThrowError("Paramètre sexe/gender invalide");
 
-    expect(() =>
-      buildSouffLookPayload({
-        breedId: 7,
-        faceId: 105,
-        gender: "m",
-        itemIds: [],
-        colors: [],
-      })
-    ).toThrowError("Au moins un identifiant d'objet est requis");
+    const barePayload = buildSouffLookPayload({
+      breedId: 7,
+      faceId: 105,
+      gender: "m",
+      itemIds: [],
+      colors: [],
+    });
+
+    expect(barePayload).toMatchObject({
+      breed: 7,
+      head: 105,
+      sex: 0,
+      item_id: [],
+    });
   });
 });
