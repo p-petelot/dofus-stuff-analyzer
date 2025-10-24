@@ -6797,9 +6797,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                         className={`skin-card__render${showComparison ? " skin-card__render--with-toggle" : ""}`}
                                       >
                                         {lookLoading ? (
-                                          <div className="skin-card__loader" role="status" aria-live="polite">
-                                            <span className="skin-card__loader-spinner" aria-hidden="true" />
-                                            <span className="sr-only">{t("suggestions.render.loading")}</span>
+                                          <div className="skin-card__loader">
+                                            <PaletteLoader label={t("suggestions.render.loading")} />
                                           </div>
                                         ) : null}
                                         {lookError && !lookLoading && !lookLoaded ? (
