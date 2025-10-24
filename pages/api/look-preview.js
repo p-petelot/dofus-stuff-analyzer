@@ -426,6 +426,12 @@ export default async function handler(req, res) {
     searchParams.set("breedId", String(numericBreedId));
     searchParams.set("sexe", normalizedGender);
     searchParams.set("lang", normalizedLang);
+    if (Number.isFinite(faceId)) {
+      const normalizedFaceId = String(Math.trunc(faceId));
+      ["faceId", "face", "head", "headId", "head_id", "lookId"].forEach((key) => {
+        searchParams.set(key, normalizedFaceId);
+      });
+    }
     itemIds.forEach((id) => {
       const numericId = Number(id);
       if (!Number.isFinite(numericId)) {
