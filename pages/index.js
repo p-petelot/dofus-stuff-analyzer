@@ -1539,8 +1539,8 @@ function SkinCardPreviewComparison({
       return;
     }
     if (Array.isArray(releaseListenersRef.current)) {
-      releaseListenersRef.current.forEach(({ type, listener, options }) => {
-        window.removeEventListener(type, listener, options);
+      releaseListenersRef.current.forEach(({ target = window, type, listener, options }) => {
+        target.removeEventListener(type, listener, options);
       });
     }
     releaseListenersRef.current = null;
@@ -1558,13 +1558,6 @@ function SkinCardPreviewComparison({
 
   const startHold = useCallback(
     (event, source) => {
-      if (
-        event &&
-        typeof event.preventDefault === "function" &&
-        (event.cancelable === undefined || event.cancelable)
-      ) {
-        event.preventDefault();
-      }
       if (event?.currentTarget && typeof event.currentTarget.focus === "function") {
         event.currentTarget.focus();
       }
@@ -1574,6 +1567,18 @@ function SkinCardPreviewComparison({
       }
 
       activeInputRef.current = source;
+
+      if (
+        source === "pointer" &&
+        typeof event?.currentTarget?.setPointerCapture === "function" &&
+        typeof event?.pointerId === "number"
+      ) {
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } catch (error) {
+          // Some browsers may throw if the pointer is already captured; ignore.
+        }
+      }
 
       removeWindowListeners();
       setShowWithout(true);
@@ -1587,22 +1592,31 @@ function SkinCardPreviewComparison({
       };
 
       const listeners = [];
+      const captureOptions = { capture: true };
 
       if (source === "pointer") {
-        listeners.push({ type: "pointerup", listener: release });
-        listeners.push({ type: "pointercancel", listener: release });
+        listeners.push({ type: "pointerup", listener: release, options: captureOptions });
+        listeners.push({ type: "pointercancel", listener: release, options: captureOptions });
       } else if (source === "touch") {
-        listeners.push({ type: "touchend", listener: release });
-        listeners.push({ type: "touchcancel", listener: release });
+        listeners.push({ type: "touchend", listener: release, options: captureOptions });
+        listeners.push({ type: "touchcancel", listener: release, options: captureOptions });
       } else {
-        listeners.push({ type: "mouseup", listener: release });
-        listeners.push({ type: "mouseleave", listener: release });
+        listeners.push({ type: "mouseup", listener: release, options: captureOptions });
+        listeners.push({ type: "mouseleave", listener: release, options: captureOptions });
       }
 
       listeners.push({ type: "blur", listener: release });
 
-      listeners.forEach(({ type, listener }) => {
-        window.addEventListener(type, listener);
+      if (typeof document !== "undefined") {
+        listeners.push({ target: document, type: "visibilitychange", listener: () => {
+          if (document.visibilityState === "hidden") {
+            release();
+          }
+        }});
+      }
+
+      listeners.forEach(({ target = window, type, listener, options }) => {
+        target.addEventListener(type, listener, options);
       });
 
       releaseListenersRef.current = listeners;
