@@ -1530,22 +1530,25 @@ function SkinCardPreviewComparison({
   }
 
   const [showWithout, setShowWithout] = useState(false);
-  const releaseHandlerRef = useRef(null);
+  const releaseListenersRef = useRef(null);
+  const activeInputRef = useRef(null);
 
   const removeWindowListeners = useCallback(() => {
     if (typeof window === "undefined") {
-      releaseHandlerRef.current = null;
+      releaseListenersRef.current = null;
       return;
     }
-    if (releaseHandlerRef.current) {
-      window.removeEventListener("pointerup", releaseHandlerRef.current);
-      window.removeEventListener("pointercancel", releaseHandlerRef.current);
-      releaseHandlerRef.current = null;
+    if (Array.isArray(releaseListenersRef.current)) {
+      releaseListenersRef.current.forEach(({ type, listener, options }) => {
+        window.removeEventListener(type, listener, options);
+      });
     }
+    releaseListenersRef.current = null;
   }, []);
 
   const endHold = useCallback(() => {
     setShowWithout(false);
+    activeInputRef.current = null;
     removeWindowListeners();
   }, [removeWindowListeners]);
 
@@ -1553,14 +1556,20 @@ function SkinCardPreviewComparison({
 
   useEffect(() => () => removeWindowListeners(), [removeWindowListeners]);
 
-  const handlePointerDown = useCallback(
-    (event) => {
+  const startHold = useCallback(
+    (event, source) => {
       if (event && typeof event.preventDefault === "function") {
         event.preventDefault();
       }
       if (event?.currentTarget && typeof event.currentTarget.focus === "function") {
         event.currentTarget.focus();
       }
+
+      if (activeInputRef.current && activeInputRef.current !== source) {
+        return;
+      }
+
+      activeInputRef.current = source;
 
       removeWindowListeners();
       setShowWithout(true);
@@ -1573,11 +1582,55 @@ function SkinCardPreviewComparison({
         endHold();
       };
 
-      releaseHandlerRef.current = release;
-      window.addEventListener("pointerup", release, { once: true });
-      window.addEventListener("pointercancel", release, { once: true });
+      const listeners = [];
+
+      if (source === "pointer") {
+        listeners.push({ type: "pointerup", listener: release });
+        listeners.push({ type: "pointercancel", listener: release });
+      } else if (source === "touch") {
+        listeners.push({ type: "touchend", listener: release });
+        listeners.push({ type: "touchcancel", listener: release });
+      } else {
+        listeners.push({ type: "mouseup", listener: release });
+        listeners.push({ type: "mouseleave", listener: release });
+      }
+
+      listeners.push({ type: "blur", listener: release });
+
+      listeners.forEach(({ type, listener }) => {
+        window.addEventListener(type, listener);
+      });
+
+      releaseListenersRef.current = listeners;
     },
     [endHold, removeWindowListeners]
+  );
+
+  const handlePointerDown = useCallback(
+    (event) => {
+      if (typeof event?.button === "number" && event.button !== 0) {
+        return;
+      }
+      startHold(event, "pointer");
+    },
+    [startHold]
+  );
+
+  const handleMouseDown = useCallback(
+    (event) => {
+      if (typeof event?.button === "number" && event.button !== 0) {
+        return;
+      }
+      startHold(event, "mouse");
+    },
+    [startHold]
+  );
+
+  const handleTouchStart = useCallback(
+    (event) => {
+      startHold(event, "touch");
+    },
+    [startHold]
   );
 
   const handleKeyDown = useCallback(
@@ -1654,6 +1707,11 @@ function SkinCardPreviewComparison({
           onPointerDown={handlePointerDown}
           onPointerUp={endHold}
           onPointerCancel={endHold}
+          onMouseDown={handleMouseDown}
+          onMouseUp={endHold}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={endHold}
+          onTouchCancel={endHold}
           onKeyDown={handleKeyDown}
           onKeyUp={handleKeyUp}
           onBlur={endHold}
