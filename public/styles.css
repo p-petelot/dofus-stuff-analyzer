@@ -2448,10 +2448,6 @@ a {
   visibility: hidden;
 }
 
-.skin-card__render--with-slider .skin-card__direction-overlay {
-  bottom: 78px;
-}
-
 .skin-card__glow {
   position: absolute;
   inset: -8%;
@@ -2466,6 +2462,7 @@ a {
 .skin-card__preview {
   position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   width: 100%;
@@ -2474,6 +2471,7 @@ a {
   user-select: none;
   touch-action: none;
   z-index: 0;
+  gap: 16px;
 }
 
 .skin-card__preview:active {
@@ -2497,21 +2495,26 @@ a {
 }
 
 .skin-card__comparison {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 210px;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.skin-card__comparison-overlay {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  height: 100%;
   pointer-events: none;
-  z-index: 4;
 }
 
-.skin-card__comparison-base,
-.skin-card__comparison-overlay {
-  position: absolute;
-  inset: 0;
+.skin-card__comparison-base {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2527,8 +2530,8 @@ a {
 
 .skin-card__comparison-divider {
   position: absolute;
-  top: 6px;
-  bottom: 6px;
+  top: 12px;
+  bottom: 12px;
   width: 3px;
   border-radius: 999px;
   transform: translateX(-50%);
@@ -2550,25 +2553,38 @@ a {
 
 
 .skin-card__render--with-slider {
-  padding-bottom: 52px;
+  padding-bottom: 0;
 }
 
 .skin-card__comparison-slider {
-  position: absolute;
-  left: 50%;
-  bottom: 16px;
-  transform: translateX(-50%);
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  width: min(88%, 320px);
+  width: min(90%, 360px);
   padding: 14px 18px;
   border-radius: 22px;
-  background: rgba(var(--surface-2-rgb), 0.9);
+  background: rgba(var(--surface-2-rgb), 0.92);
   box-shadow: 0 22px 40px -18px rgba(var(--surface-1-rgb), 0.65);
   backdrop-filter: blur(18px);
   pointer-events: auto;
   z-index: 6;
+  margin: 0 auto 4px;
+  overflow: hidden;
+}
+
+.skin-card__comparison-slider::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(145deg, rgba(var(--accent-primary-rgb), 0.16), rgba(var(--accent-sky-rgb), 0.12));
+  opacity: 0.85;
+  z-index: -1;
+}
+
+.skin-card__comparison-slider + .skin-card__direction-overlay {
+  bottom: 90px;
 }
 
 .skin-card__comparison-slider:focus-within {
@@ -2668,30 +2684,6 @@ a {
 
 .skin-card__comparison-slider-label:last-child {
   justify-content: flex-end;
-}
-
-.skin-card__comparison-tag {
-  position: absolute;
-  top: 12px;
-  padding: 4px 10px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  background: rgba(var(--surface-2-rgb), 0.86);
-  color: var(--text);
-  border-radius: 999px;
-  box-shadow: 0 8px 20px rgba(var(--surface-1-rgb), 0.4);
-  pointer-events: none;
-  z-index: 3;
-}
-
-.skin-card__comparison-tag--left {
-  left: 12px;
-}
-
-.skin-card__comparison-tag--right {
-  right: 12px;
 }
 
 .skin-card__placeholder {

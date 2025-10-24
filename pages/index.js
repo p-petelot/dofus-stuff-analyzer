@@ -1606,12 +1606,6 @@ function SkinCardPreviewComparison({
           aria-hidden="true"
           style={{ left: `${dividerDisplayOffset}%` }}
         />
-        {withoutLabel ? (
-          <span className="skin-card__comparison-tag skin-card__comparison-tag--left">{withoutLabel}</span>
-        ) : null}
-        {withLabel ? (
-          <span className="skin-card__comparison-tag skin-card__comparison-tag--right">{withLabel}</span>
-        ) : null}
       </div>
       <div
         className="skin-card__comparison-slider"
