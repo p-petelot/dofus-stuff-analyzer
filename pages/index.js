@@ -118,6 +118,32 @@ const IMAGE_REFERENCE_KEYS = [
   "src",
 ];
 
+const PALETTE_LOADER_COLORS = ["#1bdd8d", "#22d3ee", "#facc15", "#fb923c", "#a855f7"];
+
+const PaletteLoader = ({ label }) => (
+  <div className="palette-loader" role="status" aria-live="polite">
+    <span className="sr-only">{label}</span>
+    <div className="palette-loader__aurora" aria-hidden="true">
+      <span className="palette-loader__halo" />
+      <div className="palette-loader__spectrum">
+        <span className="palette-loader__ring palette-loader__ring--outer" />
+        <span className="palette-loader__ring palette-loader__ring--inner" />
+        {PALETTE_LOADER_COLORS.map((color, index) => (
+          <span
+            key={`${color}-${index}`}
+            className={`palette-loader__pulse palette-loader__pulse--${index}`}
+            style={{
+              "--palette-loader-color": color,
+              "--palette-loader-index": String(index),
+            }}
+          />
+        ))}
+      </div>
+      <span className="palette-loader__core" />
+    </div>
+  </div>
+);
+
 const THEME_KEYS = Object.freeze({
   DARK: "dark",
   LIGHT: "light",
@@ -6665,10 +6691,10 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
             <div className="suggestions__status suggestions__status--empty">
               <p>{t("suggestions.empty.identity")}</p>
             </div>
-          ) : !hasCatalogData && itemsLoading ? (
-            <div className="suggestions__status suggestions__status--loading">
-              {t("suggestions.loading.items")}
-            </div>
+        ) : !hasCatalogData && itemsLoading ? (
+          <div className="suggestions__status suggestions__status--loading">
+            <PaletteLoader label={t("suggestions.loading.items")} />
+          </div>
           ) : !hasCatalogData && itemsError ? (
             <div className="suggestions__status suggestions__status--error">{itemsError}</div>
           ) : !hasCatalogData ? (
@@ -6770,12 +6796,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                       <div
                                         className={`skin-card__render${showComparison ? " skin-card__render--with-toggle" : ""}`}
                                       >
-                                        {lookLoading ? (
-                                          <div className="skin-card__loader" role="status" aria-live="polite">
-                                            <span className="skin-card__loader-spinner" aria-hidden="true" />
-                                            <span className="sr-only">{t("suggestions.render.loading")}</span>
-                                          </div>
-                                        ) : null}
                                         {lookError && !lookLoading && !lookLoaded ? (
                                           <div className="skin-card__status skin-card__status--error">
                                             {lookError}
@@ -6831,13 +6851,17 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                               draggable={false}
                                             />
                                           ) : heroSrc ? (
-                                            <img
-                                              src={heroSrc}
-                                              alt={`Aperçu principal de la proposition ${proposal.index + 1}`}
-                                              loading="lazy"
-                                              className="skin-card__hero"
-                                              draggable={false}
-                                            />
+                                            <div
+                                              className={`skin-card__hero-stage${lookLoading ? " is-loading" : ""}`}
+                                            >
+                                              <img
+                                                src={heroSrc}
+                                                alt={`Aperçu principal de la proposition ${proposal.index + 1}`}
+                                                loading="lazy"
+                                                className="skin-card__hero"
+                                                draggable={false}
+                                              />
+                                            </div>
                                           ) : (
                                             <div className="skin-card__placeholder" aria-hidden="true">
                                               Aperçu indisponible
