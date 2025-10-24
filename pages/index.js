@@ -1706,22 +1706,6 @@ function SkinCardPreviewComparison({
 
   return (
     <div className={`skin-card__comparison${showWithout ? " skin-card__comparison--without" : ""}`}>
-      <div className="skin-card__comparison-stage">
-        <img
-          src={withSrc}
-          alt={withAlt}
-          className="skin-card__preview-image skin-card__preview-image--with"
-          draggable={false}
-          onError={onWithError}
-        />
-        <img
-          src={withoutSrc}
-          alt={withoutAlt}
-          className="skin-card__preview-image skin-card__preview-image--without"
-          draggable={false}
-          onError={onWithoutError}
-        />
-      </div>
       <div className="skin-card__comparison-toggle">
         <button
           ref={toggleButtonRef}
@@ -1760,6 +1744,22 @@ function SkinCardPreviewComparison({
           </span>
           <span className="sr-only">{accessibleLabel}</span>
         </button>
+      </div>
+      <div className="skin-card__comparison-stage">
+        <img
+          src={withSrc}
+          alt={withAlt}
+          className="skin-card__preview-image skin-card__preview-image--with"
+          draggable={false}
+          onError={onWithError}
+        />
+        <img
+          src={withoutSrc}
+          alt={withoutAlt}
+          className="skin-card__preview-image skin-card__preview-image--without"
+          draggable={false}
+          onError={onWithoutError}
+        />
       </div>
     </div>
   );
