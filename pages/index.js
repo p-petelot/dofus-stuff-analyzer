@@ -6796,11 +6796,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                       <div
                                         className={`skin-card__render${showComparison ? " skin-card__render--with-toggle" : ""}`}
                                       >
-                                        {lookLoading ? (
-                                          <div className="skin-card__loader">
-                                            <PaletteLoader label={t("suggestions.render.loading")} />
-                                          </div>
-                                        ) : null}
                                         {lookError && !lookLoading && !lookLoaded ? (
                                           <div className="skin-card__status skin-card__status--error">
                                             {lookError}
@@ -6856,13 +6851,23 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                               draggable={false}
                                             />
                                           ) : heroSrc ? (
-                                            <img
-                                              src={heroSrc}
-                                              alt={`Aperçu principal de la proposition ${proposal.index + 1}`}
-                                              loading="lazy"
-                                              className="skin-card__hero"
-                                              draggable={false}
-                                            />
+                                            <div
+                                              className={`skin-card__hero-stage${lookLoading ? " is-loading" : ""}`}
+                                            >
+                                              <img
+                                                src={heroSrc}
+                                                alt={`Aperçu principal de la proposition ${proposal.index + 1}`}
+                                                loading="lazy"
+                                                className="skin-card__hero"
+                                                draggable={false}
+                                              />
+                                              {lookLoading ? (
+                                                <span
+                                                  className="skin-card__hero-aurora"
+                                                  aria-hidden="true"
+                                                />
+                                              ) : null}
+                                            </div>
                                           ) : (
                                             <div className="skin-card__placeholder" aria-hidden="true">
                                               Aperçu indisponible
