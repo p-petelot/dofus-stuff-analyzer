@@ -250,10 +250,6 @@ export function buildSouffLookPayload({
     throw new Error("Paramètre faceId invalide");
   }
 
-  if (!Array.isArray(itemIds) || itemIds.length === 0) {
-    throw new Error("Au moins un identifiant d'objet est requis");
-  }
-
   const sex = genderToSouffSexCode(gender);
   if (sex === null) {
     throw new Error("Paramètre sexe/gender invalide");
@@ -266,10 +262,6 @@ export function buildSouffLookPayload({
         .filter((value) => Number.isFinite(value) && value > 0)
     )
   );
-
-  if (!normalizedItems.length) {
-    throw new Error("Au moins un identifiant d'objet valide est requis");
-  }
 
   const normalizedColors = Array.from(
     new Set(
@@ -361,10 +353,6 @@ export default async function handler(req, res) {
 
     const itemIds = extractItemIdsFromQuery(req.query);
     const colors = extractColorsFromQuery(req.query);
-    if (!itemIds.length) {
-      res.status(400).json({ error: "Au moins un identifiant d'objet est requis" });
-      return;
-    }
 
     const normalizedLang = normalizeLanguage(lang) ?? DEFAULT_LANG;
     const resolvedSize = coercePositiveInteger(size, DEFAULT_RENDER_SIZE);
@@ -375,17 +363,30 @@ export default async function handler(req, res) {
       ? Math.max(0, Math.min(7, Math.trunc(Number(direction))))
       : DEFAULT_RENDER_DIRECTION;
 
-    const souffPayload = buildSouffLookPayload({
-      breedId: numericBreedId,
-      faceId,
-      gender: normalizedGender,
-      itemIds,
-      colors,
-      animation: animationValue,
-      direction: directionValue,
-    });
+    const collectedWarnings = [];
+    let souffPayload = null;
+    if (itemIds.length) {
+      try {
+        souffPayload = buildSouffLookPayload({
+          breedId: numericBreedId,
+          faceId,
+          gender: normalizedGender,
+          itemIds,
+          colors,
+          animation: animationValue,
+          direction: directionValue,
+        });
+      } catch (souffBuildError) {
+        collectedWarnings.push(
+          souffBuildError instanceof Error
+            ? souffBuildError.message
+            : String(souffBuildError)
+        );
+        souffPayload = null;
+      }
+    }
 
-    warnings = [];
+    warnings = collectedWarnings;
     const requested = {
       breedId: numericBreedId,
       gender: normalizedGender,
@@ -398,25 +399,27 @@ export default async function handler(req, res) {
       direction: directionValue,
     };
 
-    try {
-      const { base64, contentType, byteLength } = await fetchSouffRenderer(souffPayload);
-      const dataUrl = `data:${contentType};base64,${base64}`;
+    if (souffPayload) {
+      try {
+        const { base64, contentType, byteLength } = await fetchSouffRenderer(souffPayload);
+        const dataUrl = `data:${contentType};base64,${base64}`;
 
-      res.status(200).json({
-        requested,
-        renderer: "souff",
-        base64,
-        contentType,
-        byteLength,
-        dataUrl,
-        lookUrl: null,
-        rendererUrl: null,
-        token: null,
-        warnings,
-      });
-      return;
-    } catch (souffError) {
-      warnings.push(souffError instanceof Error ? souffError.message : String(souffError));
+        res.status(200).json({
+          requested,
+          renderer: "souff",
+          base64,
+          contentType,
+          byteLength,
+          dataUrl,
+          lookUrl: null,
+          rendererUrl: null,
+          token: null,
+          warnings,
+        });
+        return;
+      } catch (souffError) {
+        warnings.push(souffError instanceof Error ? souffError.message : String(souffError));
+      }
     }
 
     const searchParams = new URLSearchParams();
@@ -424,13 +427,25 @@ export default async function handler(req, res) {
     searchParams.set("sexe", normalizedGender);
     searchParams.set("lang", normalizedLang);
     itemIds.forEach((id) => {
-      searchParams.append("itemIds[]", String(id));
+      const numericId = Number(id);
+      if (!Number.isFinite(numericId)) {
+        return;
+      }
+      const normalizedId = String(Math.trunc(numericId));
+      searchParams.append("itemIds[]", normalizedId);
     });
-    colors.forEach((value) => {
-      searchParams.append("colors[]", String(value));
+    colors.forEach((value, index) => {
+      if (!Number.isFinite(value)) {
+        return;
+      }
+      const normalizedColor = String(Math.trunc(value));
+      searchParams.append("colors[]", normalizedColor);
+      searchParams.append(`colors[${index + 1}]`, normalizedColor);
+      searchParams.append("palette[]", normalizedColor);
     });
     searchParams.set("animation", String(animationValue));
     searchParams.set("direction", String(directionValue));
+    searchParams.set("dir", String(directionValue));
 
     const lookUrl = `${DOFUS_LOOK_API_URL}?${searchParams.toString()}`;
 

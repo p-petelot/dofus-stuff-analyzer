@@ -1437,6 +1437,53 @@ function areLookPreviewDescriptorsEqual(a, b) {
   );
 }
 
+function buildLookBaseKey({
+  classId,
+  lookFaceId,
+  lookGender,
+  lookItemIds,
+  lookColors,
+  lookAnimation,
+}) {
+  const parts = [];
+
+  if (Number.isFinite(classId)) {
+    parts.push(String(Math.trunc(classId)));
+  }
+
+  if (Number.isFinite(lookFaceId)) {
+    parts.push(`head${Math.trunc(lookFaceId)}`);
+  }
+
+  if (typeof lookGender === "string" && lookGender.length > 0) {
+    parts.push(lookGender);
+  }
+
+  if (Array.isArray(lookItemIds) && lookItemIds.length) {
+    lookItemIds
+      .filter((value) => Number.isFinite(value))
+      .forEach((value) => {
+        parts.push(String(Math.trunc(value)));
+      });
+  }
+
+  if (Array.isArray(lookColors) && lookColors.length) {
+    lookColors
+      .filter((value) => Number.isFinite(value))
+      .forEach((value) => {
+        parts.push(`c${Math.trunc(value)}`);
+      });
+  }
+
+  const animationCode = Number.isFinite(lookAnimation)
+    ? Math.trunc(lookAnimation)
+    : DEFAULT_LOOK_ANIMATION;
+
+  parts.push(`a${animationCode}`);
+
+  return parts.length ? parts.join("-") : null;
+}
+
 const BARBOFUS_BASE_URL = "https://barbofus.com/skinator";
 const BARBOFUS_EQUIPMENT_SLOTS = ["6", "7", "8", "9", "10", "11", "12"];
 const BARBOFUS_SLOT_BY_TYPE = {
@@ -3142,6 +3189,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const [inputMode, setInputMode] = useState("image");
   const [selectedColor, setSelectedColor] = useState(null);
   const [activeProposal, setActiveProposal] = useState(0);
+  const [barePreviewStateByProposal, setBarePreviewStateByProposal] = useState({});
   const [lookPreviews, setLookPreviews] = useState({});
   const lookPreviewsRef = useRef({});
   const lookPreviewRequestsRef = useRef(new Map());
@@ -4333,25 +4381,28 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         return values.slice(0, MAX_ITEM_PALETTE_COLORS);
       })();
 
-      const baseKeyParts = [];
-      if (Number.isFinite(activeClassId)) {
-        baseKeyParts.push(activeClassId);
-      }
       const lookFaceId = Number.isFinite(activeClassFaceId) ? activeClassFaceId : null;
-      if (lookFaceId) {
-        baseKeyParts.push(`head${lookFaceId}`);
-      }
-      baseKeyParts.push(lookGenderCode);
-      baseKeyParts.push(...lookItemIds);
-      lookColors.forEach((value) => {
-        baseKeyParts.push(`c${value}`);
-      });
+      const classId = Number.isFinite(activeClassId) ? Math.trunc(activeClassId) : null;
       const animationCode = Number.isFinite(lookAnimation)
         ? Math.trunc(lookAnimation)
         : DEFAULT_LOOK_ANIMATION;
-      baseKeyParts.push(`a${animationCode}`);
       const directionCode = normalizeLookDirection(lookDirection);
-      const lookBaseKey = baseKeyParts.length ? baseKeyParts.join("-") : null;
+      const lookBaseKey = buildLookBaseKey({
+        classId,
+        lookFaceId,
+        lookGender: lookGenderCode,
+        lookItemIds,
+        lookColors,
+        lookAnimation: animationCode,
+      });
+      const lookBaseKeyUnequipped = buildLookBaseKey({
+        classId,
+        lookFaceId,
+        lookGender: lookGenderCode,
+        lookItemIds: [],
+        lookColors,
+        lookAnimation: animationCode,
+      });
       const lookKey = lookBaseKey ? `${lookBaseKey}-d${directionCode}` : null;
 
       combos.push({
@@ -4362,7 +4413,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         heroImage: items.find((item) => item.imageUrl)?.imageUrl ?? null,
         barbofusLink,
         className: activeBreed?.name ?? null,
-        classId: Number.isFinite(activeClassId) ? activeClassId : null,
+        classId,
         genderLabel: activeGenderLabel,
         classIcon: activeBreed?.icon ?? null,
         subtitle: sharedSubtitle,
@@ -4371,6 +4422,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         lookItemIds,
         lookColors,
         lookBaseKey,
+        lookBaseKeyUnequipped,
         lookKey,
         lookAnimation: animationCode,
         lookDirection: directionCode,
@@ -4403,36 +4455,116 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     const seen = new Set();
 
     proposals.forEach((proposal) => {
-      const baseKey = proposal?.lookBaseKey;
-      if (!baseKey || seen.has(baseKey)) {
-        return;
-      }
       if (!Number.isFinite(proposal?.classId) || !Number.isFinite(proposal?.lookFaceId)) {
         return;
       }
-      const itemIds = Array.isArray(proposal.lookItemIds)
-        ? proposal.lookItemIds.filter((value) => Number.isFinite(value))
-        : [];
-      if (!itemIds.length) {
-        return;
-      }
+
       const colors = Array.isArray(proposal.lookColors)
         ? proposal.lookColors.filter((value) => Number.isFinite(value)).slice(0, MAX_ITEM_PALETTE_COLORS)
         : [];
 
-      descriptors.push({
-        baseKey,
-        classId: proposal.classId,
-        lookGender: typeof proposal.lookGender === "string" ? proposal.lookGender : "m",
-        lookFaceId: proposal.lookFaceId,
-        lookItemIds: itemIds,
-        lookColors: colors,
-        lookAnimation: proposal.lookAnimation,
-      });
-      seen.add(baseKey);
+      const registerDescriptor = (baseKey, itemIds) => {
+        if (!baseKey || seen.has(baseKey)) {
+          return;
+        }
+
+        const normalizedItemIds = Array.isArray(itemIds)
+          ? itemIds
+              .filter((value) => Number.isFinite(value))
+              .map((value) => Math.trunc(value))
+          : [];
+
+        descriptors.push({
+          baseKey,
+          classId: proposal.classId,
+          lookGender: typeof proposal.lookGender === "string" ? proposal.lookGender : "m",
+          lookFaceId: proposal.lookFaceId,
+          lookItemIds: normalizedItemIds,
+          lookColors: colors.slice(),
+          lookAnimation: proposal.lookAnimation,
+        });
+        seen.add(baseKey);
+      };
+
+      const equippedItemIds = Array.isArray(proposal.lookItemIds)
+        ? proposal.lookItemIds.filter((value) => Number.isFinite(value)).map((value) => Math.trunc(value))
+        : [];
+
+      registerDescriptor(proposal?.lookBaseKey ?? null, equippedItemIds);
+
+      const unequippedKey = proposal?.lookBaseKeyUnequipped ?? null;
+      if (unequippedKey && unequippedKey !== proposal?.lookBaseKey) {
+        registerDescriptor(unequippedKey, []);
+      }
     });
 
     return descriptors;
+  }, [proposals]);
+
+  const setBarePreviewState = useCallback(
+    (proposalId, isActive) => {
+      const key =
+        typeof proposalId === "string"
+          ? proposalId
+          : Number.isFinite(proposalId)
+          ? String(Math.trunc(proposalId))
+          : null;
+
+      if (!key) {
+        return;
+      }
+
+      setBarePreviewStateByProposal((previous = {}) => {
+        const alreadyActive = Boolean(previous[key]);
+        if (isActive) {
+          if (alreadyActive) {
+            return previous;
+          }
+          return { ...previous, [key]: true };
+        }
+        if (!alreadyActive) {
+          return previous;
+        }
+        const next = { ...previous };
+        delete next[key];
+        if (Object.keys(next).length === 0) {
+          return {};
+        }
+        return next;
+      });
+    },
+    [setBarePreviewStateByProposal]
+  );
+
+  useEffect(() => {
+    setBarePreviewStateByProposal((previous = {}) => {
+      if (!previous || Object.keys(previous).length === 0) {
+        return previous;
+      }
+
+      const validIds = new Set(
+        proposals
+          .map((proposal) => (proposal?.id ? String(proposal.id) : null))
+          .filter(Boolean)
+      );
+
+      const next = {};
+      let changed = false;
+
+      Object.keys(previous).forEach((key) => {
+        if (validIds.has(key)) {
+          next[key] = true;
+        } else {
+          changed = true;
+        }
+      });
+
+      if (!changed && Object.keys(next).length === Object.keys(previous).length) {
+        return previous;
+      }
+
+      return next;
+    });
   }, [proposals]);
 
   const previewBackgroundAutoByProposal = useMemo(() => {
@@ -4684,7 +4816,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
 
       if (
         !Array.isArray(descriptor.lookItemIds) ||
-        descriptor.lookItemIds.length === 0 ||
         !Number.isFinite(descriptor.classId) ||
         !Number.isFinite(descriptor.lookFaceId)
       ) {
@@ -6408,8 +6539,22 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                             {proposals.map((proposal) => {
                               const primaryColor = proposal.palette[0] ?? "#1f2937";
                               const canvasBackground = buildGradientFromHex(primaryColor);
-                              const lookPreviewGroup = proposal.lookBaseKey
-                                ? lookPreviews?.[proposal.lookBaseKey]
+                              const hasEquipment =
+                                Array.isArray(proposal.lookItemIds) && proposal.lookItemIds.length > 0;
+                              const canShowUnequipped = Boolean(
+                                hasEquipment &&
+                                  proposal.lookBaseKeyUnequipped &&
+                                  proposal.lookBaseKeyUnequipped !== proposal.lookBaseKey
+                              );
+                              const isBarePreviewActive =
+                                canShowUnequipped && proposal.id
+                                  ? Boolean(barePreviewStateByProposal?.[proposal.id])
+                                  : false;
+                              const previewBaseKey = isBarePreviewActive
+                                ? proposal.lookBaseKeyUnequipped
+                                : proposal.lookBaseKey;
+                              const lookPreviewGroup = previewBaseKey
+                                ? lookPreviews?.[previewBaseKey]
                                 : null;
                               const lookPreview = lookPreviewGroup?.directions?.[activeDirectionValue] ?? null;
                               const previewSrc =
@@ -6423,7 +6568,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                 lookPreview?.status === "error"
                                   ? lookPreview?.error ?? t("errors.previewUnavailableDetailed")
                                   : null;
-                              const heroSrc = !lookLoaded ? proposal.heroImage ?? null : null;
+                              const heroSrc =
+                                !lookLoaded && !isBarePreviewActive ? proposal.heroImage ?? null : null;
                               const previewAlt = t("suggestions.render.alt", { index: proposal.index + 1 });
                               const autoBackgroundId = previewBackgroundAutoByProposal.get(proposal.id);
                               const autoBackground = autoBackgroundId
@@ -6461,6 +6607,99 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                     backgroundColor: primaryColor,
                                   }
                                 : { backgroundImage: canvasBackground };
+                              const toggleLabel = canShowUnequipped
+                                ? t("suggestions.render.noEquipment")
+                                : null;
+                              const toggleHint = canShowUnequipped
+                                ? t("suggestions.render.noEquipmentHold")
+                                : null;
+                              const safeProposalId = proposal?.id ? String(proposal.id) : null;
+                              const handlePreviewTogglePointerDown = (event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                if (!canShowUnequipped || !safeProposalId) {
+                                  return;
+                                }
+                                if (
+                                  typeof event?.currentTarget?.setPointerCapture === "function" &&
+                                  Number.isFinite(event.pointerId)
+                                ) {
+                                  try {
+                                    event.currentTarget.setPointerCapture(event.pointerId);
+                                  } catch (error) {
+                                    // Ignore capture errors
+                                  }
+                                }
+                                setBarePreviewState(safeProposalId, true);
+                              };
+                              const handlePreviewTogglePointerUp = (event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                if (
+                                  typeof event?.currentTarget?.releasePointerCapture === "function" &&
+                                  Number.isFinite(event.pointerId)
+                                ) {
+                                  try {
+                                    event.currentTarget.releasePointerCapture(event.pointerId);
+                                  } catch (error) {
+                                    // Ignore release errors
+                                  }
+                                }
+                                if (!canShowUnequipped || !safeProposalId) {
+                                  return;
+                                }
+                                setBarePreviewState(safeProposalId, false);
+                              };
+                              const handlePreviewTogglePointerCancel = (event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                if (
+                                  typeof event?.currentTarget?.releasePointerCapture === "function" &&
+                                  Number.isFinite(event.pointerId)
+                                ) {
+                                  try {
+                                    event.currentTarget.releasePointerCapture(event.pointerId);
+                                  } catch (error) {
+                                    // Ignore release errors
+                                  }
+                                }
+                                if (!canShowUnequipped || !safeProposalId) {
+                                  return;
+                                }
+                                setBarePreviewState(safeProposalId, false);
+                              };
+                              const handlePreviewTogglePointerLeave = (event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                if (!canShowUnequipped || !safeProposalId) {
+                                  return;
+                                }
+                                setBarePreviewState(safeProposalId, false);
+                              };
+                              const handlePreviewToggleKeyDown = (event) => {
+                                if (!canShowUnequipped || !safeProposalId) {
+                                  return;
+                                }
+                                if (event.key === " " || event.key === "Enter") {
+                                  event.preventDefault();
+                                  setBarePreviewState(safeProposalId, true);
+                                }
+                              };
+                              const handlePreviewToggleKeyUp = (event) => {
+                                if (!canShowUnequipped || !safeProposalId) {
+                                  return;
+                                }
+                                if (event.key === " " || event.key === "Enter") {
+                                  event.preventDefault();
+                                  setBarePreviewState(safeProposalId, false);
+                                }
+                              };
+                              const handlePreviewToggleBlur = () => {
+                                if (!canShowUnequipped || !safeProposalId) {
+                                  return;
+                                }
+                                setBarePreviewState(safeProposalId, false);
+                              };
                               return (
                                 <article key={proposal.id} className="skin-card">
                                   <h3 className="sr-only">{t("suggestions.carousel.proposalTitle", { index: proposal.index + 1 })}</h3>
@@ -6482,8 +6721,9 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           </div>
                                         ) : null}
                                         <div className="skin-card__glow" aria-hidden="true" />
-                                        <div
-                                          className="skin-card__preview"
+                                        <div className="skin-card__preview-wrapper">
+                                          <div
+                                            className="skin-card__preview"
                                           role="group"
                                           aria-label={previewDirectionDescription}
                                           title={t("identity.preview.direction.hint")}
@@ -6501,7 +6741,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                               loading="lazy"
                                               className="skin-card__preview-image"
                                               onError={() =>
-                                                handleLookPreviewError(proposal.lookBaseKey, activeDirectionValue)
+                                                handleLookPreviewError(previewBaseKey, activeDirectionValue)
                                               }
                                               draggable={false}
                                             />
@@ -6518,6 +6758,54 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                               Aperçu indisponible
                                             </div>
                                           )}
+                                          </div>
+                                          {canShowUnequipped ? (
+                                            <div className="skin-card__preview-actions">
+                                              <button
+                                                type="button"
+                                                className={`skin-card__preview-toggle${
+                                                  isBarePreviewActive ? " is-active" : ""
+                                                }`}
+                                                aria-pressed={isBarePreviewActive}
+                                                aria-label={toggleLabel ?? undefined}
+                                                title={toggleLabel ?? undefined}
+                                                onPointerDown={handlePreviewTogglePointerDown}
+                                                onPointerUp={handlePreviewTogglePointerUp}
+                                                onPointerCancel={handlePreviewTogglePointerCancel}
+                                                onPointerLeave={handlePreviewTogglePointerLeave}
+                                                onKeyDown={handlePreviewToggleKeyDown}
+                                                onKeyUp={handlePreviewToggleKeyUp}
+                                                onBlur={handlePreviewToggleBlur}
+                                              >
+                                                <span className="sr-only">
+                                                  {toggleHint ?? toggleLabel ?? ""}
+                                                </span>
+                                                <svg
+                                                  className="skin-card__preview-toggle-icon"
+                                                  viewBox="0 0 24 24"
+                                                  fill="none"
+                                                  xmlns="http://www.w3.org/2000/svg"
+                                                  aria-hidden="true"
+                                                >
+                                                  <path
+                                                    d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6Z"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.6"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                  />
+                                                  <circle
+                                                    cx="12"
+                                                    cy="12"
+                                                    r="3"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.6"
+                                                    fill="none"
+                                                  />
+                                                </svg>
+                                              </button>
+                                            </div>
+                                          ) : null}
                                           {activeDirectionOption ? (
                                             <div className="skin-card__direction-overlay" aria-hidden="true">
                                               <span className="skin-card__direction-label">
