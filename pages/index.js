@@ -7959,13 +7959,32 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           <span className="sr-only">{downloadCtaLabel}</span>
                                         </button>
                                       ) : lookLoading ? (
-                                        <span className="skin-card__cta skin-card__cta--disabled">
-                                          {t("suggestions.render.loading")}
-                                        </span>
+                                        <button
+                                          type="button"
+                                          className="skin-card__cta skin-card__cta--disabled"
+                                          disabled
+                                          aria-busy="true"
+                                          title={t("suggestions.render.loading")}
+                                          aria-label={t("suggestions.render.loading")}
+                                        >
+                                          <span className="skin-card__cta-icon" aria-hidden="true">
+                                            <img src="/icons/download.svg" alt="" />
+                                          </span>
+                                          <span className="sr-only">{t("suggestions.render.loading")}</span>
+                                        </button>
                                       ) : (
-                                        <span className="skin-card__cta skin-card__cta--disabled">
-                                          {t("suggestions.render.unavailable")}
-                                        </span>
+                                        <button
+                                          type="button"
+                                          className="skin-card__cta skin-card__cta--disabled"
+                                          disabled
+                                          title={t("suggestions.render.unavailable")}
+                                          aria-label={t("suggestions.render.unavailable")}
+                                        >
+                                          <span className="skin-card__cta-icon" aria-hidden="true">
+                                            <img src="/icons/download.svg" alt="" />
+                                          </span>
+                                          <span className="sr-only">{t("suggestions.render.unavailable")}</span>
+                                        </button>
                                       )}
                                       {proposal.barbofusLink ? (
                                         <a
@@ -8021,9 +8040,18 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           <span className="sr-only">{copySkinCtaLabel}</span>
                                         </button>
                                       ) : (
-                                        <span className="skin-card__cta skin-card__cta--disabled">
-                                          {copySkinUnavailableLabel}
-                                        </span>
+                                        <button
+                                          type="button"
+                                          className="skin-card__cta skin-card__cta--disabled"
+                                          disabled
+                                          title={copySkinUnavailableLabel}
+                                          aria-label={copySkinUnavailableLabel}
+                                        >
+                                          <span className="skin-card__cta-icon" aria-hidden="true">
+                                            <img src="/icons/copy.svg" alt="" />
+                                          </span>
+                                          <span className="sr-only">{copySkinUnavailableLabel}</span>
+                                        </button>
                                       )}
                                       {canShareSkin ? (
                                         <button
