@@ -7431,6 +7431,12 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                 ? preferredBackground ?? fallbackBackground
                                 : null;
                               const canShareSkin = Boolean(getShareDescriptor(proposal));
+                              const isDownloadingPreview = downloadingPreviewId === proposal.id;
+                              const downloadCtaLabel = isDownloadingPreview
+                                ? t("suggestions.render.downloading")
+                                : t("suggestions.render.download");
+                              const barbofusCtaLabel = t("suggestions.render.link");
+                              const shareCtaLabel = t("suggestions.render.share");
                               const canvasStyle = activeBackground
                                 ? {
                                     backgroundImage: `url(${activeBackground.src})`,
@@ -7745,17 +7751,15 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           type="button"
                                           onClick={() => handleDownloadPreview(proposal)}
                                           className="skin-card__cta"
-                                          disabled={downloadingPreviewId === proposal.id}
-                                          aria-busy={downloadingPreviewId === proposal.id}
+                                          disabled={isDownloadingPreview}
+                                          aria-busy={isDownloadingPreview}
+                                          title={downloadCtaLabel}
+                                          aria-label={downloadCtaLabel}
                                         >
                                           <span className="skin-card__cta-icon" aria-hidden="true">
                                             <img src="/icons/download.svg" alt="" />
                                           </span>
-                                          <span className="skin-card__cta-label">
-                                            {downloadingPreviewId === proposal.id
-                                              ? t("suggestions.render.downloading")
-                                              : t("suggestions.render.download")}
-                                          </span>
+                                          <span className="sr-only">{downloadCtaLabel}</span>
                                         </button>
                                       ) : lookLoading ? (
                                         <span className="skin-card__cta skin-card__cta--disabled">
@@ -7772,13 +7776,13 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           target="_blank"
                                           rel="noreferrer"
                                           className="skin-card__cta"
+                                          title={barbofusCtaLabel}
+                                          aria-label={barbofusCtaLabel}
                                         >
                                           <span className="skin-card__cta-icon" aria-hidden="true">
                                             <img src="/icons/barbofus.svg" alt="" />
                                           </span>
-                                          <span className="skin-card__cta-label">
-                                            {t("suggestions.render.link")}
-                                          </span>
+                                          <span className="sr-only">{barbofusCtaLabel}</span>
                                         </a>
                                       ) : (
                                         <span className="skin-card__cta skin-card__cta--disabled">
@@ -7790,13 +7794,13 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           type="button"
                                           className="skin-card__cta"
                                           onClick={() => handleShareSkin(proposal)}
+                                          title={shareCtaLabel}
+                                          aria-label={shareCtaLabel}
                                         >
                                           <span className="skin-card__cta-icon" aria-hidden="true">
                                             <img src="/icons/copy.svg" alt="" />
                                           </span>
-                                          <span className="skin-card__cta-label">
-                                            {t("suggestions.render.share")}
-                                          </span>
+                                          <span className="sr-only">{shareCtaLabel}</span>
                                         </button>
                                       ) : (
                                         <span className="skin-card__cta skin-card__cta--disabled">
