@@ -947,6 +947,102 @@ function getBarbofusFaceId(classId, genderKey, fallback) {
   return Number.isFinite(fallback) ? fallback : null;
 }
 
+function getSouffSexCode(gender) {
+  if (typeof gender !== "string") {
+    return null;
+  }
+
+  const normalized = gender.trim().toLowerCase();
+  if (normalized === "f" || normalized === "female") {
+    return 1;
+  }
+  if (normalized === "m" || normalized === "male") {
+    return 0;
+  }
+
+  return null;
+}
+
+function buildSouffLink({
+  classId,
+  faceId,
+  gender,
+  itemIds,
+  colors,
+  animation,
+  direction,
+} = {}) {
+  if (!Number.isFinite(classId) || !Number.isFinite(faceId)) {
+    return null;
+  }
+
+  const sex = getSouffSexCode(gender);
+  if (sex === null) {
+    return null;
+  }
+
+  const normalizedItems = Array.isArray(itemIds)
+    ? itemIds
+        .map((value) => (Number.isFinite(value) ? Math.trunc(value) : null))
+        .filter((value) => Number.isFinite(value) && value > 0)
+    : [];
+
+  if (!normalizedItems.length) {
+    return null;
+  }
+
+  const normalizedColors = Array.isArray(colors)
+    ? colors
+        .map((value) => (Number.isFinite(value) ? Math.trunc(value) : null))
+        .filter((value) => Number.isFinite(value) && value >= 0)
+    : [];
+
+  if (!normalizedColors.length) {
+    return null;
+  }
+
+  const animationCode = Number.isFinite(animation)
+    ? Math.max(0, Math.trunc(animation))
+    : 0;
+  const directionCode = Number.isFinite(direction)
+    ? Math.max(0, Math.min(7, Math.trunc(direction)))
+    : 0;
+
+  const payload = [
+    Math.trunc(classId),
+    Math.trunc(faceId),
+    sex,
+    normalizedItems,
+    normalizedColors,
+    directionCode,
+    0,
+    [],
+    animationCode,
+  ];
+
+  const serialized = JSON.stringify(payload);
+  if (!serialized) {
+    return null;
+  }
+
+  let base64 = "";
+  if (typeof Buffer !== "undefined") {
+    base64 = Buffer.from(serialized, "utf8").toString("base64");
+  } else if (typeof btoa === "function") {
+    try {
+      base64 = btoa(serialized);
+    } catch (error) {
+      base64 = "";
+    }
+  }
+
+  if (!base64) {
+    return null;
+  }
+
+  return `${SKIN_SOUFF_BASE_URL}?look=${encodeURIComponent(base64)}`;
+}
+
 function normalizeBreedEntry(entry, options = {}) {
   if (!entry || typeof entry !== "object") {
     return null;
@@ -1506,6 +1602,8 @@ const BARBOFUS_DEFAULTS = {
     ? BARBOFUS_DEFAULT_FACE_ENTRY.female
     : 105,
 };
+
+const SKIN_SOUFF_BASE_URL = "https://skin.souff.fr/";
 const BARBOFUS_GENDER_VALUES = {
   male: 0,
   female: 1,
@@ -3796,6 +3894,22 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const [lookAnimation, setLookAnimation] = useState(DEFAULT_LOOK_ANIMATION);
   const [lookDirection, setLookDirection] = useState(DEFAULT_LOOK_DIRECTION);
   const [downloadingPreviewId, setDownloadingPreviewId] = useState(null);
+  const [copyingPreviewId, setCopyingPreviewId] = useState(null);
+  const [supportsImageClipboard, setSupportsImageClipboard] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const hasSupport =
+      typeof navigator !== "undefined" &&
+      navigator.clipboard &&
+      typeof navigator.clipboard.write === "function" &&
+      typeof window.ClipboardItem !== "undefined";
+
+    setSupportsImageClipboard(Boolean(hasSupport));
+  }, []);
 
   useEffect(() => {
     if (lookAnimation !== 2) {
@@ -5153,6 +5267,15 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       const directionCode = normalizeLookDirection(lookDirection);
       const lookKey = lookBaseKey ? `${lookBaseKey}-d${directionCode}` : null;
       const lookKeyNoStuff = lookBaseKeyNoStuff ? `${lookBaseKeyNoStuff}-d${directionCode}` : null;
+      const souffLink = buildSouffLink({
+        classId: activeClassId,
+        faceId: activeClassFaceId,
+        gender: lookGenderCode,
+        itemIds: lookItemIds,
+        colors: lookColors,
+        animation: animationCode,
+        direction: directionCode,
+      });
 
       combos.push({
         id: `proposal-${index}`,
@@ -5161,6 +5284,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         palette: paletteSample,
         heroImage: items.find((item) => item.imageUrl)?.imageUrl ?? null,
         barbofusLink,
+        souffLink,
         className: activeBreed?.name ?? null,
         classId: Number.isFinite(activeClassId) ? activeClassId : null,
         genderLabel: activeGenderLabel,
@@ -5861,6 +5985,73 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       }
     },
     [lookDirection, lookPreviews, t]
+  );
+
+  const handleCopyPreview = useCallback(
+    async (proposal) => {
+      if (!proposal || !supportsImageClipboard) {
+        setError(t("errors.previewCopy"));
+        return;
+      }
+
+      if (typeof navigator === "undefined" || typeof window === "undefined") {
+        setError(t("errors.previewCopy"));
+        return;
+      }
+
+      const clipboard = navigator.clipboard;
+      const ClipboardItemClass = window.ClipboardItem;
+      if (!clipboard || typeof clipboard.write !== "function" || typeof ClipboardItemClass !== "function") {
+        setError(t("errors.previewCopy"));
+        return;
+      }
+
+      const activeDirection = normalizeLookDirection(lookDirection);
+      const lookPreviewGroup = proposal.lookBaseKey
+        ? lookPreviews?.[proposal.lookBaseKey]
+        : null;
+      const lookPreview = lookPreviewGroup?.directions?.[activeDirection] ?? null;
+      const hasLookPreview =
+        typeof lookPreview?.dataUrl === "string" && lookPreview.dataUrl.length > 0;
+
+      if (!hasLookPreview) {
+        setError(t("errors.previewCopy"));
+        return;
+      }
+
+      try {
+        setCopyingPreviewId(proposal.id);
+
+        const response = await fetch(lookPreview.dataUrl);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const contentType = lookPreview.contentType || blob.type || "image/png";
+        const clipboardItem = new ClipboardItemClass({ [contentType]: blob });
+        await clipboard.write([clipboardItem]);
+
+        const toastLabelRaw = t("toast.previewCopied");
+        let toastLabel = "";
+        if (typeof toastLabelRaw === "string") {
+          toastLabel = toastLabelRaw.trim().length ? toastLabelRaw.trim() : toastLabelRaw;
+        }
+        setError(null);
+        setToast({
+          id: Date.now(),
+          label: toastLabel,
+          value: null,
+          swatch: null,
+        });
+      } catch (error) {
+        console.error("Unable to copy preview:", error);
+        setError(t("errors.previewCopy"));
+      } finally {
+        setCopyingPreviewId(null);
+      }
+    },
+    [lookDirection, lookPreviews, supportsImageClipboard, t, setToast, setError]
   );
 
   const handleCopy = useCallback(async (value, options = {}) => {
@@ -7436,7 +7627,13 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                 ? t("suggestions.render.downloading")
                                 : t("suggestions.render.download");
                               const barbofusCtaLabel = t("suggestions.render.link");
+                              const souffCtaLabel = t("suggestions.render.souff");
                               const shareCtaLabel = t("suggestions.render.share");
+                              const souffUnavailableLabel = t("suggestions.render.souffUnavailable");
+                              const copySkinCtaLabel = t("suggestions.render.copySkin");
+                              const copySkinUnavailableLabel = t("suggestions.render.copySkinUnavailable");
+                              const isCopyingPreview = copyingPreviewId === proposal.id;
+                              const canCopySkinImage = supportsImageClipboard && lookLoaded;
                               const canvasStyle = activeBackground
                                 ? {
                                     backgroundImage: `url(${activeBackground.src})`,
@@ -7762,13 +7959,32 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           <span className="sr-only">{downloadCtaLabel}</span>
                                         </button>
                                       ) : lookLoading ? (
-                                        <span className="skin-card__cta skin-card__cta--disabled">
-                                          {t("suggestions.render.loading")}
-                                        </span>
+                                        <button
+                                          type="button"
+                                          className="skin-card__cta skin-card__cta--disabled"
+                                          disabled
+                                          aria-busy="true"
+                                          title={t("suggestions.render.loading")}
+                                          aria-label={t("suggestions.render.loading")}
+                                        >
+                                          <span className="skin-card__cta-icon" aria-hidden="true">
+                                            <img src="/icons/download.svg" alt="" />
+                                          </span>
+                                          <span className="sr-only">{t("suggestions.render.loading")}</span>
+                                        </button>
                                       ) : (
-                                        <span className="skin-card__cta skin-card__cta--disabled">
-                                          {t("suggestions.render.unavailable")}
-                                        </span>
+                                        <button
+                                          type="button"
+                                          className="skin-card__cta skin-card__cta--disabled"
+                                          disabled
+                                          title={t("suggestions.render.unavailable")}
+                                          aria-label={t("suggestions.render.unavailable")}
+                                        >
+                                          <span className="skin-card__cta-icon" aria-hidden="true">
+                                            <img src="/icons/download.svg" alt="" />
+                                          </span>
+                                          <span className="sr-only">{t("suggestions.render.unavailable")}</span>
+                                        </button>
                                       )}
                                       {proposal.barbofusLink ? (
                                         <a
@@ -7789,6 +8005,54 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           {t("suggestions.render.linkUnavailable")}
                                         </span>
                                       )}
+                                      {proposal.souffLink ? (
+                                        <a
+                                          href={proposal.souffLink}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="skin-card__cta"
+                                          title={souffCtaLabel}
+                                          aria-label={souffCtaLabel}
+                                        >
+                                          <span className="skin-card__cta-icon" aria-hidden="true">
+                                            <img src="/icons/souff.svg" alt="" />
+                                          </span>
+                                          <span className="sr-only">{souffCtaLabel}</span>
+                                        </a>
+                                      ) : (
+                                        <span className="skin-card__cta skin-card__cta--disabled">
+                                          {souffUnavailableLabel}
+                                        </span>
+                                      )}
+                                      {canCopySkinImage ? (
+                                        <button
+                                          type="button"
+                                          className="skin-card__cta"
+                                          onClick={() => handleCopyPreview(proposal)}
+                                          title={copySkinCtaLabel}
+                                          aria-label={copySkinCtaLabel}
+                                          disabled={isCopyingPreview}
+                                          aria-busy={isCopyingPreview}
+                                        >
+                                          <span className="skin-card__cta-icon" aria-hidden="true">
+                                            <img src="/icons/copy.svg" alt="" />
+                                          </span>
+                                          <span className="sr-only">{copySkinCtaLabel}</span>
+                                        </button>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          className="skin-card__cta skin-card__cta--disabled"
+                                          disabled
+                                          title={copySkinUnavailableLabel}
+                                          aria-label={copySkinUnavailableLabel}
+                                        >
+                                          <span className="skin-card__cta-icon" aria-hidden="true">
+                                            <img src="/icons/copy.svg" alt="" />
+                                          </span>
+                                          <span className="sr-only">{copySkinUnavailableLabel}</span>
+                                        </button>
+                                      )}
                                       {canShareSkin ? (
                                         <button
                                           type="button"
@@ -7798,7 +8062,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           aria-label={shareCtaLabel}
                                         >
                                           <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/copy.svg" alt="" />
+                                            <img src="/icons/share.svg" alt="" />
                                           </span>
                                           <span className="sr-only">{shareCtaLabel}</span>
                                         </button>
