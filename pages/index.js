@@ -118,7 +118,7 @@ const IMAGE_REFERENCE_KEYS = [
   "src",
 ];
 
-const PALETTE_LOADER_COLORS = ["#1bdd8d", "#22d3ee", "#facc15", "#fb923c", "#a855f7"];
+const PALETTE_LOADER_COLORS = ["#f1ce6e", "#58cdbd", "#a855f7", "#f472b6", "#7dd3fc"];
 
 const PaletteLoader = ({ label }) => (
   <div className="palette-loader" role="status" aria-live="polite">
@@ -218,17 +218,17 @@ const DOFUS_SURFACE_VALUES = [
 ];
 
 const DARK_ACCENT_VALUES = {
-  "--accent-primary-rgb": "139, 92, 246",
-  "--accent-strong-rgb": "168, 85, 247",
-  "--accent-soft-rgb": "192, 132, 252",
-  "--accent-glow-rgb": "123, 97, 255",
-  "--accent-contrast-rgb": "129, 140, 248",
-  "--accent-secondary-rgb": "56, 189, 248",
-  "--accent-tertiary-rgb": "59, 130, 246",
-  "--accent-quaternary-rgb": "96, 165, 250",
+  "--accent-primary-rgb": "241, 206, 110",
+  "--accent-strong-rgb": "222, 182, 72",
+  "--accent-soft-rgb": "255, 240, 198",
+  "--accent-glow-rgb": "250, 227, 152",
+  "--accent-contrast-rgb": "120, 92, 50",
+  "--accent-secondary-rgb": "88, 205, 189",
+  "--accent-tertiary-rgb": "45, 212, 191",
+  "--accent-quaternary-rgb": "125, 211, 252",
   "--accent-indigo-rgb": "99, 102, 241",
-  "--accent-sky-rgb": "14, 165, 233",
-  "--accent-cool-rgb": "129, 199, 255",
+  "--accent-sky-rgb": "125, 211, 252",
+  "--accent-cool-rgb": "202, 252, 249",
 };
 
 const LIGHT_ACCENT_VALUES = {
@@ -271,8 +271,8 @@ const STATIC_THEME_TOKENS = {
   [THEME_KEYS.DARK]: {
     ...buildSurfaceTokens(DARK_SURFACE_VALUES),
     "--surface-contrast-rgb": "30, 41, 59",
-    "--bg": "#050816",
-    "--bg-accent": "radial-gradient(circle at top right, rgba(var(--accent-glow-rgb), 0.18), transparent 55%), radial-gradient(circle at bottom left, rgba(var(--accent-sky-rgb), 0.16), transparent 50%), #050816",
+    "--bg": "#05070d",
+    "--bg-accent": "radial-gradient(circle at 12% 18%, rgba(var(--accent-primary-rgb), 0.16), transparent 55%), radial-gradient(circle at 82% 78%, rgba(var(--accent-secondary-rgb), 0.18), transparent 48%), #05070d",
     "--card": "rgba(var(--surface-8-rgb), 0.82)",
     "--card-border": "rgba(var(--text-muted-rgb), 0.18)",
     "--text": "#f8fafc",
@@ -281,8 +281,8 @@ const STATIC_THEME_TOKENS = {
     "--text-muted-rgb": "148, 163, 184",
     "--text-soft-rgb": "226, 232, 240",
     "--neutral-strong-rgb": "100, 116, 139",
-    "--highlight": "#8b5cf6",
-    "--highlight-strong": "#c084fc",
+    "--highlight": "#f1ce6e",
+    "--highlight-strong": "#58cdbd",
     "--shadow": "0 24px 48px -28px rgba(var(--surface-10-rgb), 0.95)",
     ...DARK_ACCENT_VALUES,
     "--success-rgb": "34, 197, 94",
@@ -492,7 +492,7 @@ function buildIntelligentThemeTokens(palette) {
   const surfaceTokens = { ...buildSurfaceTokens(surfaces.map((entry) => entry.rgb)) };
   const baseTokens = { ...fallback, ...surfaceTokens };
 
-  const backgroundHex = surfaces[0]?.hex ?? fallback["--bg"] ?? "#050816";
+  const backgroundHex = surfaces[0]?.hex ?? fallback["--bg"] ?? "#05070d";
   const secondaryAccentHex = accent.secondaryHex ?? secondaryHex;
   const glowAccentHex = accent.glowHex ?? accent.primaryHex ?? baseHex;
 
@@ -6930,6 +6930,16 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     return typeof raw === "string" ? raw.trim() : "";
   }, [t]);
 
+  const heroBadge = useMemo(() => {
+    const raw = t("brand.badge");
+    return typeof raw === "string" ? raw.trim() : "";
+  }, [t]);
+
+  const heroDescription = useMemo(() => {
+    const raw = t("brand.description");
+    return typeof raw === "string" ? raw.trim() : "";
+  }, [t]);
+
   const pageTitle = tagline ? `${BRAND_NAME} · ${tagline}` : BRAND_NAME;
 
   return (
@@ -6937,6 +6947,12 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       <Head>
         <title>{pageTitle}</title>
         <meta name="description" content={t("meta.description")} />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&display=swap"
+          rel="stylesheet"
+        />
       </Head>
       <main className="page">
         {showProgressBar ? (
@@ -6972,7 +6988,10 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           ) : null}
         </div>
         <header className="hero">
+          {heroBadge ? <span className="hero__badge">{heroBadge}</span> : null}
           <h1>{BRAND_NAME}</h1>
+          {tagline ? <p className="hero__subtitle">{tagline}</p> : null}
+          {heroDescription ? <p className="hero__description">{heroDescription}</p> : null}
         </header>
         <div className="preference-switchers">
           <div className="theme-switcher" role="radiogroup" aria-label={themeSelectorAria}>

@@ -1,8 +1,8 @@
 :root {
-  --bg: #050816;
-  --bg-accent: radial-gradient(circle at top right, rgba(var(--accent-glow-rgb), 0.18), transparent 55%),
-    radial-gradient(circle at bottom left, rgba(var(--accent-sky-rgb), 0.16), transparent 50%),
-    #050816;
+  --bg: #05070d;
+  --bg-accent: radial-gradient(circle at 12% 18%, rgba(var(--accent-primary-rgb), 0.16), transparent 55%),
+    radial-gradient(circle at 82% 78%, rgba(var(--accent-secondary-rgb), 0.18), transparent 48%),
+    #05070d;
   --surface-1-rgb: 5, 8, 22;
   --surface-2-rgb: 7, 12, 28;
   --surface-3-rgb: 8, 12, 26;
@@ -19,17 +19,17 @@
   --text-muted-rgb: 148, 163, 184;
   --text-soft-rgb: 226, 232, 240;
   --neutral-strong-rgb: 100, 116, 139;
-  --accent-primary-rgb: 139, 92, 246;
-  --accent-strong-rgb: 168, 85, 247;
-  --accent-soft-rgb: 192, 132, 252;
-  --accent-glow-rgb: 123, 97, 255;
-  --accent-contrast-rgb: 129, 140, 248;
-  --accent-secondary-rgb: 56, 189, 248;
-  --accent-tertiary-rgb: 59, 130, 246;
-  --accent-quaternary-rgb: 96, 165, 250;
+  --accent-primary-rgb: 241, 206, 110;
+  --accent-strong-rgb: 222, 182, 72;
+  --accent-soft-rgb: 255, 240, 198;
+  --accent-glow-rgb: 250, 227, 152;
+  --accent-contrast-rgb: 120, 92, 50;
+  --accent-secondary-rgb: 88, 205, 189;
+  --accent-tertiary-rgb: 45, 212, 191;
+  --accent-quaternary-rgb: 125, 211, 252;
   --accent-indigo-rgb: 99, 102, 241;
-  --accent-sky-rgb: 14, 165, 233;
-  --accent-cool-rgb: 129, 199, 255;
+  --accent-sky-rgb: 125, 211, 252;
+  --accent-cool-rgb: 202, 252, 249;
   --success-rgb: 34, 197, 94;
   --success-strong-rgb: 16, 185, 129;
   --success-soft-rgb: 45, 212, 191;
@@ -44,8 +44,8 @@
   --white-rgb: 255, 255, 255;
   --card: rgba(var(--surface-8-rgb), 0.82);
   --card-border: rgba(var(--text-muted-rgb), 0.18);
-  --highlight: #8b5cf6;
-  --highlight-strong: #c084fc;
+  --highlight: #f1ce6e;
+  --highlight-strong: #58cdbd;
   --text: #f8fafc;
   --text-muted: #94a3b8;
   --text-soft: rgba(var(--text-soft-rgb), 0.66);
@@ -53,7 +53,7 @@
   --radius-lg: 28px;
   --radius-md: 18px;
   --radius-sm: 12px;
-  font-family: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: "Manrope", "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 * {
@@ -263,14 +263,52 @@ a {
 
 .hero {
   text-align: center;
-  max-width: 640px;
-  margin-bottom: 0;
+  max-width: 720px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.hero__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(var(--surface-10-rgb), 0.35);
+  border: 1px solid rgba(var(--accent-primary-rgb), 0.32);
+  box-shadow: inset 0 1px 0 rgba(var(--white-rgb), 0.12);
+  font-size: 0.72rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(var(--text-soft-rgb), 0.86);
 }
 
 .hero h1 {
   margin: 0;
-  font-size: clamp(2.5rem, 5vw, 3.6rem);
-  letter-spacing: -0.045em;
+  font-family: "Playfair Display", "Cormorant Garamond", serif;
+  font-size: clamp(2.8rem, 5vw, 3.8rem);
+  letter-spacing: -0.035em;
+  font-weight: 600;
+}
+
+.hero__subtitle {
+  margin: 0;
+  font-family: "Playfair Display", "Cormorant Garamond", serif;
+  font-style: italic;
+  font-size: clamp(1.1rem, 2.4vw, 1.5rem);
+  color: rgba(var(--accent-soft-rgb), 0.95);
+  letter-spacing: 0.02em;
+}
+
+.hero__description {
+  margin: 0;
+  max-width: 520px;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: rgba(var(--text-soft-rgb), 0.86);
 }
 
 .language-switcher__option,
