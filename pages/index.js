@@ -5864,7 +5864,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   );
 
   const handleCopy = useCallback(async (value, options = {}) => {
-    const { swatch = null, toastKey = "toast.colorCopied" } = options;
+    const { swatch = null, toastKey = "toast.colorCopied", hideValue = false } = options;
     const fallbackCopy = (text) => {
       const textarea = document.createElement("textarea");
       textarea.value = text;
@@ -5898,7 +5898,12 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           : "";
       setError(null);
       setCopiedCode(value);
-      setToast({ id: Date.now(), label: toastLabel, value, swatch });
+      setToast({
+        id: Date.now(),
+        label: toastLabel,
+        value: hideValue ? null : value,
+        swatch,
+      });
     } catch (err) {
       console.error(err);
       try {
@@ -5913,7 +5918,12 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
             : "";
         setError(null);
         setCopiedCode(value);
-        setToast({ id: Date.now(), label: toastLabel, value, swatch });
+        setToast({
+          id: Date.now(),
+          label: toastLabel,
+          value: hideValue ? null : value,
+          swatch,
+        });
       } catch (fallbackErr) {
         console.error(fallbackErr);
         setError(t("errors.clipboard"));
@@ -5947,7 +5957,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       try {
         const shareUrl = new URL(window.location.href);
         shareUrl.searchParams.set("skin", encoded);
-        handleCopy(shareUrl.toString(), { toastKey: "toast.shareLinkCopied" });
+        handleCopy(shareUrl.toString(), { toastKey: "toast.shareLinkCopied", hideValue: true });
       } catch (err) {
         console.error(err);
         setError(t("errors.shareLink"));
@@ -6755,7 +6765,9 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                 <span className="toast__icon" aria-hidden="true">✓</span>
                 <div className="toast__body">
                   <span className="toast__title">{toast.label}</span>
-                  <span className="toast__value">{toast.value}</span>
+                  {toast.value ? (
+                    <span className="toast__value">{toast.value}</span>
+                  ) : null}
                 </div>
                 {toast.swatch ? (
                   <span
@@ -7736,9 +7748,14 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           disabled={downloadingPreviewId === proposal.id}
                                           aria-busy={downloadingPreviewId === proposal.id}
                                         >
-                                          {downloadingPreviewId === proposal.id
-                                            ? t("suggestions.render.downloading")
-                                            : t("suggestions.render.download")}
+                                          <span className="skin-card__cta-icon" aria-hidden="true">
+                                            <img src="/icons/download.svg" alt="" />
+                                          </span>
+                                          <span className="skin-card__cta-label">
+                                            {downloadingPreviewId === proposal.id
+                                              ? t("suggestions.render.downloading")
+                                              : t("suggestions.render.download")}
+                                          </span>
                                         </button>
                                       ) : lookLoading ? (
                                         <span className="skin-card__cta skin-card__cta--disabled">
@@ -7756,9 +7773,11 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           rel="noreferrer"
                                           className="skin-card__cta"
                                         >
-                                          {t("suggestions.render.link")}
-                                          <span aria-hidden="true" className="skin-card__cta-icon">
-                                            ↗
+                                          <span className="skin-card__cta-icon" aria-hidden="true">
+                                            <img src="/icons/barbofus.svg" alt="" />
+                                          </span>
+                                          <span className="skin-card__cta-label">
+                                            {t("suggestions.render.link")}
                                           </span>
                                         </a>
                                       ) : (
@@ -7772,7 +7791,12 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           className="skin-card__cta"
                                           onClick={() => handleShareSkin(proposal)}
                                         >
-                                          {t("suggestions.render.share")}
+                                          <span className="skin-card__cta-icon" aria-hidden="true">
+                                            <img src="/icons/copy.svg" alt="" />
+                                          </span>
+                                          <span className="skin-card__cta-label">
+                                            {t("suggestions.render.share")}
+                                          </span>
                                         </button>
                                       ) : (
                                         <span className="skin-card__cta skin-card__cta--disabled">
