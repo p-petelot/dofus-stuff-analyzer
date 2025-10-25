@@ -1001,31 +1001,46 @@ function buildSouffLink({
     return null;
   }
 
-  const params = new URLSearchParams();
-  params.set("breed", String(Math.trunc(classId)));
-  params.set("head", String(Math.trunc(faceId)));
-  params.set("sex", String(sex));
-  normalizedItems.forEach((id) => {
-    params.append("item_id", String(id));
-  });
-  normalizedColors.forEach((value) => {
-    params.append("colors", String(value));
-  });
+  const animationCode = Number.isFinite(animation)
+    ? Math.max(0, Math.trunc(animation))
+    : 0;
+  const directionCode = Number.isFinite(direction)
+    ? Math.max(0, Math.min(7, Math.trunc(direction)))
+    : 0;
 
-  if (Number.isFinite(animation)) {
-    params.set("animation", String(Math.max(0, Math.trunc(animation))));
-  }
+  const payload = [
+    Math.trunc(classId),
+    Math.trunc(faceId),
+    sex,
+    normalizedItems,
+    normalizedColors,
+    directionCode,
+    0,
+    [],
+    animationCode,
+  ];
 
-  if (Number.isFinite(direction)) {
-    params.set("direction", String(Math.max(0, Math.min(7, Math.trunc(direction)))));
-  }
-
-  const query = params.toString();
-  if (!query) {
+  const serialized = JSON.stringify(payload);
+  if (!serialized) {
     return null;
   }
 
-  return `${SKIN_SOUFF_BASE_URL}?${query}`;
+  let base64 = "";
+  if (typeof Buffer !== "undefined") {
+    base64 = Buffer.from(serialized, "utf8").toString("base64");
+  } else if (typeof btoa === "function") {
+    try {
+      base64 = btoa(serialized);
+    } catch (error) {
+      base64 = "";
+    }
+  }
+
+  if (!base64) {
+    return null;
+  }
+
+  return `${SKIN_SOUFF_BASE_URL}?look=${encodeURIComponent(base64)}`;
 }
 
 function normalizeBreedEntry(entry, options = {}) {
