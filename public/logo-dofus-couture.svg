@@ -1,0 +1,46 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="dc-glow" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#f4e8c9" stop-opacity="0.9" />
+      <stop offset="55%" stop-color="#e4d0a2" stop-opacity="0.65" />
+      <stop offset="100%" stop-color="#d2b678" stop-opacity="0.2" />
+    </radialGradient>
+    <linearGradient id="dc-gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f3dba3" />
+      <stop offset="50%" stop-color="#c19b4a" />
+      <stop offset="100%" stop-color="#9a7531" />
+    </linearGradient>
+  </defs>
+  <rect x="10" y="10" width="140" height="140" rx="28" fill="url(#dc-glow)" stroke="rgba(193,155,74,0.65)" stroke-width="2" />
+  <path
+    d="M54 52c16.8-15.6 49.2-13.9 59.8 8.8 5 10.9 3.8 24.4-4.5 34.7-8.6 10.6-23.1 15.7-40 13.2"
+    stroke="url(#dc-gold)"
+    stroke-width="7"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M52 108c-6.4-16.1 3.9-32 18.4-34.6 8.4-1.5 15.6 1.6 19.9 7.9"
+    stroke="#9a7531"
+    stroke-width="6"
+    stroke-linecap="round"
+  />
+  <path
+    d="M44 64c12.3 7.6 33.7 13.8 54.2 12.4 7.8-.5 18.3-2.9 24.4-6.3"
+    stroke="#c19b4a"
+    stroke-width="3"
+    stroke-linecap="round"
+    stroke-dasharray="4 6"
+    opacity="0.85"
+  />
+  <path
+    d="M68 124c12.4 6.2 35.9 3.3 47.4-9.2"
+    stroke="#b78b3f"
+    stroke-width="3.5"
+    stroke-linecap="round"
+    stroke-dasharray="2 6"
+    opacity="0.8"
+  />
+  <circle cx="62" cy="58" r="5.4" fill="#f7e9c8" stroke="#a47d2d" stroke-width="2" />
+  <circle cx="112" cy="94" r="4.8" fill="#f7e9c8" stroke="#a47d2d" stroke-width="2" />
+</svg>
