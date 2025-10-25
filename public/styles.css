@@ -104,11 +104,15 @@ a {
   position: absolute;
   top: 18px;
   left: 18px;
+  right: 18px;
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
   gap: 12px;
   z-index: 10;
+}
+
+.preference-switchers .language-switcher {
+  margin-left: auto;
 }
 
 .language-switcher,
@@ -139,6 +143,7 @@ a {
     position: static;
     width: 100%;
     margin: 12px 0 18px;
+    flex-direction: column;
     align-items: stretch;
     gap: 10px;
   }
@@ -152,6 +157,10 @@ a {
 
   .theme-switcher__label {
     display: none;
+  }
+
+  .preference-switchers .language-switcher {
+    margin-left: 0;
   }
 }
 
