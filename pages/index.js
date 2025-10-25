@@ -5863,6 +5863,64 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     [lookDirection, lookPreviews, t]
   );
 
+  const handleCopy = useCallback(async (value, options = {}) => {
+    const { swatch = null, toastKey = "toast.colorCopied" } = options;
+    const fallbackCopy = (text) => {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.top = "-1000px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    };
+
+    try {
+      if (
+        typeof navigator !== "undefined" &&
+        navigator.clipboard &&
+        typeof window !== "undefined" &&
+        window.isSecureContext
+      ) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        fallbackCopy(value);
+      }
+      const toastLabelRaw = t(toastKey);
+      const fallbackLabelRaw = t("toast.colorCopied");
+      const toastLabel =
+        typeof toastLabelRaw === "string" && toastLabelRaw.trim().length
+          ? toastLabelRaw
+          : typeof fallbackLabelRaw === "string" && fallbackLabelRaw.trim().length
+          ? fallbackLabelRaw
+          : "";
+      setError(null);
+      setCopiedCode(value);
+      setToast({ id: Date.now(), label: toastLabel, value, swatch });
+    } catch (err) {
+      console.error(err);
+      try {
+        fallbackCopy(value);
+        const toastLabelRaw = t(toastKey);
+        const fallbackLabelRaw = t("toast.colorCopied");
+        const toastLabel =
+          typeof toastLabelRaw === "string" && toastLabelRaw.trim().length
+            ? toastLabelRaw
+            : typeof fallbackLabelRaw === "string" && fallbackLabelRaw.trim().length
+            ? fallbackLabelRaw
+            : "";
+        setError(null);
+        setCopiedCode(value);
+        setToast({ id: Date.now(), label: toastLabel, value, swatch });
+      } catch (fallbackErr) {
+        console.error(fallbackErr);
+        setError(t("errors.clipboard"));
+      }
+    }
+  }, [t]);
+
   const handleShareSkin = useCallback(
     (proposal) => {
       if (!proposal) {
@@ -6648,64 +6706,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     setInputMode("color");
     setSelectedColor(hex.toUpperCase());
   }, []);
-
-  const handleCopy = useCallback(async (value, options = {}) => {
-    const { swatch = null, toastKey = "toast.colorCopied" } = options;
-    const fallbackCopy = (text) => {
-      const textarea = document.createElement("textarea");
-      textarea.value = text;
-      textarea.setAttribute("readonly", "");
-      textarea.style.position = "fixed";
-      textarea.style.top = "-1000px";
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
-    };
-
-    try {
-      if (
-        typeof navigator !== "undefined" &&
-        navigator.clipboard &&
-        typeof window !== "undefined" &&
-        window.isSecureContext
-      ) {
-        await navigator.clipboard.writeText(value);
-      } else {
-        fallbackCopy(value);
-      }
-      const toastLabelRaw = t(toastKey);
-      const fallbackLabelRaw = t("toast.colorCopied");
-      const toastLabel =
-        typeof toastLabelRaw === "string" && toastLabelRaw.trim().length
-          ? toastLabelRaw
-          : typeof fallbackLabelRaw === "string" && fallbackLabelRaw.trim().length
-          ? fallbackLabelRaw
-          : "";
-      setError(null);
-      setCopiedCode(value);
-      setToast({ id: Date.now(), label: toastLabel, value, swatch });
-    } catch (err) {
-      console.error(err);
-      try {
-        fallbackCopy(value);
-        const toastLabelRaw = t(toastKey);
-        const fallbackLabelRaw = t("toast.colorCopied");
-        const toastLabel =
-          typeof toastLabelRaw === "string" && toastLabelRaw.trim().length
-            ? toastLabelRaw
-            : typeof fallbackLabelRaw === "string" && fallbackLabelRaw.trim().length
-            ? fallbackLabelRaw
-            : "";
-        setError(null);
-        setCopiedCode(value);
-        setToast({ id: Date.now(), label: toastLabel, value, swatch });
-      } catch (fallbackErr) {
-        console.error(fallbackErr);
-        setError(t("errors.clipboard"));
-      }
-    }
-  }, [t]);
 
   const showProgressBar = isProcessing || analysisProgress > 0;
   const clampedProgress = Math.max(0, Math.min(analysisProgress, 100));
