@@ -152,7 +152,7 @@ const THEME_KEYS = Object.freeze({
 });
 
 const THEME_STORAGE_KEY = "krospalette.theme";
-const DEFAULT_THEME_KEY = THEME_KEYS.DARK;
+const DEFAULT_THEME_KEY = THEME_KEYS.LIGHT;
 
 const THEME_OPTIONS = [
   { key: THEME_KEYS.DARK, icon: "🌙", labelKey: "theme.option.dark" },
@@ -190,17 +190,17 @@ const DARK_SURFACE_VALUES = [
 ];
 
 const LIGHT_SURFACE_VALUES = [
-  "244, 247, 255",
-  "235, 240, 255",
-  "228, 235, 250",
-  "222, 230, 244",
-  "210, 220, 236",
-  "196, 206, 224",
-  "184, 195, 214",
-  "255, 255, 255",
-  "228, 236, 246",
-  "216, 226, 240",
-  "204, 214, 230",
+  "253, 251, 246",
+  "248, 244, 236",
+  "244, 239, 228",
+  "240, 234, 221",
+  "236, 229, 214",
+  "232, 224, 206",
+  "228, 219, 199",
+  "222, 212, 191",
+  "216, 205, 184",
+  "210, 198, 176",
+  "202, 188, 164",
 ];
 
 const DOFUS_SURFACE_VALUES = [
@@ -232,17 +232,17 @@ const DARK_ACCENT_VALUES = {
 };
 
 const LIGHT_ACCENT_VALUES = {
-  "--accent-primary-rgb": "37, 99, 235",
-  "--accent-strong-rgb": "29, 78, 216",
-  "--accent-soft-rgb": "147, 197, 253",
-  "--accent-glow-rgb": "96, 165, 250",
-  "--accent-contrast-rgb": "30, 64, 175",
-  "--accent-secondary-rgb": "14, 165, 233",
-  "--accent-tertiary-rgb": "2, 132, 199",
-  "--accent-quaternary-rgb": "56, 189, 248",
-  "--accent-indigo-rgb": "79, 70, 229",
-  "--accent-sky-rgb": "14, 165, 233",
-  "--accent-cool-rgb": "125, 211, 252",
+  "--accent-primary-rgb": "193, 155, 74",
+  "--accent-strong-rgb": "164, 125, 45",
+  "--accent-soft-rgb": "227, 198, 118",
+  "--accent-glow-rgb": "241, 213, 145",
+  "--accent-contrast-rgb": "104, 83, 34",
+  "--accent-secondary-rgb": "190, 170, 140",
+  "--accent-tertiary-rgb": "150, 134, 109",
+  "--accent-quaternary-rgb": "212, 193, 164",
+  "--accent-indigo-rgb": "118, 104, 95",
+  "--accent-sky-rgb": "196, 186, 166",
+  "--accent-cool-rgb": "213, 202, 188",
 };
 
 const DOFUS_ACCENT_VALUES = {
@@ -270,6 +270,7 @@ function buildSurfaceTokens(values, fallbackValues = DARK_SURFACE_VALUES) {
 const STATIC_THEME_TOKENS = {
   [THEME_KEYS.DARK]: {
     ...buildSurfaceTokens(DARK_SURFACE_VALUES),
+    "color-scheme": "dark",
     "--surface-contrast-rgb": "30, 41, 59",
     "--bg": "#050816",
     "--bg-accent": "radial-gradient(circle at top right, rgba(var(--accent-glow-rgb), 0.18), transparent 55%), radial-gradient(circle at bottom left, rgba(var(--accent-sky-rgb), 0.16), transparent 50%), #050816",
@@ -300,36 +301,38 @@ const STATIC_THEME_TOKENS = {
   },
   [THEME_KEYS.LIGHT]: {
     ...buildSurfaceTokens(LIGHT_SURFACE_VALUES),
-    "--surface-contrast-rgb": "30, 41, 59",
-    "--bg": "#f4f6fb",
-    "--bg-accent": "radial-gradient(circle at top right, rgba(var(--accent-cool-rgb), 0.22), transparent 55%), radial-gradient(circle at bottom left, rgba(var(--accent-secondary-rgb), 0.18), transparent 45%), #f4f6fb",
+    "color-scheme": "light",
+    "--surface-contrast-rgb": "68, 60, 49",
+    "--bg": "#fdfbf6",
+    "--bg-accent": "radial-gradient(circle at top right, rgba(var(--accent-glow-rgb), 0.28), transparent 52%), radial-gradient(circle at bottom left, rgba(var(--accent-primary-rgb), 0.18), transparent 58%), #fdfbf6",
     "--card": "rgba(var(--surface-8-rgb), 0.92)",
-    "--card-border": "rgba(var(--text-muted-rgb), 0.22)",
-    "--text": "#0f172a",
-    "--text-muted": "#475569",
-    "--text-rgb": "15, 23, 42",
-    "--text-muted-rgb": "71, 85, 105",
-    "--text-soft-rgb": "100, 116, 139",
-    "--neutral-strong-rgb": "120, 135, 152",
-    "--highlight": "#2563eb",
-    "--highlight-strong": "#1d4ed8",
-    "--shadow": "0 20px 38px -26px rgba(var(--surface-contrast-rgb), 0.25)",
+    "--card-border": "rgba(var(--accent-primary-rgb), 0.22)",
+    "--text": "#120f0b",
+    "--text-muted": "#6b5c47",
+    "--text-rgb": "18, 16, 11",
+    "--text-muted-rgb": "102, 90, 72",
+    "--text-soft-rgb": "160, 147, 126",
+    "--neutral-strong-rgb": "143, 130, 109",
+    "--highlight": "#c19b4a",
+    "--highlight-strong": "#a47d2d",
+    "--shadow": "0 32px 46px -36px rgba(var(--accent-contrast-rgb), 0.34)",
     ...LIGHT_ACCENT_VALUES,
     "--success-rgb": "34, 197, 94",
     "--success-strong-rgb": "16, 185, 129",
     "--success-soft-rgb": "45, 212, 191",
     "--success-pale-rgb": "134, 239, 172",
     "--warning-rgb": "245, 158, 11",
-    "--warning-strong-rgb": "250, 204, 21",
+    "--warning-strong-rgb": "210, 134, 16",
     "--warning-soft-rgb": "234, 179, 8",
-    "--danger-rgb": "248, 113, 113",
-    "--danger-strong-rgb": "239, 68, 68",
+    "--danger-rgb": "217, 101, 101",
+    "--danger-strong-rgb": "185, 55, 55",
     "--danger-dark-rgb": "127, 29, 29",
-    "--frost-rgb": "223, 232, 255",
+    "--frost-rgb": "244, 241, 235",
     "--white-rgb": "255, 255, 255",
   },
   [THEME_KEYS.DOFUS]: {
     ...buildSurfaceTokens(DOFUS_SURFACE_VALUES),
+    "color-scheme": "dark",
     "--surface-contrast-rgb": "30, 44, 36",
     "--bg": "#04160f",
     "--bg-accent": "radial-gradient(circle at top right, rgba(var(--accent-primary-rgb), 0.2), transparent 55%), radial-gradient(circle at bottom left, rgba(var(--accent-strong-rgb), 0.18), transparent 50%), #04160f",
@@ -513,6 +516,13 @@ function buildIntelligentThemeTokens(palette) {
     secondaryAccentHex ?? backgroundHex,
     0.18
   )}, transparent 50%), ${backgroundHex}`;
+  const backgroundRgb = hexToRgb(backgroundHex);
+  if (backgroundRgb) {
+    const bgLuminance = 0.299 * backgroundRgb.r + 0.587 * backgroundRgb.g + 0.114 * backgroundRgb.b;
+    baseTokens["color-scheme"] = bgLuminance > 160 ? "light" : "dark";
+  } else {
+    baseTokens["color-scheme"] = "light";
+  }
   baseTokens["--card"] = cardSurface ? `rgba(${cardSurface.rgb}, 0.85)` : fallback["--card"];
   baseTokens["--card-border"] = textMutedRgb
     ? `rgba(${textMutedRgb.r}, ${textMutedRgb.g}, ${textMutedRgb.b}, 0.26)`
@@ -1396,7 +1406,7 @@ function normalizeDofusItem(rawItem, type, options = {}) {
   };
 }
 
-const BRAND_NAME = "KrosPalette";
+const BRAND_NAME = "Dofus Couture";
 const MAX_COLORS = 6;
 const MAX_DIMENSION = 280;
 const BUCKET_SIZE = 24;
@@ -6922,12 +6932,33 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
 
   const getTextColor = useCallback((color) => {
     const luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
-    return luminance > 155 ? "rgba(15, 23, 42, 0.9)" : "#f8fafc";
+    return luminance > 155 ? "rgba(18, 16, 11, 0.9)" : "#fdfbf6";
   }, []);
 
   const tagline = useMemo(() => {
     const raw = t("brand.tagline");
     return typeof raw === "string" ? raw.trim() : "";
+  }, [t]);
+
+  const heroSubtitle = useMemo(() => {
+    const raw = t("brand.subtitle");
+    return typeof raw === "string" ? raw.trim() : "";
+  }, [t]);
+
+  const heroDescription = useMemo(() => {
+    const raw = t("brand.description");
+    return typeof raw === "string" ? raw.trim() : "";
+  }, [t]);
+
+  const heroExamples = useMemo(() => {
+    const raw = t("brand.examples");
+    if (typeof raw !== "string") {
+      return [];
+    }
+    return raw
+      .split("|")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
   }, [t]);
 
   const pageTitle = tagline ? `${BRAND_NAME} · ${tagline}` : BRAND_NAME;
@@ -6937,6 +6968,12 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       <Head>
         <title>{pageTitle}</title>
         <meta name="description" content={t("meta.description")} />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@400;600;700&display=swap"
+        />
       </Head>
       <main className="page">
         {showProgressBar ? (
@@ -6972,7 +7009,27 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           ) : null}
         </div>
         <header className="hero">
-          <h1>{BRAND_NAME}</h1>
+          <div className="hero__brand">
+            {tagline ? <span className="hero__tagline">{tagline}</span> : null}
+            <img
+              className="hero__logo"
+              src="/logo-dofus-couture.svg"
+              alt={BRAND_NAME}
+              width="160"
+              height="160"
+              decoding="async"
+            />
+            <h1 className="hero__title">{BRAND_NAME}</h1>
+          </div>
+          {heroSubtitle ? <p className="hero__subtitle">{heroSubtitle}</p> : null}
+          {heroDescription ? <p className="hero__description">{heroDescription}</p> : null}
+          {heroExamples.length ? (
+            <ul className="hero__examples">
+              {heroExamples.map((example) => (
+                <li key={example}>{example}</li>
+              ))}
+            </ul>
+          ) : null}
         </header>
         <div className="preference-switchers">
           <div className="theme-switcher" role="radiogroup" aria-label={themeSelectorAria}>

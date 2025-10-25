@@ -60,9 +60,13 @@ const LANGUAGE_VARIANT_KEYS = {
 
 const TRANSLATIONS = {
   fr: {
-    "brand.tagline": "",
+    "brand.tagline": "Les plus grands tailleurs sont à Astrub.",
+    "brand.subtitle": "La haute couture rencontre les ateliers d’Astrub.",
+    "brand.description": "Un lieu où les aventuriers ne forment pas des panoplies, mais des collections.",
+    "brand.examples":
+      "Découvrez la Collection Printemps Frigost.|Un Iop, une coiffe, une vision.|L’élégance n’a jamais coûté aussi peu de kamas.|La mode, c’est aussi un bonus de charisme.",
     "meta.description":
-      "KrosPalette extrait les couleurs dominantes de tes images pour composer des skins Dofus harmonieux.",
+      "Dofus Couture imagine des collections sur mesure en extrayant les couleurs de tes inspirations pour sublimer tes skins.",
     "theme.selectorAria": "Sélection du thème",
     "theme.option.dark": "Sombre",
     "theme.option.light": "Clair",
@@ -92,7 +96,7 @@ const TRANSLATIONS = {
     "palette.skin.default": "Peau par défaut",
     "palette.skin.custom": "Peau personnalisée",
     "palette.empty":
-      "Glisse un visuel ou sélectionne une couleur d'ambiance : KrosPalette s'occupe de générer automatiquement une palette harmonieuse.",
+      "Glisse un visuel ou sélectionne une couleur d'ambiance : Dofus Couture se charge de dérouler une palette harmonieuse sur mesure.",
     "identity.groupLabel": "Configuration du personnage Dofus",
     "identity.gender.sectionTitle": "Choix de la classe et du sexe",
     "identity.gender.groupLabel": "Sexe du personnage",
@@ -264,9 +268,13 @@ const TRANSLATIONS = {
     "aria.closeItemPanel": "Fermer la sélection d'objets",
   },
   en: {
-    "brand.tagline": "Dofus skin studio",
+    "brand.tagline": "The finest tailors reside in Astrub.",
+    "brand.subtitle": "Haute couture meets the workshops of Astrub.",
+    "brand.description": "A house where adventurers craft couture collections instead of mere sets.",
+    "brand.examples":
+      "Explore the Frigost Spring Collection.|One Iop, one headpiece, one vision.|Elegance has never cost so few kamas.|Fashion is just another charisma buff.",
     "meta.description":
-      "KrosPalette extracts the dominant colors from your images to craft harmonious Dofus outfits.",
+      "Dofus Couture distills the colors of your inspirations to compose refined Dofus skins.",
     "theme.selectorAria": "Theme selection",
     "theme.option.dark": "Dark",
     "theme.option.light": "Light",
@@ -296,7 +304,7 @@ const TRANSLATIONS = {
     "palette.skin.default": "Default skin",
     "palette.skin.custom": "Custom skin",
     "palette.empty":
-      "Drop an image or choose a vibe color — KrosPalette automatically builds a harmonious palette.",
+      "Drop an image or choose a vibe color — Dofus Couture will weave a harmonious palette for you.",
     "identity.groupLabel": "Dofus character setup",
     "identity.gender.sectionTitle": "Class and gender selection",
     "identity.gender.groupLabel": "Character gender",
@@ -466,9 +474,13 @@ const TRANSLATIONS = {
     "aria.closeItemPanel": "Close item selection",
   },
   es: {
-    "brand.tagline": "Estudio de skins de Dofus",
+    "brand.tagline": "Los mejores sastres viven en Astrub.",
+    "brand.subtitle": "La alta costura se encuentra con los talleres de Astrub.",
+    "brand.description": "Un espacio donde los aventureros crean colecciones, no simples panoplias.",
+    "brand.examples":
+      "Descubre la Colección Primavera de Frigost.|Un yopuka, un tocado, una visión.|La elegancia nunca costó tan pocos kamas.|La moda también es un bonus de carisma.",
     "meta.description":
-      "KrosPalette extrae los colores dominantes de tus imágenes para crear conjuntos de Dofus armoniosos.",
+      "Dofus Couture destila los colores de tus inspiraciones para diseñar conjuntos refinados de Dofus.",
     "theme.selectorAria": "Selección de tema",
     "theme.option.dark": "Oscuro",
     "theme.option.light": "Claro",
@@ -498,7 +510,7 @@ const TRANSLATIONS = {
     "palette.skin.default": "Piel predeterminada",
     "palette.skin.custom": "Piel personalizada",
     "palette.empty":
-      "Suelta una imagen o elige un color ambiental: KrosPalette genera automáticamente una paleta armoniosa.",
+      "Suelta una imagen o elige un color ambiental: Dofus Couture teje automáticamente una paleta armoniosa.",
     "identity.groupLabel": "Configuración del personaje de Dofus",
     "identity.gender.sectionTitle": "Selección de clase y género",
     "identity.gender.groupLabel": "Género del personaje",
@@ -668,9 +680,13 @@ const TRANSLATIONS = {
     "aria.closeItemPanel": "Cerrar la selección de objetos",
   },
   de: {
-    "brand.tagline": "Dofus-Skin-Studio",
+    "brand.tagline": "Die besten Schneider arbeiten in Astrub.",
+    "brand.subtitle": "Haute Couture trifft die Werkstätten von Astrub.",
+    "brand.description": "Ein Atelier, in dem Abenteurer keine Sets, sondern Kollektionen entwerfen.",
+    "brand.examples":
+      "Entdecke die Frigost-Frühjahrskollektion.|Ein Iop, ein Kopfschmuck, eine Vision.|Eleganz hat noch nie so wenige Kamas gekostet.|Mode ist auch ein Bonus auf Charisma.",
     "meta.description":
-      "KrosPalette extrahiert die dominanten Farben deiner Bilder und erstellt harmonische Dofus-Outfits.",
+      "Dofus Couture extrahiert die Farben deiner Inspirationen, um edle Dofus-Skins zu komponieren.",
     "theme.selectorAria": "Theme-Auswahl",
     "theme.option.dark": "Dunkel",
     "theme.option.light": "Hell",
@@ -700,7 +716,7 @@ const TRANSLATIONS = {
     "palette.skin.default": "Standard-Hautton",
     "palette.skin.custom": "Eigener Hautton",
     "palette.empty":
-      "Zieh ein Bild hierher oder wähle eine Stimmungfarbe – KrosPalette erstellt automatisch eine harmonische Palette.",
+      "Zieh ein Bild hierher oder wähle eine Stimmungsfarbe – Dofus Couture webt automatisch eine harmonische Palette.",
     "identity.groupLabel": "Dofus-Charakterkonfiguration",
     "identity.gender.sectionTitle": "Klassen- und Geschlechtswahl",
     "identity.gender.groupLabel": "Geschlecht des Charakters",
@@ -871,9 +887,13 @@ const TRANSLATIONS = {
     "aria.closeItemPanel": "Gegenstandsauswahl schließen",
   },
   pt: {
-    "brand.tagline": "Estúdio de skins de Dofus",
+    "brand.tagline": "Os maiores alfaiates estão em Astrub.",
+    "brand.subtitle": "A alta-costura encontra os ateliês de Astrub.",
+    "brand.description": "Um espaço onde aventureiros criam coleções em vez de panóplias.",
+    "brand.examples":
+      "Descubra a Coleção Primavera de Frigost.|Um Iop, um elmo, uma visão.|A elegância nunca custou tão poucos kamas.|Moda também é um bônus de carisma.",
     "meta.description":
-      "KrosPalette extrai as cores dominantes das suas imagens para criar visuais harmoniosos de Dofus.",
+      "A Dofus Couture captura as cores das suas referências para compor skins refinados de Dofus.",
     "theme.selectorAria": "Seleção de tema",
     "theme.option.dark": "Escuro",
     "theme.option.light": "Claro",
@@ -903,7 +923,7 @@ const TRANSLATIONS = {
     "palette.skin.default": "Pele padrão",
     "palette.skin.custom": "Pele personalizada",
     "palette.empty":
-      "Solte uma imagem ou escolha uma cor de ambiente — a KrosPalette gera automaticamente uma paleta harmoniosa.",
+      "Solte uma imagem ou escolha uma cor de ambiente — a Dofus Couture tece automaticamente uma paleta harmoniosa.",
     "identity.groupLabel": "Configuração do personagem de Dofus",
     "identity.gender.sectionTitle": "Escolha da classe e do gênero",
     "identity.gender.groupLabel": "Gênero do personagem",

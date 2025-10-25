@@ -1,6 +1,6 @@
-# KrosPalette
+# Dofus Couture
 
-KrosPalette est un studio de palettes pour les créateurs de skins Dofus. Dépose, colle ou importe une image de référence et l'application extrait instantanément les couleurs dominantes pour guider tes compositions.
+Dofus Couture est une maison de direction artistique pour les créateurs de skins Dofus. Dépose, colle ou importe une image de référence et l'application extrait instantanément les couleurs dominantes pour imaginer des collections harmonieuses.
 
 ## Lancer le projet
 
