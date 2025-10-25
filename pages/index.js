@@ -1534,9 +1534,29 @@ const BARBOFUS_DEFAULT_BREED = Object.freeze({
 });
 
 const LZ_KEY_STR_URI_SAFE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-$";
+const LZ_BASE_REVERSE_DICTIONARY = Object.create(null);
 
 function getUriSafeCharFromInt(value) {
   return LZ_KEY_STR_URI_SAFE.charAt(value);
+}
+
+function getUriSafeValueFromChar(character) {
+  if (!character) {
+    return 0;
+  }
+  const cacheKey = LZ_KEY_STR_URI_SAFE;
+  if (!Object.prototype.hasOwnProperty.call(LZ_BASE_REVERSE_DICTIONARY, cacheKey)) {
+    const map = Object.create(null);
+    for (let index = 0; index < LZ_KEY_STR_URI_SAFE.length; index += 1) {
+      map[LZ_KEY_STR_URI_SAFE.charAt(index)] = index;
+    }
+    LZ_BASE_REVERSE_DICTIONARY[cacheKey] = map;
+  }
+  const dictionary = LZ_BASE_REVERSE_DICTIONARY[cacheKey];
+  if (!Object.prototype.hasOwnProperty.call(dictionary, character)) {
+    return 0;
+  }
+  return dictionary[character];
 }
 
 function SkinCardPreviewComparison({
@@ -1890,11 +1910,352 @@ function _compress(uncompressed, bitsPerChar, getCharFromInt) {
   return data.join("");
 }
 
+function _decompress(length, resetValue, getNextValue) {
+  if (length === 0) {
+    return "";
+  }
+
+  const dictionary = [];
+  let enlargeIn = 4;
+  let dictSize = 4;
+  let numBits = 3;
+  let entry = "";
+  const result = [];
+  let w;
+  let bits;
+  let resb;
+  let maxpower;
+  let power;
+  let c;
+  const data = {
+    value: getNextValue(0),
+    position: resetValue,
+    index: 1,
+  };
+
+  const readBits = (bitCount) => {
+    let bitsValue = 0;
+    let max = 1 << bitCount;
+    let bitPower = 1;
+    while (bitPower !== max) {
+      resb = data.value & data.position;
+      data.position >>= 1;
+      if (data.position === 0) {
+        data.position = resetValue;
+        data.value = getNextValue(data.index);
+        data.index += 1;
+      }
+      bitsValue |= (resb > 0 ? 1 : 0) * bitPower;
+      bitPower <<= 1;
+    }
+    return bitsValue;
+  };
+
+  for (let i = 0; i < 3; i += 1) {
+    dictionary[i] = i;
+  }
+
+  bits = readBits(2);
+  switch (bits) {
+    case 0:
+      c = String.fromCharCode(readBits(8));
+      break;
+    case 1:
+      c = String.fromCharCode(readBits(16));
+      break;
+    case 2:
+    default:
+      return "";
+  }
+
+  dictionary[3] = c;
+  w = c;
+  result.push(c);
+
+  while (true) {
+    if (data.index > length) {
+      return result.join("");
+    }
+
+    bits = readBits(numBits);
+
+    switch (bits) {
+      case 0:
+        dictionary[dictSize] = String.fromCharCode(readBits(8));
+        dictSize += 1;
+        c = dictSize - 1;
+        enlargeIn -= 1;
+        break;
+      case 1:
+        dictionary[dictSize] = String.fromCharCode(readBits(16));
+        dictSize += 1;
+        c = dictSize - 1;
+        enlargeIn -= 1;
+        break;
+      case 2:
+        return result.join("");
+      default:
+        c = bits;
+        break;
+    }
+
+    if (enlargeIn === 0) {
+      enlargeIn = 1 << numBits;
+      numBits += 1;
+    }
+
+    if (dictionary[c]) {
+      entry = dictionary[c];
+    } else if (c === dictSize) {
+      entry = w + w.charAt(0);
+    } else {
+      return result.join("");
+    }
+
+    result.push(entry);
+    dictionary[dictSize] = w + entry.charAt(0);
+    dictSize += 1;
+    enlargeIn -= 1;
+    w = entry;
+
+    if (enlargeIn === 0) {
+      enlargeIn = 1 << numBits;
+      numBits += 1;
+    }
+  }
+}
+
 function compressToEncodedURIComponent(input) {
   if (input == null) {
     return "";
   }
   return _compress(input, 6, getUriSafeCharFromInt);
+}
+
+function decompressFromEncodedURIComponent(input) {
+  if (input == null) {
+    return "";
+  }
+  const normalized = String(input).replace(/ /g, "+");
+  return _decompress(normalized.length, 32, (index) =>
+    getUriSafeValueFromChar(normalized.charAt(index))
+  );
+}
+
+const SKIN_SHARE_VERSION = 1;
+
+function buildSkinShareDescriptor(proposal, options = {}) {
+  if (!proposal || !Number.isFinite(proposal.classId)) {
+    return null;
+  }
+
+  const { useCustomSkinTone = false, referenceColors = [] } = options;
+
+  const gender = proposal.lookGender === "f" ? "f" : "m";
+  const lookColors = Array.isArray(proposal.lookColors)
+    ? proposal.lookColors
+        .map((value) => {
+          const numeric = Number(value);
+          return Number.isFinite(numeric) ? Math.trunc(numeric) : null;
+        })
+        .filter((value) => value !== null)
+    : [];
+
+  if (!lookColors.length) {
+    return null;
+  }
+
+  const itemDescriptors = {};
+  let hasItems = false;
+
+  if (Array.isArray(proposal.items)) {
+    proposal.items.forEach((item) => {
+      if (!item || !item.slotType) {
+        return;
+      }
+      const entry = {};
+      if (Number.isFinite(item.ankamaId)) {
+        entry.a = Math.trunc(item.ankamaId);
+      }
+      if (item.id) {
+        entry.i = item.id;
+      }
+      if (!Object.keys(entry).length) {
+        return;
+      }
+      itemDescriptors[item.slotType] = entry;
+      hasItems = true;
+    });
+  }
+
+  if (!hasItems) {
+    return null;
+  }
+
+  const descriptor = {
+    v: SKIN_SHARE_VERSION,
+    c: Math.trunc(proposal.classId),
+    g: gender,
+    o: lookColors,
+    i: itemDescriptors,
+    u: useCustomSkinTone ? 1 : 0,
+  };
+
+  if (Number.isFinite(proposal.lookFaceId)) {
+    descriptor.f = Math.trunc(proposal.lookFaceId);
+  }
+  if (Number.isFinite(proposal.lookAnimation)) {
+    descriptor.a = Math.trunc(proposal.lookAnimation);
+  }
+  if (Number.isFinite(proposal.lookDirection)) {
+    descriptor.d = normalizeLookDirection(proposal.lookDirection);
+  }
+
+  const palette = Array.isArray(proposal.palette)
+    ? proposal.palette.map((hex) => normalizeColorToHex(hex)).filter(Boolean)
+    : [];
+  if (palette.length) {
+    descriptor.p = palette;
+  }
+
+  const referencePalette = Array.isArray(referenceColors)
+    ? referenceColors.map((hex) => normalizeColorToHex(hex)).filter(Boolean)
+    : [];
+  if (referencePalette.length) {
+    descriptor.r = referencePalette;
+  }
+
+  return descriptor;
+}
+
+function encodeSkinShareDescriptor(descriptor) {
+  if (!descriptor) {
+    return null;
+  }
+  try {
+    const payload = JSON.stringify(descriptor);
+    const encoded = compressToEncodedURIComponent(payload);
+    return encoded || null;
+  } catch (err) {
+    console.error(err);
+    return null;
+  }
+}
+
+function decodeSkinShareDescriptor(encoded) {
+  if (typeof encoded !== "string" || !encoded.trim()) {
+    return null;
+  }
+
+  try {
+    const decompressed = decompressFromEncodedURIComponent(encoded.trim());
+    if (!decompressed) {
+      return null;
+    }
+
+    const raw = JSON.parse(decompressed);
+    if (!raw || typeof raw !== "object") {
+      return null;
+    }
+
+    const version = Number(raw.v ?? SKIN_SHARE_VERSION);
+    if (!Number.isFinite(version) || version < 1 || version > SKIN_SHARE_VERSION) {
+      return null;
+    }
+
+    const classId = Number(raw.c);
+    if (!Number.isFinite(classId)) {
+      return null;
+    }
+
+    const rawColors = Array.isArray(raw.o) ? raw.o : [];
+    const lookColors = rawColors
+      .map((value) => {
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? Math.trunc(numeric) : null;
+      })
+      .filter((value) => value !== null);
+
+    if (!lookColors.length) {
+      return null;
+    }
+
+    const rawItems = raw.i && typeof raw.i === "object" ? raw.i : {};
+    const items = {};
+    Object.entries(rawItems).forEach(([slot, descriptor]) => {
+      if (!ITEM_TYPES.includes(slot)) {
+        return;
+      }
+      if (!descriptor || typeof descriptor !== "object") {
+        return;
+      }
+      const entry = {};
+      const ankamaId = Number(descriptor.a);
+      if (Number.isFinite(ankamaId)) {
+        entry.a = Math.trunc(ankamaId);
+      }
+      if (descriptor.i !== undefined && descriptor.i !== null) {
+        if (typeof descriptor.i === "string" && descriptor.i.trim()) {
+          entry.i = descriptor.i.trim();
+        } else {
+          const numericId = Number(descriptor.i);
+          if (Number.isFinite(numericId)) {
+            entry.i = Math.trunc(numericId);
+          }
+        }
+      }
+      if (Object.keys(entry).length) {
+        items[slot] = entry;
+      }
+    });
+
+    if (!Object.keys(items).length) {
+      return null;
+    }
+
+    const descriptor = {
+      version: Math.trunc(version),
+      classId: Math.trunc(classId),
+      gender: raw.g === "f" ? "f" : "m",
+      lookColors,
+      items,
+    };
+
+    if (Number.isFinite(raw.f)) {
+      descriptor.faceId = Math.trunc(raw.f);
+    }
+    if (Number.isFinite(raw.a)) {
+      descriptor.animation = Math.trunc(raw.a);
+    }
+    if (Number.isFinite(raw.d)) {
+      descriptor.direction = normalizeLookDirection(raw.d);
+    }
+
+    const palette = Array.isArray(raw.p)
+      ? raw.p.map((hex) => normalizeColorToHex(hex)).filter(Boolean)
+      : [];
+    if (palette.length) {
+      descriptor.palette = palette;
+    }
+
+    const referencePalette = Array.isArray(raw.r)
+      ? raw.r.map((hex) => normalizeColorToHex(hex)).filter(Boolean)
+      : [];
+    if (referencePalette.length) {
+      descriptor.referenceColors = referencePalette;
+    }
+
+    if (raw.u === 1 || raw.u === true || raw.u === "1") {
+      descriptor.useCustomSkinTone = true;
+    } else if (raw.u === 0 || raw.u === false || raw.u === "0") {
+      descriptor.useCustomSkinTone = false;
+    }
+
+    return descriptor;
+  } catch (err) {
+    console.error(err);
+    return null;
+  }
 }
 function hexToNumeric(hex) {
   const normalized = normalizeColorToHex(hex);
@@ -3423,6 +3784,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const [lookPreviews, setLookPreviews] = useState({});
   const lookPreviewsRef = useRef({});
   const lookPreviewRequestsRef = useRef(new Map());
+  const appliedShareTokenRef = useRef(null);
+  const pendingSharedItemsRef = useRef(null);
   const directionDragStateRef = useRef({
     active: false,
     pointerId: null,
@@ -3937,6 +4300,129 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     return values;
   }, [colors]);
 
+  const getShareDescriptor = useCallback(
+    (proposal) =>
+      buildSkinShareDescriptor(proposal, {
+        useCustomSkinTone,
+        referenceColors: colors,
+      }),
+    [useCustomSkinTone, colors]
+  );
+
+  const applySharedSkin = useCallback(
+    (descriptor) => {
+      if (!descriptor) {
+        return;
+      }
+
+      if (Number.isFinite(descriptor.classId)) {
+        setSelectedBreedId(descriptor.classId);
+      }
+
+      if (descriptor.gender === "f" || descriptor.gender === "m") {
+        setSelectedGender(descriptor.gender === "f" ? "female" : "male");
+      }
+
+      if (descriptor.useCustomSkinTone !== undefined) {
+        setUseCustomSkinTone(Boolean(descriptor.useCustomSkinTone));
+      }
+
+      const referencePalette = Array.isArray(descriptor.referenceColors)
+        ? descriptor.referenceColors.map((hex) => normalizeColorToHex(hex)).filter(Boolean)
+        : [];
+      const palette = referencePalette.length
+        ? referencePalette
+        : Array.isArray(descriptor.palette)
+        ? descriptor.palette.map((hex) => normalizeColorToHex(hex)).filter(Boolean)
+        : [];
+      const fallbackPalette =
+        !palette.length && Array.isArray(descriptor.lookColors)
+          ? descriptor.lookColors
+              .map((value) => normalizeColorToHex(value))
+              .filter((hex) => typeof hex === "string" && hex.length)
+          : [];
+      const resolvedPalette = palette.length ? palette : fallbackPalette;
+
+      if (resolvedPalette.length) {
+        const paletteObjects = resolvedPalette
+          .map((value) => {
+            const normalizedHex = normalizeColorToHex(value);
+            if (!normalizedHex) {
+              return null;
+            }
+            const rgb = hexToRgb(normalizedHex);
+            if (!rgb) {
+              return null;
+            }
+            return {
+              hex: normalizedHex,
+              rgb: `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`,
+              r: rgb.r,
+              g: rgb.g,
+              b: rgb.b,
+              weight: 1,
+            };
+          })
+          .filter(Boolean);
+
+        if (paletteObjects.length) {
+          setInputMode("color");
+          setSelectedColor(paletteObjects[0].hex);
+          setColors(paletteObjects);
+        }
+      }
+
+      if (Number.isFinite(descriptor.animation)) {
+        setLookAnimation(descriptor.animation);
+      }
+
+      if (Number.isFinite(descriptor.direction)) {
+        setLookDirection(normalizeLookDirection(descriptor.direction));
+      }
+
+      if (descriptor.items && typeof descriptor.items === "object") {
+        const requiredOptionalSlots = {};
+        OPTIONAL_ITEM_TYPES.forEach((slot) => {
+          if (descriptor.items[slot]) {
+            requiredOptionalSlots[slot] = true;
+          }
+        });
+
+        if (Object.keys(requiredOptionalSlots).length) {
+          setItemSlotFilters((previous = {}) => {
+            let changed = false;
+            const next = { ...previous };
+            Object.entries(requiredOptionalSlots).forEach(([slot]) => {
+              if (next[slot] === false) {
+                next[slot] = true;
+                changed = true;
+              }
+            });
+            return changed ? next : previous;
+          });
+        }
+
+        pendingSharedItemsRef.current = { ...descriptor.items };
+      } else {
+        pendingSharedItemsRef.current = null;
+      }
+
+      setActiveProposal(0);
+    },
+    [
+      setSelectedBreedId,
+      setSelectedGender,
+      setUseCustomSkinTone,
+      setInputMode,
+      setSelectedColor,
+      setColors,
+      setLookAnimation,
+      setLookDirection,
+      setItemSlotFilters,
+      setActiveProposal,
+    ]
+  );
+
   const loadBreeds = useCallback(async () => {
     if (typeof fetch !== "function") {
       return;
@@ -4056,6 +4542,34 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   useEffect(() => {
     setShowDetailedMatches(false);
   }, [colors]);
+
+  useEffect(() => {
+    if (!router?.isReady) {
+      return;
+    }
+
+    const rawSkin = router?.query?.skin;
+    const token = Array.isArray(rawSkin) ? rawSkin[0] : rawSkin;
+
+    if (!token) {
+      appliedShareTokenRef.current = null;
+      return;
+    }
+
+    if (appliedShareTokenRef.current === token) {
+      return;
+    }
+
+    const descriptor = decodeSkinShareDescriptor(token);
+    appliedShareTokenRef.current = token;
+
+    if (!descriptor) {
+      setError(t("errors.shareLink"));
+      return;
+    }
+
+    applySharedSkin(descriptor);
+  }, [router?.isReady, router?.query?.skin, applySharedSkin, t, setError]);
 
   useEffect(() => {
     if (!isItemsMode) {
@@ -5349,6 +5863,109 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     [lookDirection, lookPreviews, t]
   );
 
+  const handleCopy = useCallback(async (value, options = {}) => {
+    const { swatch = null, toastKey = "toast.colorCopied", hideValue = false } = options;
+    const fallbackCopy = (text) => {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.top = "-1000px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    };
+
+    try {
+      if (
+        typeof navigator !== "undefined" &&
+        navigator.clipboard &&
+        typeof window !== "undefined" &&
+        window.isSecureContext
+      ) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        fallbackCopy(value);
+      }
+      const toastLabelRaw = t(toastKey);
+      const fallbackLabelRaw = t("toast.colorCopied");
+      const toastLabel =
+        typeof toastLabelRaw === "string" && toastLabelRaw.trim().length
+          ? toastLabelRaw
+          : typeof fallbackLabelRaw === "string" && fallbackLabelRaw.trim().length
+          ? fallbackLabelRaw
+          : "";
+      setError(null);
+      setCopiedCode(value);
+      setToast({
+        id: Date.now(),
+        label: toastLabel,
+        value: hideValue ? null : value,
+        swatch,
+      });
+    } catch (err) {
+      console.error(err);
+      try {
+        fallbackCopy(value);
+        const toastLabelRaw = t(toastKey);
+        const fallbackLabelRaw = t("toast.colorCopied");
+        const toastLabel =
+          typeof toastLabelRaw === "string" && toastLabelRaw.trim().length
+            ? toastLabelRaw
+            : typeof fallbackLabelRaw === "string" && fallbackLabelRaw.trim().length
+            ? fallbackLabelRaw
+            : "";
+        setError(null);
+        setCopiedCode(value);
+        setToast({
+          id: Date.now(),
+          label: toastLabel,
+          value: hideValue ? null : value,
+          swatch,
+        });
+      } catch (fallbackErr) {
+        console.error(fallbackErr);
+        setError(t("errors.clipboard"));
+      }
+    }
+  }, [t]);
+
+  const handleShareSkin = useCallback(
+    (proposal) => {
+      if (!proposal) {
+        return;
+      }
+
+      if (typeof window === "undefined") {
+        setError(t("errors.shareLink"));
+        return;
+      }
+
+      const descriptor = getShareDescriptor(proposal);
+      if (!descriptor) {
+        setError(t("errors.shareLink"));
+        return;
+      }
+
+      const encoded = encodeSkinShareDescriptor(descriptor);
+      if (!encoded) {
+        setError(t("errors.shareLink"));
+        return;
+      }
+
+      try {
+        const shareUrl = new URL(window.location.href);
+        shareUrl.searchParams.set("skin", encoded);
+        handleCopy(shareUrl.toString(), { toastKey: "toast.shareLinkCopied", hideValue: true });
+      } catch (err) {
+        console.error(err);
+        setError(t("errors.shareLink"));
+      }
+    },
+    [getShareDescriptor, handleCopy, t, setError]
+  );
+
   const rotateLookDirection = useCallback(
     (step) => {
       const total = ALL_LOOK_DIRECTIONS.length;
@@ -5785,6 +6402,80 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   }, [itemsCatalog]);
 
   useEffect(() => {
+    const pending = pendingSharedItemsRef.current;
+    if (!pending) {
+      return;
+    }
+
+    const entries = Object.entries(pending);
+    if (!entries.length) {
+      pendingSharedItemsRef.current = null;
+      return;
+    }
+
+    const updates = {};
+    const remaining = {};
+
+    entries.forEach(([slot, descriptor]) => {
+      if (!ITEM_TYPES.includes(slot)) {
+        return;
+      }
+
+      const pool = itemsCatalog?.[slot];
+      if (!Array.isArray(pool) || pool.length === 0) {
+        remaining[slot] = descriptor;
+        return;
+      }
+
+      const ankamaId = Number(descriptor?.a);
+      let match = Number.isFinite(ankamaId)
+        ? pool.find(
+            (item) =>
+              Number.isFinite(item?.ankamaId) && Math.trunc(item.ankamaId) === Math.trunc(ankamaId)
+          )
+        : null;
+
+      if (!match && descriptor && descriptor.i !== undefined && descriptor.i !== null) {
+        const descriptorId = descriptor.i;
+        if (typeof descriptorId === "string" && descriptorId.trim()) {
+          const trimmedId = descriptorId.trim();
+          match = pool.find((item) => item?.id === trimmedId);
+        } else {
+          const numericId = Number(descriptorId);
+          if (Number.isFinite(numericId)) {
+            const normalizedId = Math.trunc(numericId);
+            match = pool.find(
+              (item) => Number.isFinite(item?.id) && Math.trunc(item.id) === normalizedId
+            );
+          }
+        }
+      }
+
+      if (match) {
+        updates[slot] = match;
+      } else {
+        remaining[slot] = descriptor;
+      }
+    });
+
+    if (Object.keys(updates).length) {
+      setSelectedItemsBySlot((previous = {}) => {
+        let changed = false;
+        const next = { ...previous };
+        Object.entries(updates).forEach(([slot, item]) => {
+          if (next[slot] !== item) {
+            next[slot] = item;
+            changed = true;
+          }
+        });
+        return changed ? next : previous;
+      });
+    }
+
+    pendingSharedItemsRef.current = Object.keys(remaining).length ? remaining : null;
+  }, [itemsCatalog, setSelectedItemsBySlot]);
+
+  useEffect(() => {
     setSelectedItemsBySlot((previous = {}) => {
       let changed = false;
       const next = { ...previous };
@@ -6026,48 +6717,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     setSelectedColor(hex.toUpperCase());
   }, []);
 
-  const handleCopy = useCallback(async (value, options = {}) => {
-    const { swatch = null } = options;
-    const fallbackCopy = (text) => {
-      const textarea = document.createElement("textarea");
-      textarea.value = text;
-      textarea.setAttribute("readonly", "");
-      textarea.style.position = "fixed";
-      textarea.style.top = "-1000px";
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
-    };
-
-    try {
-      if (
-        typeof navigator !== "undefined" &&
-        navigator.clipboard &&
-        typeof window !== "undefined" &&
-        window.isSecureContext
-      ) {
-        await navigator.clipboard.writeText(value);
-      } else {
-        fallbackCopy(value);
-      }
-      setError(null);
-      setCopiedCode(value);
-      setToast({ id: Date.now(), label: t("toast.colorCopied"), value, swatch });
-    } catch (err) {
-      console.error(err);
-      try {
-        fallbackCopy(value);
-        setError(null);
-        setCopiedCode(value);
-        setToast({ id: Date.now(), label: t("toast.colorCopied"), value, swatch });
-      } catch (fallbackErr) {
-        console.error(fallbackErr);
-        setError(t("errors.clipboard"));
-      }
-    }
-  }, [t]);
-
   const showProgressBar = isProcessing || analysisProgress > 0;
   const clampedProgress = Math.max(0, Math.min(analysisProgress, 100));
   const safeProgress = Number.isFinite(clampedProgress) ? clampedProgress : 0;
@@ -6116,7 +6765,9 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                 <span className="toast__icon" aria-hidden="true">✓</span>
                 <div className="toast__body">
                   <span className="toast__title">{toast.label}</span>
-                  <span className="toast__value">{toast.value}</span>
+                  {toast.value ? (
+                    <span className="toast__value">{toast.value}</span>
+                  ) : null}
                 </div>
                 {toast.swatch ? (
                   <span
@@ -6779,6 +7430,13 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                               const activeBackground = isPreviewBackgroundEnabled
                                 ? preferredBackground ?? fallbackBackground
                                 : null;
+                              const canShareSkin = Boolean(getShareDescriptor(proposal));
+                              const isDownloadingPreview = downloadingPreviewId === proposal.id;
+                              const downloadCtaLabel = isDownloadingPreview
+                                ? t("suggestions.render.downloading")
+                                : t("suggestions.render.download");
+                              const barbofusCtaLabel = t("suggestions.render.link");
+                              const shareCtaLabel = t("suggestions.render.share");
                               const canvasStyle = activeBackground
                                 ? {
                                     backgroundImage: `url(${activeBackground.src})`,
@@ -7093,12 +7751,15 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           type="button"
                                           onClick={() => handleDownloadPreview(proposal)}
                                           className="skin-card__cta"
-                                          disabled={downloadingPreviewId === proposal.id}
-                                          aria-busy={downloadingPreviewId === proposal.id}
+                                          disabled={isDownloadingPreview}
+                                          aria-busy={isDownloadingPreview}
+                                          title={downloadCtaLabel}
+                                          aria-label={downloadCtaLabel}
                                         >
-                                          {downloadingPreviewId === proposal.id
-                                            ? t("suggestions.render.downloading")
-                                            : t("suggestions.render.download")}
+                                          <span className="skin-card__cta-icon" aria-hidden="true">
+                                            <img src="/icons/download.svg" alt="" />
+                                          </span>
+                                          <span className="sr-only">{downloadCtaLabel}</span>
                                         </button>
                                       ) : lookLoading ? (
                                         <span className="skin-card__cta skin-card__cta--disabled">
@@ -7115,15 +7776,35 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           target="_blank"
                                           rel="noreferrer"
                                           className="skin-card__cta"
+                                          title={barbofusCtaLabel}
+                                          aria-label={barbofusCtaLabel}
                                         >
-                                          {t("suggestions.render.link")}
-                                          <span aria-hidden="true" className="skin-card__cta-icon">
-                                            ↗
+                                          <span className="skin-card__cta-icon" aria-hidden="true">
+                                            <img src="/icons/barbofus.svg" alt="" />
                                           </span>
+                                          <span className="sr-only">{barbofusCtaLabel}</span>
                                         </a>
                                       ) : (
                                         <span className="skin-card__cta skin-card__cta--disabled">
                                           {t("suggestions.render.linkUnavailable")}
+                                        </span>
+                                      )}
+                                      {canShareSkin ? (
+                                        <button
+                                          type="button"
+                                          className="skin-card__cta"
+                                          onClick={() => handleShareSkin(proposal)}
+                                          title={shareCtaLabel}
+                                          aria-label={shareCtaLabel}
+                                        >
+                                          <span className="skin-card__cta-icon" aria-hidden="true">
+                                            <img src="/icons/copy.svg" alt="" />
+                                          </span>
+                                          <span className="sr-only">{shareCtaLabel}</span>
+                                        </button>
+                                      ) : (
+                                        <span className="skin-card__cta skin-card__cta--disabled">
+                                          {t("suggestions.render.shareUnavailable")}
                                         </span>
                                       )}
                                     </div>
