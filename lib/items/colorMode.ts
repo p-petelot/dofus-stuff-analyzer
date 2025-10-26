@@ -1,4 +1,4 @@
-import { FLAGS, K, SUGGESTION_COUNT, WEIGHTS_COLOR } from "../config/suggestions";
+import { FLAGS, K, PENALTIES, SUGGESTION_COUNT, WEIGHTS_COLOR } from "../config/suggestions";
 import { deltaE2000 } from "../colors/palette";
 import { clipEmbedding, edgeSSIM } from "../vision/features";
 import { queryIndex } from "./indexStore";
@@ -81,7 +81,10 @@ export async function colorModeSuggest(
       FLAGS.recolorTemplates && candidateLabs ? paletteLabs : candidateLabs ?? paletteLabs;
     const delta = averageDeltaE(paletteLabs, comparisonLabs);
     const deltaNorm = normaliseDelta(delta);
-    const colorScore = 1 - deltaNorm;
+    const isColorable = candidate.tags?.includes("colorable") ?? false;
+    const penaltyFactor = isColorable ? PENALTIES.colorModeColorableFactor : 1;
+    const rawColorScore = 1 - deltaNorm;
+    const colorScore = rawColorScore * penaltyFactor;
     const template = renderCandidateTemplate(candidate, patch);
     const ssimEdgesRaw = edgeSSIM(patch, template);
     const ssimEdges = Math.min(1, Math.max(0, ssimEdgesRaw));
@@ -94,8 +97,11 @@ export async function colorModeSuggest(
       verified: false,
       thumb: candidate.thumb ?? candidate.sprite,
       setId: candidate.setId ?? undefined,
+      isColorable,
       reasons: {
         colorScore,
+        colorScoreRaw: rawColorScore,
+        colorablePenalty: penaltyFactor,
         ssimEdges,
         deltaE: delta,
       },

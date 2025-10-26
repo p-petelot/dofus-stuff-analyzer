@@ -62,6 +62,14 @@ export const WEIGHTS_COLOR = { color: 0.8, edges: 0.2 } as const;
 
 export const BONUS = { sameSetCoiffeCape: 0.02 } as const;
 
+export const PENALTIES = {
+  /**
+   * Reduce reliance on colour-only matches for colour-synchronised items.
+   * Values closer to 0 apply a stronger penalty to the colour score.
+   */
+  colorModeColorableFactor: 0.75,
+} as const;
+
 export const SUGGESTION_COUNT = { min: 3, max: 5 } as const;
 
 export const LOW_CONFIDENCE_THRESHOLD = 0.5;

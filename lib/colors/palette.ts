@@ -1,12 +1,15 @@
 import { ROI, SLOTS } from "../config/suggestions";
 import type {
   BoundingBox,
+  DofusColorSlots,
   DofusPalette,
   ImageDataLike,
   Lab,
   Mask,
   Palette,
   SlotKey,
+  VisualZoneKey,
+  ColorSlotKey,
 } from "../types";
 
 const DOFUS_HEX = [
@@ -29,6 +32,32 @@ interface LabAccumulator {
   L: number;
   a: number;
   b: number;
+}
+
+const VISUAL_ZONE_KEYS: VisualZoneKey[] = ["hair", "skin", "outfit", "accent"];
+
+const ACCENT_DELTA_THRESHOLD = 8;
+
+const FALLBACK_LAB: Lab = { L: 60, a: 0, b: 0 };
+
+interface MaskBounds {
+  minY: number;
+  maxY: number;
+  height: number;
+}
+
+function reorderOutfitPalette(palette: Palette): Palette {
+  const unique: Lab[] = [];
+  for (const lab of [palette.primary, palette.secondary, palette.tertiary]) {
+    if (!unique.some((entry) => deltaE2000(entry, lab) < 1)) {
+      unique.push(lab);
+    }
+  }
+  unique.sort((a, b) => b.b - a.b);
+  const primary = unique[0] ?? FALLBACK_LAB;
+  const secondary = unique[1] ?? primary;
+  const tertiary = unique[2] ?? unique[1] ?? primary;
+  return { primary, secondary, tertiary };
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -71,7 +100,7 @@ function valueSaturation(r: number, g: number, b: number): { value: number; satu
 }
 
 function accumulateLab(acc: Map<string, LabAccumulator>, lab: Lab): void {
-  const key = `${Math.round(lab.L / 10)}_${Math.round(lab.a / 20)}_${Math.round(lab.b / 20)}`;
+  const key = `${Math.round(lab.L / 5)}_${Math.round(lab.a / 10)}_${Math.round(lab.b / 10)}`;
   const bucket = acc.get(key);
   if (bucket) {
     bucket.count += 1;
@@ -123,6 +152,162 @@ function collectLabs(
     accumulateLab(acc, { L: 60, a: 0, b: 0 });
   }
   return acc;
+}
+
+function computeMaskBounds(mask: Mask, width: number, height: number): MaskBounds {
+  let minY = height;
+  let maxY = -1;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (mask[y * width + x] !== 0) {
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxY < minY) {
+    return { minY: 0, maxY: height - 1, height };
+  }
+  const maskHeight = Math.max(1, maxY - minY + 1);
+  return { minY, maxY, height: maskHeight };
+}
+
+interface ZoneFilters {
+  hair: (x: number, y: number) => boolean;
+  skin: (x: number, y: number) => boolean;
+  outfit: (x: number, y: number) => boolean;
+  accent: (x: number, y: number) => boolean;
+}
+
+function buildZoneFilters(bounds: MaskBounds, imageHeight: number): ZoneFilters {
+  const top = clamp(bounds.minY, 0, imageHeight - 1);
+  const bottom = clamp(bounds.maxY + 1, top + 1, imageHeight);
+  const total = Math.max(1, bottom - top);
+
+  const headBudget = Math.max(2, total - 2);
+  let hairHeight = Math.max(1, Math.round(total * 0.28));
+  if (hairHeight < 2 && total >= 4) {
+    hairHeight = 2;
+  }
+  let skinHeight = Math.max(1, Math.round(total * 0.18));
+  if (skinHeight < 2 && total >= 6) {
+    skinHeight = 2;
+  }
+  let headSum = hairHeight + skinHeight;
+  if (headSum > headBudget) {
+    const scale = headBudget / headSum;
+    hairHeight = Math.max(1, Math.floor(hairHeight * scale));
+    skinHeight = Math.max(1, Math.floor(skinHeight * scale));
+    headSum = hairHeight + skinHeight;
+    while (headSum > headBudget) {
+      if (skinHeight > 1) {
+        skinHeight -= 1;
+      } else if (hairHeight > 1) {
+        hairHeight -= 1;
+      } else {
+        break;
+      }
+      headSum = hairHeight + skinHeight;
+    }
+  }
+
+  const hairEnd = clamp(top + hairHeight, top + 1, bottom);
+  const skinEnd = clamp(hairEnd + skinHeight, hairEnd + 1, bottom);
+
+  const bodyHeight = Math.max(1, bottom - skinEnd);
+  let accentHeight = Math.max(1, Math.round(bodyHeight * 0.2));
+  if (accentHeight >= bodyHeight) {
+    accentHeight = Math.max(1, bodyHeight - 1);
+  }
+  const outfitEnd = clamp(skinEnd + (bodyHeight - accentHeight), skinEnd + 1, bottom);
+  const accentStart = clamp(outfitEnd, skinEnd + 1, bottom);
+
+  return {
+    hair: (_x, y) => y >= top && y < hairEnd,
+    skin: (_x, y) => y >= hairEnd && y < skinEnd,
+    outfit: (_x, y) => y >= skinEnd && y < outfitEnd,
+    accent: (_x, y) => y >= accentStart && y < bottom,
+  };
+}
+
+export function extractVisualZonePalettes(
+  img512: ImageDataLike,
+  mask: Mask,
+): Record<VisualZoneKey, Palette> {
+  const globalBuckets = collectLabs(img512, mask, () => true);
+  const globalPalette = bucketsToPalette(globalBuckets);
+
+  const zonePalettes = {} as Record<VisualZoneKey, Palette>;
+  const bounds = computeMaskBounds(mask, img512.width, img512.height);
+
+  const filters = buildZoneFilters(bounds, img512.height);
+
+  for (const zone of ["hair", "skin", "outfit"] as const) {
+    const buckets = collectLabs(img512, mask, filters[zone]);
+    const palette = bucketsToPalette(buckets);
+    zonePalettes[zone] = zone === "outfit" ? reorderOutfitPalette(palette) : palette;
+  }
+
+  const accentBuckets = collectLabs(img512, mask, filters.accent);
+
+  let accentPalette = bucketsToPalette(accentBuckets);
+
+  const anchorColours = [
+    zonePalettes.hair.primary,
+    zonePalettes.skin.primary,
+    zonePalettes.outfit.primary,
+  ];
+
+  const accentCandidates = [accentPalette.primary, accentPalette.secondary, globalPalette.primary];
+
+  const accentLab =
+    accentCandidates.find((candidate) =>
+      anchorColours.every((anchor) => deltaE2000(candidate, anchor) >= ACCENT_DELTA_THRESHOLD),
+    ) ?? zonePalettes.outfit.tertiary ?? globalPalette.tertiary;
+
+  accentPalette = {
+    primary: accentLab,
+    secondary: accentPalette.secondary ?? zonePalettes.outfit.secondary ?? accentLab,
+    tertiary: accentPalette.tertiary ?? zonePalettes.outfit.tertiary ?? accentLab,
+  };
+
+  zonePalettes.accent = {
+    primary: accentPalette.primary,
+    secondary: accentPalette.secondary,
+    tertiary: accentPalette.tertiary,
+  };
+
+  return zonePalettes;
+}
+
+export function snapVisualZonesToDofus(
+  zones: Record<VisualZoneKey, Palette>,
+): Record<VisualZoneKey, DofusPalette> {
+  const result = {} as Record<VisualZoneKey, DofusPalette>;
+  for (const zone of VISUAL_ZONE_KEYS) {
+    const palette = zones[zone];
+    result[zone] = paletteToDofus(palette);
+  }
+  return result;
+}
+
+export function buildDofusColorSlots(zones: Record<VisualZoneKey, DofusPalette>): DofusColorSlots {
+  const slots: Record<ColorSlotKey, string> = {
+    1: zones.hair.primary,
+    2: zones.skin.primary,
+    3: zones.outfit.primary,
+    4: zones.outfit.secondary ?? zones.outfit.primary,
+    5: zones.accent.primary ?? zones.outfit.tertiary ?? zones.outfit.primary,
+  };
+
+  const byZone: Record<VisualZoneKey, string> = {
+    hair: slots[1],
+    skin: slots[2],
+    outfit: slots[3],
+    accent: slots[5],
+  };
+
+  return { slots, byZone };
 }
 
 /** Extract a LAB palette for the whole normalized image. */
@@ -177,7 +362,7 @@ function nearestDofusColour(lab: Lab): string {
   return best;
 }
 
-function paletteToDofus(palette: Palette): DofusPalette {
+export function paletteToDofus(palette: Palette): DofusPalette {
   return {
     primary: nearestDofusColour(palette.primary),
     secondary: nearestDofusColour(palette.secondary),

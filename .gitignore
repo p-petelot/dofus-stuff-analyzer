@@ -2,3 +2,5 @@ node_modules/
 .next/
 .DS_Store
 npm-debug.log*
+.cache/
+data/training/
