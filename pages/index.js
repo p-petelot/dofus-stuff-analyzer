@@ -1430,7 +1430,13 @@ const TONE_CONFIDENCE_WEIGHT = 0.18;
 const MIN_ALPHA_WEIGHT = 0.05;
 const MAX_RECOMMENDATIONS = 12;
 const PANEL_ITEMS_LIMIT = 5;
-const PROPOSAL_COUNT = 12;
+const GALLERY_PROPOSAL_OPTIONS = Object.freeze([6, 9, 12, 15]);
+const DEFAULT_GALLERY_PROPOSAL_COUNT =
+  GALLERY_PROPOSAL_OPTIONS[2] ?? GALLERY_PROPOSAL_OPTIONS[0] ?? 12;
+const GALLERY_GENDER_ICONS = Object.freeze({
+  m: "/icons/gender-male.svg",
+  f: "/icons/gender-female.svg",
+});
 const HASH_CONFIDENCE_DISTANCE = 0.32;
 const HASH_CONFIDENCE_WEIGHT = 0.18;
 const HASH_STRONG_THRESHOLD = 0.12;
@@ -3905,6 +3911,9 @@ export default function Home({
   );
   const [galleryRefreshToken, setGalleryRefreshToken] = useState(0);
   const [galleryAssignments, setGalleryAssignments] = useState([]);
+  const [galleryProposalCount, setGalleryProposalCount] = useState(
+    DEFAULT_GALLERY_PROPOSAL_COUNT
+  );
   const galleryInitializedRef = useRef(false);
   const isGalleryView = activeView === "gallery";
 
@@ -4908,6 +4917,21 @@ export default function Home({
     setSelectedItemsBySlot,
   ]);
 
+  const handleGalleryCountChange = useCallback(
+    (event) => {
+      const value = Number.parseInt(event?.target?.value, 10);
+      if (!Number.isFinite(value)) {
+        return;
+      }
+
+      const normalized = GALLERY_PROPOSAL_OPTIONS.includes(value)
+        ? value
+        : DEFAULT_GALLERY_PROPOSAL_COUNT;
+      setGalleryProposalCount(normalized);
+    },
+    [setGalleryProposalCount]
+  );
+
   useEffect(() => {
     if (!isGalleryView) {
       galleryInitializedRef.current = false;
@@ -4936,10 +4960,16 @@ export default function Home({
         return [];
       }
 
-      const desired = Math.min(PROPOSAL_COUNT, generated.length);
+      const desired = Math.min(galleryProposalCount, generated.length);
       return generated.slice(0, desired);
     });
-  }, [breeds, generateGalleryAssignments, galleryRefreshToken, isGalleryView]);
+  }, [
+    breeds,
+    galleryProposalCount,
+    generateGalleryAssignments,
+    galleryRefreshToken,
+    isGalleryView,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -5203,7 +5233,7 @@ export default function Home({
           return;
         }
 
-        const limit = Math.min(PROPOSAL_COUNT, pool.length);
+        const limit = Math.min(galleryProposalCount, pool.length);
         const { indexes, changed: normalizedChanged } = normalizeSelection(previous?.[type], limit, pool.length);
         next[type] = indexes;
         if (normalizedChanged) {
@@ -5227,7 +5257,7 @@ export default function Home({
 
       return next;
     });
-  }, [recommendations]);
+  }, [galleryProposalCount, recommendations]);
 
   useEffect(() => {
     if (!isGalleryView || !galleryRefreshToken || !recommendations) {
@@ -5267,7 +5297,7 @@ export default function Home({
       const next = {};
       ITEM_TYPES.forEach((type) => {
         const pool = recommendations[type] ?? [];
-        next[type] = buildIndexes(pool, PROPOSAL_COUNT);
+        next[type] = buildIndexes(pool, galleryProposalCount);
       });
       return next;
     });
@@ -5276,6 +5306,7 @@ export default function Home({
   }, [
     galleryRefreshToken,
     isGalleryView,
+    galleryProposalCount,
     recommendations,
     setActiveProposal,
     setPanelItemIndexes,
@@ -5292,7 +5323,7 @@ export default function Home({
       ...ITEM_TYPES.map((type) => (recommendations[type]?.length ?? 0))
     );
 
-    const total = Math.min(PROPOSAL_COUNT, maxLength || 0);
+    const total = Math.min(galleryProposalCount, maxLength || 0);
     const combos = [];
     const assignmentPool =
       isGalleryView && Array.isArray(galleryAssignments) && galleryAssignments.length
@@ -5596,6 +5627,7 @@ export default function Home({
     activeGenderValue,
     breedsById,
     galleryAssignments,
+    galleryProposalCount,
     genderLabels,
     isGalleryView,
     fallbackColorValues,
@@ -6680,7 +6712,7 @@ export default function Home({
       let nextSelection = null;
 
       if (Number.isFinite(proposalIndex)) {
-        const limit = Math.min(PROPOSAL_COUNT, pool.length);
+        const limit = Math.min(galleryProposalCount, pool.length);
         if (proposalIndex >= 0 && proposalIndex < limit) {
           setProposalItemIndexes((previous = {}) => {
             const prevIndexes = Array.isArray(previous[type]) ? previous[type] : [];
@@ -6716,7 +6748,7 @@ export default function Home({
         }
       }
     },
-    [recommendations, selectedItemsBySlot]
+    [galleryProposalCount, recommendations, selectedItemsBySlot]
   );
 
   const inputRef = useRef(null);
@@ -9073,6 +9105,20 @@ export default function Home({
                 <p>{t("gallery.subtitle")}</p>
               </div>
               <div className="gallery__actions">
+                <label className="gallery__count-control">
+                  <span className="gallery__count-label">{t("gallery.countLabel")}</span>
+                  <select
+                    className="gallery__count-select"
+                    value={String(galleryProposalCount)}
+                    onChange={handleGalleryCountChange}
+                  >
+                    {GALLERY_PROPOSAL_OPTIONS.map((count) => (
+                      <option key={count} value={String(count)}>
+                        {t("gallery.countOption", { count })}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <button type="button" className="gallery__shuffle" onClick={handleGalleryShuffle}>
                   <span className="gallery__shuffle-icon" aria-hidden="true">↻</span>
                   <span>{t("gallery.shuffle")}</span>
@@ -9106,6 +9152,20 @@ export default function Home({
                     });
                     const lookLoaded = status === "ready" && previewUrl;
                     const lookLoading = status === "loading" || status === "idle";
+                    const generationLabel = t("gallery.card.generation", {
+                      index: proposal.index + 1,
+                    });
+                    const generationBadge = `#${String(proposal.index + 1).padStart(2, "0")}`;
+                    const genderCode = proposal.lookGender === "f" ? "f" : "m";
+                    const genderIcon = GALLERY_GENDER_ICONS[genderCode] ?? null;
+                    const genderLabel =
+                      typeof proposal.genderLabel === "string"
+                        ? proposal.genderLabel
+                        : genderCode === "f"
+                        ? t("identity.gender.female")
+                        : t("identity.gender.male");
+                    const equipmentItems = Array.isArray(proposal.items) ? proposal.items : [];
+                    const equipmentLabel = t("gallery.card.items");
                     return (
                       <article key={proposal.id} className="gallery-card">
                         <div className="gallery-card__preview">
@@ -9123,10 +9183,30 @@ export default function Home({
                         </div>
                         <div className="gallery-card__body">
                           <header className="gallery-card__header">
-                            <h3 className="gallery-card__title">{displayName}</h3>
-                            {subtitle ? (
-                              <p className="gallery-card__subtitle">{subtitle}</p>
-                            ) : null}
+                            <div className="gallery-card__header-top">
+                              <span className="gallery-card__generation" aria-label={generationLabel}>
+                                {generationBadge}
+                              </span>
+                              {genderIcon ? (
+                                <span className="gallery-card__gender" title={genderLabel}>
+                                  <span className="sr-only">{genderLabel}</span>
+                                  <img src={genderIcon} alt="" aria-hidden="true" loading="lazy" />
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="gallery-card__identity">
+                              {proposal.classIcon ? (
+                                <span className="gallery-card__class-icon" aria-hidden="true">
+                                  <img src={proposal.classIcon} alt="" loading="lazy" />
+                                </span>
+                              ) : null}
+                              <div className="gallery-card__identity-details">
+                                <h3 className="gallery-card__title">{displayName}</h3>
+                                {subtitle ? (
+                                  <p className="gallery-card__subtitle">{subtitle}</p>
+                                ) : null}
+                              </div>
+                            </div>
                           </header>
                           <div
                             className="gallery-card__swatches"
@@ -9153,38 +9233,53 @@ export default function Home({
                               </span>
                             )}
                           </div>
-                          <ul className="gallery-card__items" role="list">
-                            {proposal.items.map((item) => {
+                          <div className="gallery-card__equipment" role="list" aria-label={equipmentLabel}>
+                            {equipmentItems.map((item) => {
                               const slotLabelKey = ITEM_TYPE_LABEL_KEYS[item.slotType];
                               const slotLabel = slotLabelKey ? t(slotLabelKey) : item.slotType;
+                              const itemName = item.name ?? slotLabel;
+                              const tooltipParts = [slotLabel];
+                              if (itemName && itemName !== slotLabel) {
+                                tooltipParts.push(itemName);
+                              }
                               const flagEntries = buildItemFlags(item, t);
                               const flagSummary = flagEntries.map((flag) => flag.label).join(", ");
+                              const baseTooltip = tooltipParts.filter(Boolean).join(" · ");
+                              const combinedTooltip = flagSummary
+                                ? `${baseTooltip}${baseTooltip ? " • " : ""}${flagSummary}`
+                                : baseTooltip;
+                              const finalTooltip =
+                                combinedTooltip || itemName || slotLabel || equipmentLabel;
+                              const compactFlags = flagEntries.slice(0, 2);
+                              const placeholderLabel =
+                                typeof slotLabel === "string" && slotLabel.length
+                                  ? slotLabel.slice(0, 2).toUpperCase()
+                                  : "?";
+
                               return (
-                                <li key={`${proposal.id}-${item.id}`} className="gallery-card__item">
-                                  <span className="gallery-card__item-type">{slotLabel}</span>
-                                  <a
-                                    href={item.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="gallery-card__item-link"
-                                  >
-                                    {item.imageUrl ? (
-                                      <span className="gallery-card__item-thumb" aria-hidden="true">
-                                        <img src={item.imageUrl} alt="" loading="lazy" />
-                                      </span>
-                                    ) : null}
-                                    <span className="gallery-card__item-name">
-                                      {item.name ?? slotLabel}
-                                    </span>
-                                  </a>
-                                  {flagEntries.length ? (
+                                <a
+                                  key={`${proposal.id}-${item.id}`}
+                                  className="gallery-card__equipment-slot"
+                                  href={item.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title={finalTooltip}
+                                  aria-label={finalTooltip}
+                                  role="listitem"
+                                >
+                                  {item.imageUrl ? (
+                                    <img src={item.imageUrl} alt="" loading="lazy" />
+                                  ) : (
                                     <span
-                                      className="item-flags item-flags--compact"
-                                      role="img"
-                                      aria-label={flagSummary || undefined}
-                                      title={flagSummary || undefined}
+                                      className="gallery-card__equipment-placeholder"
+                                      aria-hidden="true"
                                     >
-                                      {flagEntries.map((flag) => {
+                                      {placeholderLabel}
+                                    </span>
+                                  )}
+                                  {compactFlags.length ? (
+                                    <span className="gallery-card__equipment-flags" aria-hidden="true">
+                                      {compactFlags.map((flag) => {
                                         const classes = ["item-flag"];
                                         if (flag.className) {
                                           classes.push(flag.className);
@@ -9200,10 +9295,11 @@ export default function Home({
                                       })}
                                     </span>
                                   ) : null}
-                                </li>
+                                  <span className="sr-only">{finalTooltip}</span>
+                                </a>
                               );
                             })}
-                          </ul>
+                          </div>
                           <div className="gallery-card__actions">
                             {lookLoaded ? (
                               <button
