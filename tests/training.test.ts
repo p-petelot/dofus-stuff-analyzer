@@ -39,18 +39,33 @@ describe("training random generation", () => {
 
   it("aligns item colors when coherence is enforced", async () => {
     const candidate = await generateCandidate({ enforceColorCoherence: true });
+    const paletteValues = Object.values(candidate.palette.colors).map((color) => color.toUpperCase());
     let worstDistance = 0;
+    let paletteCoverage = 0;
     candidate.items.forEach((pick) => {
       if (!pick.item || pick.item.palette.length === 0) {
         return;
       }
-      expect(pick.item.palette).toContain(pick.assignedColor);
+      expect(pick.item.palette.map((hex) => hex.toUpperCase())).toContain(pick.assignedColor.toUpperCase());
       const assignedHue = hueFromHex(pick.assignedColor);
       const bestItemHue = Math.min(
         ...pick.item.palette.map((hex) => hueDistance(assignedHue, hueFromHex(hex))),
       );
       worstDistance = Math.max(worstDistance, bestItemHue);
+      const paletteMatch = paletteValues.some((hex) => hex === pick.assignedColor.toUpperCase());
+      if (paletteMatch) {
+        paletteCoverage += 1;
+      }
     });
     expect(worstDistance).toBeLessThanOrEqual(35);
+    expect(paletteCoverage).toBeGreaterThan(0);
+    const paletteHueDistances = paletteValues.map((hex) => hueFromHex(hex));
+    candidate.items.forEach((pick) => {
+      const assignedHue = hueFromHex(pick.assignedColor);
+      const bestPaletteDistance = Math.min(
+        ...paletteHueDistances.map((hue) => hueDistance(assignedHue, hue)),
+      );
+      expect(bestPaletteDistance).toBeLessThanOrEqual(25);
+    });
   });
 });

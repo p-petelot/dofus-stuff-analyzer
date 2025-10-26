@@ -72,26 +72,24 @@ function TrainingCard({ candidate, index }: { candidate: TrainingCardEntry; inde
       <article className="training-card training-card--loading" aria-busy="true">
         <div className="training-card__visual">
           <span className="skeleton-block skeleton-block--image" />
-          <div className="training-card__visual-overlay">
-            <span className="skeleton-pill skeleton-pill--class" />
-            <span className="skeleton-pill skeleton-pill--generation" />
-          </div>
         </div>
-        <div className="training-card__details">
+        <div className="training-card__meta training-card__meta--loading" aria-hidden="true">
           <span className="skeleton-line skeleton-line--title" />
           <span className="skeleton-line skeleton-line--subtitle" />
+        </div>
+        <ul className="training-card__items-strip" aria-hidden="true">
+          {Array.from({ length: SKELETON_ITEMS }).map((_, itemIndex) => (
+            <li key={`item-skeleton-${itemIndex}`}>
+              <span className="skeleton-chip" />
+            </li>
+          ))}
+        </ul>
+        <div className="training-card__details">
           <div className="training-card__palette-strip" aria-hidden="true">
             {Array.from({ length: SKELETON_ITEMS }).map((_, paletteIndex) => (
               <span key={`palette-skeleton-${paletteIndex}`} className="skeleton-dot" />
             ))}
           </div>
-          <ul className="training-card__items-strip" aria-hidden="true">
-            {Array.from({ length: SKELETON_ITEMS }).map((_, itemIndex) => (
-              <li key={`item-skeleton-${itemIndex}`}>
-                <span className="skeleton-chip" />
-              </li>
-            ))}
-          </ul>
         </div>
       </article>
     );
@@ -115,26 +113,47 @@ function TrainingCard({ candidate, index }: { candidate: TrainingCardEntry; inde
         ) : (
           <div className="training-card__visual-fallback">Rendu indisponible</div>
         )}
-        <div className="training-card__visual-overlay">
-          <div className="training-card__class-chip">
-            <span className="training-card__class-icon" aria-hidden="true">
-              {candidate.classIcon ? (
-                <img src={candidate.classIcon} alt="" loading="lazy" />
-              ) : (
-                <span>{getItemInitial(className)}</span>
-              )}
-            </span>
-            <div className="training-card__class-meta">
-              <span className="training-card__class-name">{className}</span>
-              <span className="training-card__sex-label">{formatSexLabel(candidate.sex)}</span>
-            </div>
-          </div>
-          <span className="training-card__generation" aria-label={`Génération ${generationNumber}`}>
-            {generationLabel}
-          </span>
-          {candidate.theme ? <span className="training-card__theme">{candidate.theme}</span> : null}
-        </div>
       </div>
+      <div className="training-card__meta">
+        <div className="training-card__class-chip">
+          <span className="training-card__class-icon" aria-hidden="true">
+            {candidate.classIcon ? (
+              <img src={candidate.classIcon} alt="" loading="lazy" />
+            ) : (
+              <span>{getItemInitial(className)}</span>
+            )}
+          </span>
+          <div className="training-card__class-meta">
+            <span className="training-card__class-name">{className}</span>
+            <span className="training-card__sex-label">{formatSexLabel(candidate.sex)}</span>
+          </div>
+        </div>
+        <span className="training-card__generation" aria-label={`Génération ${generationNumber}`}>
+          {generationLabel}
+        </span>
+      </div>
+      <ul className="training-card__items-strip" aria-label="Équipements choisis">
+        {candidate.items.map((pick) => {
+          const label = pick.item?.label ?? "Aucun objet";
+          const tooltip = `${formatSlotLabel(pick.slot)} · ${label}`;
+          return (
+            <li key={`${candidate.id}-${pick.slot}`}>
+              <span
+                className="training-card__item-chip"
+                style={{ borderColor: pick.assignedColor }}
+                title={tooltip}
+                aria-label={tooltip}
+              >
+                {pick.item?.imageUrl ? (
+                  <img src={pick.item.imageUrl} alt="" loading="lazy" />
+                ) : (
+                  <span className="training-card__item-initial">{getItemInitial(label)}</span>
+                )}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
       <div className="training-card__details">
         <div className="training-card__palette-strip" aria-label={paletteTitle}>
           {paletteEntries.map(({ key, color }) => (
@@ -147,28 +166,6 @@ function TrainingCard({ candidate, index }: { candidate: TrainingCardEntry; inde
             />
           ))}
         </div>
-        <ul className="training-card__items-strip" aria-label="Équipements choisis">
-          {candidate.items.map((pick) => {
-            const label = pick.item?.label ?? "Aucun objet";
-            const tooltip = `${formatSlotLabel(pick.slot)} · ${label}`;
-            return (
-              <li key={`${candidate.id}-${pick.slot}`}>
-                <span
-                  className="training-card__item-chip"
-                  style={{ borderColor: pick.assignedColor }}
-                  title={tooltip}
-                  aria-label={tooltip}
-                >
-                  {pick.item?.imageUrl ? (
-                    <img src={pick.item.imageUrl} alt="" loading="lazy" />
-                  ) : (
-                    <span className="training-card__item-initial">{getItemInitial(label)}</span>
-                  )}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
         {candidate.notes.length ? (
           <ul className="training-card__notes" aria-label="Remarques">
             {candidate.notes.map((note, noteIndex) => (
@@ -263,32 +260,20 @@ export default function TrainingPage(): JSX.Element {
   return (
     <>
       <Head>
-        <title>Centre d'entraînement — Génération aléatoire</title>
+        <title>Galerie de skins — Génération aléatoire</title>
       </Head>
       <main className="training-page">
         <section className="training-hero">
           <div className="training-hero__content">
-            <h1>Centre d'entraînement</h1>
-            <p>
-              Explore des looks générés automatiquement à partir des classes, des sexes, des couleurs et des
-              équipements disponibles sur DofusDB.
-            </p>
+            <span className="training-hero__eyebrow">Galerie aléatoire</span>
+            <h1>Galerie de skins</h1>
+            <p>Génère un lot de rendus inspirés de Dofus et explore rapidement les variations proposées.</p>
           </div>
           <form className="training-hero__controls" onSubmit={handleSubmit}>
-            <label htmlFor="training-count" className="training-hero__label">
-              Nombre de skins
-            </label>
-            <div className="training-hero__inputs">
-              <input
-                id="training-count"
-                type="range"
-                min={MIN_COUNT}
-                max={MAX_COUNT}
-                step={COUNT_STEP}
-                value={desiredCount}
-                onChange={handleSliderChange}
-                aria-label="Nombre de skins à générer"
-              />
+            <div className="training-hero__row">
+              <label htmlFor="training-count" className="training-hero__label">
+                Nombre de skins
+              </label>
               <div className="training-hero__count-input">
                 <input
                   type="number"
@@ -302,16 +287,22 @@ export default function TrainingPage(): JSX.Element {
                 <span>skins</span>
               </div>
             </div>
+            <input
+              id="training-count"
+              type="range"
+              min={MIN_COUNT}
+              max={MAX_COUNT}
+              step={COUNT_STEP}
+              value={desiredCount}
+              onChange={handleSliderChange}
+              aria-label="Nombre de skins à générer"
+            />
             <label className="training-hero__checkbox">
-              <input
-                type="checkbox"
-                checked={coherentColors}
-                onChange={handleCoherenceChange}
-              />
+              <input type="checkbox" checked={coherentColors} onChange={handleCoherenceChange} />
               <span>Cohérence visuelle</span>
             </label>
             <button type="submit" className="training-button" disabled={loading}>
-              {loading ? "Génération en cours…" : "Générer"}
+              {loading ? "Génération en cours…" : "Actualiser la galerie"}
             </button>
             {error ? <p className="training-error">Erreur: {error}</p> : null}
           </form>

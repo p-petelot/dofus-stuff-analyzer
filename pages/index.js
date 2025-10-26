@@ -6976,7 +6976,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           <h1>{BRAND_NAME}</h1>
           <div className="hero__actions">
             <Link href="/training" className="hero__cta">
-              <span>Centre d&apos;entraînement</span>
+              <span>Galerie de skins</span>
               <span aria-hidden="true">→</span>
             </Link>
           </div>

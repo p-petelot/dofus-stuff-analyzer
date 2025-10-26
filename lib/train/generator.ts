@@ -1,8 +1,10 @@
 import { getCatalog, TRAINING_SLOTS } from "./catalog";
-import { clampHue, hslToHex, hexToRgb, rgbToHue } from "./color";
+import { clampHue, hslToHex, hexToRgb, labDelta, rgbToHue } from "./color";
 import { createRng, shuffleInPlace, weightedSample, jitter } from "./random";
+import type { Rng } from "./random";
 import type {
   CandidateItemPick,
+  Catalog,
   CatalogItem,
   GenParams,
   GeneratedCandidate,
@@ -22,6 +24,13 @@ const SLOT_TO_COLOR: Record<TrainingSlotKey, keyof PaletteSummary["colors"]> = {
   costume: "primary",
   ailes: "accent",
 };
+
+const COHERENCE_BASE_SLOT_PRIORITY: TrainingSlotKey[] = [
+  "costume",
+  "cape",
+  "coiffe",
+  "epauliere",
+];
 
 const CLASS_NAME_OVERRIDES: Record<string, string> = {
   feca: "Féca",
@@ -150,6 +159,146 @@ function findClosestColor(item: CatalogItem | null | undefined, targetHue: numbe
     }
   });
   return closest ?? fallbackColor;
+}
+
+function uniquePaletteColors(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  values.forEach((value) => {
+    if (typeof value !== "string") {
+      return;
+    }
+    const normalized = value.startsWith("#") ? value.toUpperCase() : `#${value.toUpperCase()}`;
+    if (/^#[0-9A-F]{6}$/.test(normalized) && !seen.has(normalized)) {
+      seen.add(normalized);
+      result.push(normalized);
+    }
+  });
+  return result;
+}
+
+function derivePaletteFromItem(baseItem: CatalogItem, palette: PaletteSummary): PaletteSummary {
+  const unique = uniquePaletteColors(baseItem.palette);
+  if (!unique.length) {
+    return palette;
+  }
+  const [c0, c1, c2, c3, c4] = unique;
+  const resolvedSkin = palette.colors.skin;
+  return {
+    ...palette,
+    colors: {
+      hair: c0 ?? palette.colors.hair,
+      skin: resolvedSkin,
+      primary: c1 ?? c0 ?? palette.colors.primary,
+      secondary: c2 ?? c1 ?? palette.colors.secondary,
+      accent: c3 ?? c2 ?? palette.colors.accent,
+      detail: c4 ?? c3 ?? c2 ?? palette.colors.detail,
+    },
+  };
+}
+
+function chooseRepresentativeColor(colors: string[], fallback: string): string {
+  const unique = uniquePaletteColors(colors);
+  if (!unique.length) {
+    return fallback;
+  }
+  if (unique.length === 1) {
+    return unique[0];
+  }
+  let best = unique[0];
+  let bestScore = Number.POSITIVE_INFINITY;
+  unique.forEach((candidate) => {
+    const total = unique.reduce((sum, color) => sum + labDelta(candidate, color), 0);
+    if (total < bestScore) {
+      bestScore = total;
+      best = candidate;
+    }
+  });
+  return best ?? fallback;
+}
+
+function harmonizePaletteWithPicks(
+  palette: PaletteSummary,
+  picks: CandidateItemPick[],
+): { palette: PaletteSummary; picks: CandidateItemPick[] } {
+  const paletteBySlot: Partial<Record<keyof PaletteSummary["colors"], string[]>> = {};
+  picks.forEach((pick) => {
+    const colorKey = SLOT_TO_COLOR[pick.slot];
+    if (!colorKey) {
+      return;
+    }
+    const bucket = paletteBySlot[colorKey] ?? [];
+    bucket.push(pick.assignedColor);
+    paletteBySlot[colorKey] = bucket;
+  });
+
+  const harmonizedColors: PaletteSummary["colors"] = { ...palette.colors };
+  (Object.keys(paletteBySlot) as (keyof PaletteSummary["colors"])[]).forEach((key) => {
+    const source = paletteBySlot[key];
+    if (!source || !source.length) {
+      return;
+    }
+    harmonizedColors[key] = chooseRepresentativeColor(source, harmonizedColors[key]);
+  });
+
+  const adjustedPicks = picks.map((pick) => {
+    const colorKey = SLOT_TO_COLOR[pick.slot];
+    if (!colorKey) {
+      return pick;
+    }
+    const targetHex = harmonizedColors[colorKey];
+    if (!targetHex) {
+      return pick;
+    }
+    if (!pick.item) {
+      return { ...pick, assignedColor: targetHex };
+    }
+    const targetHue = hueFromHex(targetHex);
+    const assignedColor = findClosestColor(pick.item, targetHue, targetHex);
+    return { ...pick, assignedColor };
+  });
+
+  return {
+    palette: {
+      ...palette,
+      colors: harmonizedColors,
+    },
+    picks: adjustedPicks,
+  };
+}
+
+function selectCoherenceAnchor(
+  slots: TrainingSlotKey[],
+  catalog: Catalog,
+  rng: Rng,
+): { slot: TrainingSlotKey; item: CatalogItem } | null {
+  const ordered = [
+    ...COHERENCE_BASE_SLOT_PRIORITY.filter((slot) => slots.includes(slot)),
+    ...slots.filter((slot) => !COHERENCE_BASE_SLOT_PRIORITY.includes(slot)),
+  ];
+  for (const slot of ordered) {
+    const options = catalog.bySlot[slot];
+    if (!options || options.length === 0) {
+      continue;
+    }
+    const sorted = [...options].sort((a, b) => {
+      const paletteDiff = (b.palette.length || 0) - (a.palette.length || 0);
+      if (paletteDiff !== 0) {
+        return paletteDiff;
+      }
+      const colorableDiff = Number(b.isColorable) - Number(a.isColorable);
+      if (colorableDiff !== 0) {
+        return colorableDiff;
+      }
+      return (b.rarity ?? 0) - (a.rarity ?? 0);
+    });
+    const selectionPool = sorted.slice(0, Math.min(24, sorted.length));
+    const candidate = selectionPool[rng.int(selectionPool.length)];
+    if (candidate) {
+      return { slot, item: candidate };
+    }
+  }
+  return null;
 }
 
 function pickItem(
@@ -289,7 +438,7 @@ export async function generateCandidate(params?: GenParams): Promise<GeneratedCa
     harmony = HARMONIES[rng.int(HARMONIES.length)] ?? "triad";
   }
   const anchorHue = alignAnchorHue(paletteSource, theme, catalog.items, `${seed}-anchor`);
-  const palette = buildPalette({
+  let palette = buildPalette({
     source: paletteSource,
     harmony,
     theme,
@@ -298,10 +447,34 @@ export async function generateCandidate(params?: GenParams): Promise<GeneratedCa
   });
   const preferJokers = Boolean(params?.preferJokers);
   const enforceColorCoherence = Boolean(params?.enforceColorCoherence);
+  let anchor: { slot: TrainingSlotKey; item: CatalogItem } | null = null;
+  if (enforceColorCoherence) {
+    anchor = selectCoherenceAnchor(slotCoverage, catalog, rng);
+    if (anchor) {
+      palette = derivePaletteFromItem(anchor.item, palette);
+    }
+  }
   const picks: CandidateItemPick[] = [];
   let jokerCount = 0;
   for (const slot of slotCoverage) {
     const options = catalog.bySlot[slot] ?? [];
+    if (enforceColorCoherence && anchor && slot === anchor.slot) {
+      const colorKey = SLOT_TO_COLOR[slot] ?? "primary";
+      const targetColor = palette.colors[colorKey] ?? palette.colors.primary;
+      const targetHue = hueFromHex(targetColor);
+      const assignedColor = findClosestColor(anchor.item, targetHue, targetColor);
+      const pick = {
+        slot,
+        item: anchor.item,
+        assignedColor,
+        isJoker: Boolean(anchor.item.isJoker),
+      };
+      picks.push(pick);
+      if (pick.isJoker) {
+        jokerCount += 1;
+      }
+      continue;
+    }
     const pick = pickItem(
       slot,
       palette,
@@ -327,19 +500,26 @@ export async function generateCandidate(params?: GenParams): Promise<GeneratedCa
   if (enforceColorCoherence) {
     notes.push("Palette harmonisée avec les teintes des équipements sélectionnés.");
   }
+  let finalPalette = palette;
+  let finalPicks = picks;
+  if (enforceColorCoherence) {
+    const harmonized = harmonizePaletteWithPicks(palette, picks);
+    finalPalette = harmonized.palette;
+    finalPicks = harmonized.picks;
+  }
   return {
     id: seed,
     classKey,
     className: classMetadata?.name ?? fallbackClassName(classKey),
     classIcon: classMetadata?.icon ?? null,
     sex,
-    palette,
+    palette: finalPalette,
     slotCoverage,
-    items: picks,
+    items: finalPicks,
     theme,
     jokerCount,
     notes,
     imageUrl: null,
-    preview: buildCandidatePreview(classKey, sex, palette, picks),
+    preview: buildCandidatePreview(classKey, sex, finalPalette, finalPicks),
   };
 }
