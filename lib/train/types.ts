@@ -2,16 +2,7 @@ import type { SlotKey as SuggestionSlotKey } from "../config/suggestions";
 
 export type TrainingSex = "male" | "female";
 
-export type TrainingSlotKey =
-  | "coiffe"
-  | "cape"
-  | "bottes"
-  | "amulette"
-  | "anneau"
-  | "ceinture"
-  | "bouclier"
-  | "familier"
-  | "arme";
+export type TrainingSlotKey = SuggestionSlotKey;
 
 export type PaletteSource = "random" | "theme" | "image";
 
@@ -25,9 +16,10 @@ export interface PaletteSummary {
   colors: {
     hair: string;
     skin: string;
-    outfitPrimary: string;
-    outfitSecondary: string;
+    primary: string;
+    secondary: string;
     accent: string;
+    detail: string;
   };
 }
 
@@ -163,10 +155,13 @@ export interface FeedbackPayload {
 }
 
 export interface RendererPayload {
-  classKey: string;
-  sex: TrainingSex;
-  colors: PaletteSummary["colors"];
-  items: Record<TrainingSlotKey, number | null>;
+  breed: number;
+  head: number;
+  sex: 0 | 1;
+  item_id: number[];
+  colors: number[];
+  animation: number;
+  direction: number;
 }
 
 export interface RendererResult {
@@ -179,4 +174,4 @@ export interface TrainingStatusResponse {
   completedCount: number;
 }
 
-export type SlotKey = SuggestionSlotKey | TrainingSlotKey;
+export type SlotKey = SuggestionSlotKey;

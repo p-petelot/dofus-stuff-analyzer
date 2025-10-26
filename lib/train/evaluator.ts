@@ -43,9 +43,9 @@ function evaluateHarmony(candidate: GeneratedCandidate): { value: number; notes:
 function evaluateContrast(candidate: GeneratedCandidate): { value: number; notes: string[] } {
   const { colors } = candidate.palette;
   const hairSkin = labDelta(colors.hair, colors.skin);
-  const outfitSkin = labDelta(colors.outfitPrimary, colors.skin);
-  const hairOutfit = labDelta(colors.hair, colors.outfitPrimary);
-  const contrastAverage = (hairSkin + outfitSkin + hairOutfit) / 3;
+  const primarySkin = labDelta(colors.primary, colors.skin);
+  const hairPrimary = labDelta(colors.hair, colors.primary);
+  const contrastAverage = (hairSkin + primarySkin + hairPrimary) / 3;
   const normalized = normalize(contrastAverage, 10, 45);
   const score = normalized * CONTRAST_WEIGHT;
   const notes: string[] = [];

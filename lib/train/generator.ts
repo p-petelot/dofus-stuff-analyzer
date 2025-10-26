@@ -15,14 +15,12 @@ import { buildCandidatePreview } from "./look";
 
 const SLOT_TO_COLOR: Record<TrainingSlotKey, keyof PaletteSummary["colors"]> = {
   coiffe: "hair",
-  cape: "outfitPrimary",
-  bottes: "outfitSecondary",
-  amulette: "accent",
-  anneau: "accent",
-  ceinture: "outfitPrimary",
+  cape: "primary",
   bouclier: "accent",
-  familier: "accent",
-  arme: "outfitSecondary",
+  familier: "detail",
+  epauliere: "secondary",
+  costume: "primary",
+  ailes: "accent",
 };
 
 const HARMONIES: PaletteHarmony[] = ["triad", "split", "analogous", "complementary"];
@@ -58,10 +56,11 @@ function buildPalette(ctx: PaletteContext): PaletteSummary {
       offsets = [0, 120, 240];
   }
   const hairHue = clampHue(baseHue + offsets[0]);
-  const outfitHueA = clampHue(baseHue + offsets[1]);
-  const outfitHueB = clampHue(baseHue + offsets[2]);
+  const primaryHue = clampHue(baseHue + offsets[1]);
+  const secondaryHue = clampHue(baseHue + offsets[2]);
   const accentHue = clampHue(baseHue + offsets[1] / 2 + jitter(0, 12, rng));
   const skinHue = clampHue(baseHue + 35 + jitter(0, 8, rng));
+  const detailHue = clampHue(accentHue + 45 + jitter(0, 10, rng));
   const palette: PaletteSummary = {
     source: ctx.source,
     harmony: ctx.harmony,
@@ -70,9 +69,10 @@ function buildPalette(ctx: PaletteContext): PaletteSummary {
     colors: {
       hair: hslToHex(hairHue, 0.55, 0.45),
       skin: hslToHex(skinHue, 0.38, 0.72),
-      outfitPrimary: hslToHex(outfitHueA, 0.6, 0.46),
-      outfitSecondary: hslToHex(outfitHueB, 0.58, 0.42),
+      primary: hslToHex(primaryHue, 0.6, 0.46),
+      secondary: hslToHex(secondaryHue, 0.58, 0.42),
       accent: hslToHex(accentHue, 0.66, 0.52),
+      detail: hslToHex(detailHue, 0.55, 0.48),
     },
   };
   return palette;
@@ -123,15 +123,28 @@ function pickItem(
   options: CatalogItem[],
 ): CandidateItemPick {
   const rng = createRng(`${rngSeed}-${slot}`);
-  const targetColorKey = SLOT_TO_COLOR[slot] ?? "outfitPrimary";
-  const targetColor = palette.colors[targetColorKey];
+  const targetColorKey = SLOT_TO_COLOR[slot] ?? "primary";
+  const targetColor = palette.colors[targetColorKey] ?? palette.colors.primary;
   const targetHue = hueFromHex(targetColor);
   const pool = options.filter((item) => {
     if (!item) return false;
-    if (!item.classTags.length || item.classTags.includes("toutes")) {
+    const normalizedTags = item.classTags
+      .map((tag) =>
+        tag
+          .toString()
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, ""),
+      )
+      .filter(Boolean);
+    if (!normalizedTags.length || normalizedTags.includes("toutes")) {
       return true;
     }
-    return item.classTags.includes(classKey);
+    const normalizedClassKey = classKey
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
+    return normalizedTags.includes(normalizedClassKey);
   });
   if (!pool.length) {
     return { slot, item: null, assignedColor: targetColor, isJoker: false };

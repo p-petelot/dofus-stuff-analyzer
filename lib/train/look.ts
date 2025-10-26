@@ -28,6 +28,8 @@ const CLASS_PREVIEW_CONFIG: Record<string, ClassPreviewConfig> = Object.freeze({
   forgelance: { breedId: 19, maleFaceId: 294, femaleFaceId: 302 },
 });
 
+export const AVAILABLE_CLASS_KEYS = Object.freeze(Object.keys(CLASS_PREVIEW_CONFIG));
+
 const DEFAULT_DIRECTION = 1;
 const DEFAULT_ANIMATION = 0;
 
@@ -53,6 +55,13 @@ function hexToColorInt(hex: string | null | undefined): number | null {
   }
   const parsed = parseInt(normalized, 16);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+const FALLBACK_COLOR_HEX = ["#E0A060", "#F4D8B0", "#3A7BD5", "#295F9E", "#D05F5F", "#FFFFFF"];
+
+function fallbackColorInt(index: number): number {
+  const hex = FALLBACK_COLOR_HEX[index] ?? FALLBACK_COLOR_HEX[FALLBACK_COLOR_HEX.length - 1];
+  return hexToColorInt(hex) ?? 0;
 }
 
 function extractItemIds(items: CandidateItemPick[]): number[] {
@@ -84,15 +93,23 @@ export function buildCandidatePreview(
     return null;
   }
 
-  const colors = [
+  const rawColors = [
     hexToColorInt(palette.colors.hair),
     hexToColorInt(palette.colors.skin),
-    hexToColorInt(palette.colors.outfitPrimary),
-    hexToColorInt(palette.colors.outfitSecondary ?? palette.colors.outfitPrimary),
+    hexToColorInt(palette.colors.primary),
+    hexToColorInt(palette.colors.secondary ?? palette.colors.primary),
     hexToColorInt(palette.colors.accent),
-  ].filter((value): value is number => Number.isFinite(value));
+    hexToColorInt(palette.colors.detail ?? palette.colors.accent ?? palette.colors.primary),
+  ];
 
-  if (!colors.length) {
+  const colors = rawColors.map((value, index) => {
+    if (Number.isFinite(value) && (value ?? -1) >= 0) {
+      return value as number;
+    }
+    return fallbackColorInt(index);
+  });
+
+  if (!colors.length || colors.every((value) => !Number.isFinite(value))) {
     return null;
   }
 

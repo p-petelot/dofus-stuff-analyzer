@@ -1,5 +1,6 @@
 import { Buffer } from "buffer";
-import type { GeneratedCandidate, RendererPayload, RendererResult, TrainingSlotKey } from "./types";
+import type { GeneratedCandidate, RendererPayload, RendererResult } from "./types";
+import { buildCandidatePreview } from "./look";
 
 const RENDERER_ENDPOINT = "https://skin.souff.fr/renderer/";
 const MAX_CONCURRENCY = 3;
@@ -13,16 +14,53 @@ interface RenderJob {
 const queue: RenderJob[] = [];
 let active = 0;
 
-function buildPayload(candidate: GeneratedCandidate): RendererPayload {
-  const items = candidate.items.reduce((acc, pick) => {
-    acc[pick.slot] = pick.item?.id ?? null;
-    return acc;
-  }, {} as Record<TrainingSlotKey, number | null>);
+function normalizePreview(candidate: GeneratedCandidate) {
+  if (candidate.preview) {
+    return candidate.preview;
+  }
+  return buildCandidatePreview(candidate.classKey, candidate.sex, candidate.palette, candidate.items);
+}
+
+function buildPayload(candidate: GeneratedCandidate): RendererPayload | null {
+  const preview = normalizePreview(candidate);
+  if (!preview) {
+    return null;
+  }
+
+  const itemIds = Array.isArray(preview.itemIds)
+    ? preview.itemIds
+        .map((value) => (Number.isFinite(value) ? Math.trunc(value) : null))
+        .filter((value): value is number => Number.isFinite(value) && value > 0)
+    : [];
+
+  const colors = Array.isArray(preview.colors)
+    ? preview.colors
+        .map((value) => (Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : null))
+        .filter((value): value is number => Number.isFinite(value) && value >= 0)
+    : [];
+
+  if (!itemIds.length || !colors.length) {
+    return null;
+  }
+
+  const sex = preview.gender === "female" ? 1 : 0;
+  const animation = Number.isFinite(preview.animation) ? Math.max(0, Math.trunc(preview.animation)) : 0;
+  const direction = Number.isFinite(preview.direction)
+    ? Math.max(0, Math.min(7, Math.trunc(preview.direction)))
+    : 1;
+
+  if (!Number.isFinite(preview.classId) || !Number.isFinite(preview.faceId)) {
+    return null;
+  }
+
   return {
-    classKey: candidate.classKey,
-    sex: candidate.sex,
-    colors: candidate.palette.colors,
-    items,
+    breed: Math.trunc(preview.classId),
+    head: Math.trunc(preview.faceId),
+    sex: sex as 0 | 1,
+    item_id: itemIds,
+    colors,
+    animation,
+    direction,
   };
 }
 
@@ -35,6 +73,9 @@ function asDataUrl(buffer: ArrayBuffer, contentType: string): string {
 async function performRender(candidate: GeneratedCandidate): Promise<string | null> {
   try {
     const payload = buildPayload(candidate);
+    if (!payload) {
+      return null;
+    }
     const response = await fetch(RENDERER_ENDPOINT, {
       method: "POST",
       headers: {
