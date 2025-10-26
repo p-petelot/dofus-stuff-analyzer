@@ -36,15 +36,15 @@ interface LabAccumulator {
 
 const VISUAL_ZONE_KEYS: VisualZoneKey[] = ["hair", "skin", "outfit", "accent"];
 
-const ZONE_BOUNDS: Record<Exclude<VisualZoneKey, "accent">, { yMin: number; yMax: number }> = {
-  hair: { yMin: 0, yMax: 0.25 },
-  skin: { yMin: 0.25, yMax: 0.48 },
-  outfit: { yMin: 0.5, yMax: 0.75 },
-};
-
 const ACCENT_DELTA_THRESHOLD = 8;
 
 const FALLBACK_LAB: Lab = { L: 60, a: 0, b: 0 };
+
+interface MaskBounds {
+  minY: number;
+  maxY: number;
+  height: number;
+}
 
 function reorderOutfitPalette(palette: Palette): Palette {
   const unique: Lab[] = [];
@@ -100,7 +100,7 @@ function valueSaturation(r: number, g: number, b: number): { value: number; satu
 }
 
 function accumulateLab(acc: Map<string, LabAccumulator>, lab: Lab): void {
-  const key = `${Math.round(lab.L / 10)}_${Math.round(lab.a / 20)}_${Math.round(lab.b / 20)}`;
+  const key = `${Math.round(lab.L / 5)}_${Math.round(lab.a / 10)}_${Math.round(lab.b / 10)}`;
   const bucket = acc.get(key);
   if (bucket) {
     bucket.count += 1;
@@ -154,14 +154,80 @@ function collectLabs(
   return acc;
 }
 
-function zoneFilter(
-  zone: Exclude<VisualZoneKey, "accent">,
-  height: number,
-): (x: number, y: number) => boolean {
-  const bounds = ZONE_BOUNDS[zone];
-  const minY = Math.floor(bounds.yMin * height);
-  const maxY = Math.ceil(bounds.yMax * height);
-  return (_x: number, y: number) => y >= minY && y < maxY;
+function computeMaskBounds(mask: Mask, width: number, height: number): MaskBounds {
+  let minY = height;
+  let maxY = -1;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (mask[y * width + x] !== 0) {
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxY < minY) {
+    return { minY: 0, maxY: height - 1, height };
+  }
+  const maskHeight = Math.max(1, maxY - minY + 1);
+  return { minY, maxY, height: maskHeight };
+}
+
+interface ZoneFilters {
+  hair: (x: number, y: number) => boolean;
+  skin: (x: number, y: number) => boolean;
+  outfit: (x: number, y: number) => boolean;
+  accent: (x: number, y: number) => boolean;
+}
+
+function buildZoneFilters(bounds: MaskBounds, imageHeight: number): ZoneFilters {
+  const top = clamp(bounds.minY, 0, imageHeight - 1);
+  const bottom = clamp(bounds.maxY + 1, top + 1, imageHeight);
+  const total = Math.max(1, bottom - top);
+
+  const headBudget = Math.max(2, total - 2);
+  let hairHeight = Math.max(1, Math.round(total * 0.28));
+  if (hairHeight < 2 && total >= 4) {
+    hairHeight = 2;
+  }
+  let skinHeight = Math.max(1, Math.round(total * 0.18));
+  if (skinHeight < 2 && total >= 6) {
+    skinHeight = 2;
+  }
+  let headSum = hairHeight + skinHeight;
+  if (headSum > headBudget) {
+    const scale = headBudget / headSum;
+    hairHeight = Math.max(1, Math.floor(hairHeight * scale));
+    skinHeight = Math.max(1, Math.floor(skinHeight * scale));
+    headSum = hairHeight + skinHeight;
+    while (headSum > headBudget) {
+      if (skinHeight > 1) {
+        skinHeight -= 1;
+      } else if (hairHeight > 1) {
+        hairHeight -= 1;
+      } else {
+        break;
+      }
+      headSum = hairHeight + skinHeight;
+    }
+  }
+
+  const hairEnd = clamp(top + hairHeight, top + 1, bottom);
+  const skinEnd = clamp(hairEnd + skinHeight, hairEnd + 1, bottom);
+
+  const bodyHeight = Math.max(1, bottom - skinEnd);
+  let accentHeight = Math.max(1, Math.round(bodyHeight * 0.2));
+  if (accentHeight >= bodyHeight) {
+    accentHeight = Math.max(1, bodyHeight - 1);
+  }
+  const outfitEnd = clamp(skinEnd + (bodyHeight - accentHeight), skinEnd + 1, bottom);
+  const accentStart = clamp(outfitEnd, skinEnd + 1, bottom);
+
+  return {
+    hair: (_x, y) => y >= top && y < hairEnd,
+    skin: (_x, y) => y >= hairEnd && y < skinEnd,
+    outfit: (_x, y) => y >= skinEnd && y < outfitEnd,
+    accent: (_x, y) => y >= accentStart && y < bottom,
+  };
 }
 
 export function extractVisualZonePalettes(
@@ -172,18 +238,19 @@ export function extractVisualZonePalettes(
   const globalPalette = bucketsToPalette(globalBuckets);
 
   const zonePalettes = {} as Record<VisualZoneKey, Palette>;
+  const bounds = computeMaskBounds(mask, img512.width, img512.height);
+
+  const filters = buildZoneFilters(bounds, img512.height);
 
   for (const zone of ["hair", "skin", "outfit"] as const) {
-    const buckets = collectLabs(img512, mask, zoneFilter(zone, img512.height));
+    const buckets = collectLabs(img512, mask, filters[zone]);
     const palette = bucketsToPalette(buckets);
     zonePalettes[zone] = zone === "outfit" ? reorderOutfitPalette(palette) : palette;
   }
 
-  const accentCandidates = [
-    globalPalette.primary,
-    globalPalette.secondary,
-    globalPalette.tertiary,
-  ];
+  const accentBuckets = collectLabs(img512, mask, filters.accent);
+
+  let accentPalette = bucketsToPalette(accentBuckets);
 
   const anchorColours = [
     zonePalettes.hair.primary,
@@ -191,15 +258,23 @@ export function extractVisualZonePalettes(
     zonePalettes.outfit.primary,
   ];
 
+  const accentCandidates = [accentPalette.primary, accentPalette.secondary, globalPalette.primary];
+
   const accentLab =
     accentCandidates.find((candidate) =>
       anchorColours.every((anchor) => deltaE2000(candidate, anchor) >= ACCENT_DELTA_THRESHOLD),
     ) ?? zonePalettes.outfit.tertiary ?? globalPalette.tertiary;
 
-  zonePalettes.accent = {
+  accentPalette = {
     primary: accentLab,
-    secondary: zonePalettes.outfit.secondary,
-    tertiary: zonePalettes.outfit.tertiary,
+    secondary: accentPalette.secondary ?? zonePalettes.outfit.secondary ?? accentLab,
+    tertiary: accentPalette.tertiary ?? zonePalettes.outfit.tertiary ?? accentLab,
+  };
+
+  zonePalettes.accent = {
+    primary: accentPalette.primary,
+    secondary: accentPalette.secondary,
+    tertiary: accentPalette.tertiary,
   };
 
   return zonePalettes;

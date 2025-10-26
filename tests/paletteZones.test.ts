@@ -68,4 +68,49 @@ describe("visual zone palette extraction", () => {
     expect(colorSlots.byZone.hair).toBe("#F5D142");
     expect(colorSlots.byZone.accent).toBe("#57B8FF");
   });
+
+  it("uses dynamic mask bounds and falls back when no accent is found", () => {
+    const width = 6;
+    const height = 6;
+    const data = new Uint8ClampedArray(width * height * 4);
+    const mask = new Uint8Array(width * height).fill(0);
+
+    const hair = [245, 209, 66];
+    const skin = [249, 166, 2];
+    const outfitPrimary = [255, 122, 90];
+    const outfitSecondary = [158, 122, 79];
+
+    let offset = 0;
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        if (y === 0) {
+          offset += 4;
+          continue;
+        }
+        let color: [number, number, number];
+        if (y === 1) {
+          color = hair;
+        } else if (y === 2) {
+          color = skin;
+        } else {
+          color = x % 2 === 0 ? outfitPrimary : outfitSecondary;
+        }
+        const idx = y * width + x;
+        mask[idx] = 1;
+        data[offset] = color[0];
+        data[offset + 1] = color[1];
+        data[offset + 2] = color[2];
+        data[offset + 3] = 255;
+        offset += 4;
+      }
+    }
+
+    const img: ImageDataLike = { width, height, data };
+    const zonePalettes = extractVisualZonePalettes(img, mask);
+    const snapped = snapVisualZonesToDofus(zonePalettes);
+
+    expect(snapped.hair.primary).toBe("#F5D142");
+    expect(snapped.outfit.primary).toBe("#FF7A5A");
+    expect(snapped.accent.primary).toBe(snapped.outfit.tertiary);
+  });
 });
