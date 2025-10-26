@@ -265,9 +265,9 @@ export default function TrainingPage(): JSX.Element {
       <main className="training-page">
         <section className="training-hero">
           <div className="training-hero__content">
-            <span className="training-hero__eyebrow">Galerie aléatoire</span>
+            <span className="training-hero__eyebrow">Galerie</span>
             <h1>Galerie de skins</h1>
-            <p>Génère un lot de rendus inspirés de Dofus et explore rapidement les variations proposées.</p>
+            <p>Découvre des rendus Dofus générés aléatoirement et ajuste la galerie en fonction de tes envies.</p>
           </div>
           <form className="training-hero__controls" onSubmit={handleSubmit}>
             <div className="training-hero__row">
