@@ -5,6 +5,7 @@ import type { GeneratedCandidate } from "../../../lib/train/types";
 
 interface RandomGenerationBody {
   count?: number;
+  coherentColors?: boolean;
 }
 
 interface RandomGenerationResponse {
@@ -30,6 +31,20 @@ function sanitizeCount(value: unknown): number {
   return DEFAULT_COUNT;
 }
 
+function sanitizeBoolean(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    return sanitizeBoolean(value[value.length - 1]);
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
+      return false;
+    }
+    return ["1", "true", "vrai", "oui", "on"].includes(normalized);
+  }
+  return Boolean(value);
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<RandomGenerationResponse | { error: string }>,
@@ -43,11 +58,12 @@ export default async function handler(
   try {
     const body = (req.method === "POST" ? req.body : null) as RandomGenerationBody | null;
     const count = sanitizeCount(body?.count ?? req.query.count);
+    const coherentColors = sanitizeBoolean(body?.coherentColors ?? req.query.coherentColors);
 
     const candidates: GeneratedCandidate[] = [];
     for (let index = 0; index < count; index += 1) {
       // eslint-disable-next-line no-await-in-loop -- sequential seeding keeps variety
-      const candidate = await generateCandidate();
+      const candidate = await generateCandidate({ enforceColorCoherence: coherentColors });
       candidates.push(candidate);
     }
 

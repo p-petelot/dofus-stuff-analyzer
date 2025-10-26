@@ -56,6 +56,8 @@ const FALLBACK_CLASS_METADATA: CatalogClassMetadata[] = [
   { key: "forgelance", name: "Forgelance", icon: null },
 ];
 
+const LANGUAGE_PRIORITY = ["fr", "en", "es", "pt", "de", "it"];
+
 function coerceArray(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value.map((entry) => String(entry)).filter(Boolean);
@@ -76,6 +78,12 @@ function normalizeLabel(entry: unknown, fallback: string): string {
     return entry.trim();
   }
   if (entry && typeof entry === "object") {
+    for (const key of LANGUAGE_PRIORITY) {
+      const value = (entry as Record<string, unknown>)[key];
+      if (typeof value === "string" && value.trim()) {
+        return value.trim();
+      }
+    }
     const candidates = coerceArray(entry);
     for (const candidate of candidates) {
       if (candidate.trim()) {

@@ -105,6 +105,7 @@ export interface GenParams {
   preferJokers?: boolean;
   paletteMode?: PaletteSource;
   paletteBias?: Partial<Record<PaletteHarmony, number>>;
+  enforceColorCoherence?: boolean;
 }
 
 export interface Policy {

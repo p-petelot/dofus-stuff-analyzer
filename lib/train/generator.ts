@@ -11,7 +11,7 @@ import type {
   PaletteSource,
   TrainingSlotKey,
 } from "./types";
-import { buildCandidatePreview } from "./look";
+import { buildCandidatePreview, AVAILABLE_CLASS_KEYS, getClassPreviewConfig } from "./look";
 
 const SLOT_TO_COLOR: Record<TrainingSlotKey, keyof PaletteSummary["colors"]> = {
   coiffe: "hair",
@@ -21,6 +21,28 @@ const SLOT_TO_COLOR: Record<TrainingSlotKey, keyof PaletteSummary["colors"]> = {
   epauliere: "secondary",
   costume: "primary",
   ailes: "accent",
+};
+
+const CLASS_NAME_OVERRIDES: Record<string, string> = {
+  feca: "Féca",
+  osamodas: "Osamodas",
+  enutrof: "Enutrof",
+  sram: "Sram",
+  xelor: "Xélor",
+  ecaflip: "Ecaflip",
+  eniripsa: "Eniripsa",
+  iop: "Iop",
+  cra: "Crâ",
+  sadida: "Sadida",
+  sacrieur: "Sacrieur",
+  pandawa: "Pandawa",
+  roublard: "Roublard",
+  zobal: "Zobal",
+  steamer: "Steamer",
+  eliotrope: "Eliotrope",
+  huppermage: "Huppermage",
+  ouginak: "Ouginak",
+  forgelance: "Forgelance",
 };
 
 const HARMONIES: PaletteHarmony[] = ["triad", "split", "analogous", "complementary"];
@@ -113,12 +135,30 @@ function alignAnchorHue(
   return clampHue(createRng(fallbackSeed).next() * 360);
 }
 
+function findClosestColor(item: CatalogItem | null | undefined, targetHue: number, fallbackColor: string): string {
+  if (!item || item.palette.length === 0) {
+    return fallbackColor;
+  }
+  let closest = item.palette[0];
+  let bestDistance = Number.POSITIVE_INFINITY;
+  item.palette.forEach((color) => {
+    const hue = hueFromHex(color);
+    const distance = hueDistance(hue, targetHue);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      closest = color;
+    }
+  });
+  return closest ?? fallbackColor;
+}
+
 function pickItem(
   slot: TrainingSlotKey,
   palette: PaletteSummary,
   theme: string | null,
   classKey: string,
   preferJokers: boolean,
+  enforceColorCoherence: boolean,
   rngSeed: string,
   options: CatalogItem[],
 ): CandidateItemPick {
@@ -162,16 +202,25 @@ function pickItem(
   });
   scored.sort((a, b) => b.weight - a.weight);
   const top = scored.slice(0, Math.min(12, scored.length));
+  if (enforceColorCoherence) {
+    const [best] = scored.sort((a, b) => a.minDistance - b.minDistance);
+    const item = best?.item ?? pool[0];
+    const assignedColor = item ? findClosestColor(item, targetHue, targetColor) : targetColor;
+    return { slot, item: item ?? null, assignedColor, isJoker: Boolean(item?.isJoker) };
+  }
+
   const totalWeight = top.reduce((sum, entry) => sum + entry.weight, 0);
   let roll = rng.next() * (totalWeight || 1);
   for (const entry of top) {
     roll -= entry.weight;
     if (roll <= 0) {
-      return { slot, item: entry.item, assignedColor: targetColor, isJoker: entry.item.isJoker };
+      const assignedColor = findClosestColor(entry.item, targetHue, targetColor);
+      return { slot, item: entry.item, assignedColor, isJoker: entry.item.isJoker };
     }
   }
   const fallback = top[0];
-  return { slot, item: fallback.item, assignedColor: targetColor, isJoker: fallback.item.isJoker };
+  const assignedColor = findClosestColor(fallback.item, targetHue, targetColor);
+  return { slot, item: fallback.item, assignedColor, isJoker: fallback.item.isJoker };
 }
 
 function fallbackClassName(key: string): string {
@@ -179,7 +228,23 @@ function fallbackClassName(key: string): string {
     return "Classe inconnue";
   }
   const trimmed = key.trim();
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+  const normalized = trimmed.toLowerCase();
+  if (CLASS_NAME_OVERRIDES[normalized]) {
+    return CLASS_NAME_OVERRIDES[normalized];
+  }
+  const breedMatch = normalized.match(/^breed-(\d+)$/);
+  if (breedMatch) {
+    const breedId = Number(breedMatch[1]);
+    const matchedKey = AVAILABLE_CLASS_KEYS.find((candidate) => {
+      const config = getClassPreviewConfig(candidate);
+      return config?.breedId === breedId;
+    });
+    if (matchedKey) {
+      return CLASS_NAME_OVERRIDES[matchedKey] ?? matchedKey.charAt(0).toUpperCase() + matchedKey.slice(1);
+    }
+    return `Classe ${breedId}`;
+  }
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
 export async function generateCandidate(params?: GenParams): Promise<GeneratedCandidate> {
@@ -232,11 +297,21 @@ export async function generateCandidate(params?: GenParams): Promise<GeneratedCa
     anchorHue,
   });
   const preferJokers = Boolean(params?.preferJokers);
+  const enforceColorCoherence = Boolean(params?.enforceColorCoherence);
   const picks: CandidateItemPick[] = [];
   let jokerCount = 0;
   for (const slot of slotCoverage) {
     const options = catalog.bySlot[slot] ?? [];
-    const pick = pickItem(slot, palette, theme, classKey, preferJokers, seed, options);
+    const pick = pickItem(
+      slot,
+      palette,
+      theme,
+      classKey,
+      preferJokers,
+      enforceColorCoherence,
+      seed,
+      options,
+    );
     picks.push(pick);
     if (pick.isJoker) {
       jokerCount += 1;
@@ -248,6 +323,9 @@ export async function generateCandidate(params?: GenParams): Promise<GeneratedCa
   }
   if (jokerCount > 0) {
     notes.push(`${jokerCount} joker(s) intégrés pour équilibrer la palette.`);
+  }
+  if (enforceColorCoherence) {
+    notes.push("Palette harmonisée avec les teintes des équipements sélectionnés.");
   }
   return {
     id: seed,

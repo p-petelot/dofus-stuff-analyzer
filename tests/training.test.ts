@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { generateCandidate } from "../lib/train/generator";
+import { hexToRgb, rgbToHue } from "../lib/train/color";
+
+function hueFromHex(hex: string): number {
+  const [r, g, b] = hexToRgb(hex);
+  return rgbToHue(r, g, b);
+}
+
+function hueDistance(a: number, b: number): number {
+  const diff = Math.abs(a - b) % 360;
+  return diff > 180 ? 360 - diff : diff;
+}
 
 describe("training random generation", () => {
   it("produces candidates with palette and items", async () => {
@@ -24,5 +35,22 @@ describe("training random generation", () => {
     expect(candidate.preview?.itemIds.length ?? 0).toBeGreaterThanOrEqual(0);
     expect(candidate.preview?.colors.length ?? 0).toBeGreaterThan(0);
     expect(candidate.preview?.colors.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("aligns item colors when coherence is enforced", async () => {
+    const candidate = await generateCandidate({ enforceColorCoherence: true });
+    let worstDistance = 0;
+    candidate.items.forEach((pick) => {
+      if (!pick.item || pick.item.palette.length === 0) {
+        return;
+      }
+      expect(pick.item.palette).toContain(pick.assignedColor);
+      const assignedHue = hueFromHex(pick.assignedColor);
+      const bestItemHue = Math.min(
+        ...pick.item.palette.map((hex) => hueDistance(assignedHue, hueFromHex(hex))),
+      );
+      worstDistance = Math.max(worstDistance, bestItemHue);
+    });
+    expect(worstDistance).toBeLessThanOrEqual(35);
   });
 });

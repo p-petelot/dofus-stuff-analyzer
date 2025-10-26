@@ -190,6 +190,7 @@ export default function TrainingPage(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
   const [batchId, setBatchId] = useState(0);
+  const [coherentColors, setCoherentColors] = useState(false);
 
   const regenerate = useCallback(
     async (count: number) => {
@@ -204,7 +205,7 @@ export default function TrainingPage(): JSX.Element {
         const response = await fetch("/api/train/random", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ count: clamped }),
+          body: JSON.stringify({ count: clamped, coherentColors }),
         });
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
@@ -227,7 +228,7 @@ export default function TrainingPage(): JSX.Element {
         }
       }
     },
-    [],
+    [coherentColors],
   );
 
   useEffect(() => {
@@ -253,6 +254,10 @@ export default function TrainingPage(): JSX.Element {
       return;
     }
     setDesiredCount(clampCount(value));
+  }, []);
+
+  const handleCoherenceChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    setCoherentColors(event.target.checked);
   }, []);
 
   return (
@@ -297,6 +302,14 @@ export default function TrainingPage(): JSX.Element {
                 <span>skins</span>
               </div>
             </div>
+            <label className="training-hero__checkbox">
+              <input
+                type="checkbox"
+                checked={coherentColors}
+                onChange={handleCoherenceChange}
+              />
+              <span>Cohérence visuelle</span>
+            </label>
             <button type="submit" className="training-button" disabled={loading}>
               {loading ? "Génération en cours…" : "Générer"}
             </button>
