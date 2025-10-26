@@ -9128,28 +9128,6 @@ export default function Home({
                               <p className="gallery-card__subtitle">{subtitle}</p>
                             ) : null}
                           </header>
-                          <ul className="gallery-card__meta">
-                            {proposal.className ? (
-                              <li>
-                                <span className="gallery-card__meta-label">
-                                  {t("gallery.card.class")}
-                                </span>
-                                <span className="gallery-card__meta-value">
-                                  {proposal.className}
-                                </span>
-                              </li>
-                            ) : null}
-                            {proposal.genderLabel ? (
-                              <li>
-                                <span className="gallery-card__meta-label">
-                                  {t("gallery.card.gender")}
-                                </span>
-                                <span className="gallery-card__meta-value">
-                                  {proposal.genderLabel}
-                                </span>
-                              </li>
-                            ) : null}
-                          </ul>
                           <div
                             className="gallery-card__swatches"
                             role="list"
