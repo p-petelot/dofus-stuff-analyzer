@@ -1,3 +1,4 @@
+import { Buffer } from "buffer";
 import type { GeneratedCandidate, RendererPayload, RendererResult, TrainingSlotKey } from "./types";
 
 const RENDERER_ENDPOINT = "https://skin.souff.fr/renderer/";
@@ -25,23 +26,45 @@ function buildPayload(candidate: GeneratedCandidate): RendererPayload {
   };
 }
 
+function asDataUrl(buffer: ArrayBuffer, contentType: string): string {
+  const bytes = Buffer.from(buffer);
+  const base64 = bytes.toString("base64");
+  return `data:${contentType};base64,${base64}`;
+}
+
 async function performRender(candidate: GeneratedCandidate): Promise<string | null> {
   try {
     const payload = buildPayload(candidate);
     const response = await fetch(RENDERER_ENDPOINT, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "image/png,application/json;q=0.8,*/*;q=0.5",
+      },
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
       return null;
     }
-    const result = (await response.json()) as RendererResult | { url?: string };
-    if ("imageUrl" in result && typeof result.imageUrl === "string") {
-      return result.imageUrl;
+    const contentType = response.headers.get("content-type") ?? "image/png";
+    if (contentType.includes("image/")) {
+      const buffer = await response.arrayBuffer();
+      return asDataUrl(buffer, contentType.split(";")[0]);
     }
-    if ("url" in result && typeof result.url === "string") {
-      return result.url;
+    // Some deployments can return JSON with a remote URL fallback.
+    const text = await response.text();
+    try {
+      const parsed = JSON.parse(text) as RendererResult | { url?: string };
+      if (typeof parsed === "object" && parsed) {
+        if ("imageUrl" in parsed && typeof parsed.imageUrl === "string") {
+          return parsed.imageUrl;
+        }
+        if ("url" in parsed && typeof parsed.url === "string") {
+          return parsed.url;
+        }
+      }
+    } catch (error) {
+      console.warn("renderer unexpected payload", error, text);
     }
     return null;
   } catch (error) {
