@@ -52,9 +52,9 @@ export default async function handler(
     }
 
     const rendered = await Promise.all(
-      candidates.map(async (candidate) => {
+      candidates.map(async (candidate, index) => {
         const imageUrl = await enqueueRender(candidate);
-        return { ...candidate, imageUrl };
+        return { ...candidate, imageUrl, generation: index + 1 };
       }),
     );
 

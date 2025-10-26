@@ -2,7 +2,7 @@ import { SLOTS } from "../config/suggestions";
 import { clampHue, hslToHex, paletteToHues } from "./color";
 import { AVAILABLE_CLASS_KEYS } from "./look";
 import { createRng } from "./random";
-import type { Catalog, CatalogItem, TrainingSlotKey } from "./types";
+import type { Catalog, CatalogClassMetadata, CatalogItem, TrainingSlotKey } from "./types";
 
 const DOFUS_API_HOST = "https://api.dofusdb.fr";
 const DEFAULT_LANG = "fr";
@@ -33,6 +33,28 @@ const SLOT_REQUESTS: Record<TrainingSlotKey, { typeIds: number[]; limit: number 
 };
 
 const FALLBACK_CLASS_KEYS = AVAILABLE_CLASS_KEYS;
+
+const FALLBACK_CLASS_METADATA: CatalogClassMetadata[] = [
+  { key: "feca", name: "Féca", icon: null },
+  { key: "osamodas", name: "Osamodas", icon: null },
+  { key: "enutrof", name: "Enutrof", icon: null },
+  { key: "sram", name: "Sram", icon: null },
+  { key: "xelor", name: "Xélor", icon: null },
+  { key: "ecaflip", name: "Ecaflip", icon: null },
+  { key: "eniripsa", name: "Eniripsa", icon: null },
+  { key: "iop", name: "Iop", icon: null },
+  { key: "cra", name: "Crâ", icon: null },
+  { key: "sadida", name: "Sadida", icon: null },
+  { key: "sacrieur", name: "Sacrieur", icon: null },
+  { key: "pandawa", name: "Pandawa", icon: null },
+  { key: "roublard", name: "Roublard", icon: null },
+  { key: "zobal", name: "Zobal", icon: null },
+  { key: "steamer", name: "Steamer", icon: null },
+  { key: "eliotrope", name: "Eliotrope", icon: null },
+  { key: "huppermage", name: "Huppermage", icon: null },
+  { key: "ouginak", name: "Ouginak", icon: null },
+  { key: "forgelance", name: "Forgelance", icon: null },
+];
 
 function coerceArray(value: unknown): string[] {
   if (Array.isArray(value)) {
@@ -119,6 +141,43 @@ function extractImageUrl(entry: any): string | null {
   for (const candidate of candidates) {
     if (typeof candidate === "string" && candidate.trim()) {
       return candidate.trim();
+    }
+  }
+  return null;
+}
+
+function extractClassIcon(entry: any): string | null {
+  const direct = extractImageUrl(entry);
+  if (direct) {
+    return direct;
+  }
+  const nestedCandidates = [
+    entry?.headUri,
+    entry?.maleImg,
+    entry?.femaleImg,
+    entry?.maleImage,
+    entry?.femaleImage,
+    entry?.maleIcon,
+    entry?.femaleIcon,
+    entry?.malePortrait,
+    entry?.femalePortrait,
+    entry?.images?.icon,
+    entry?.images?.head,
+    entry?.artwork,
+    entry?.illustration,
+  ];
+  for (const candidate of nestedCandidates) {
+    if (!candidate) {
+      continue;
+    }
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+    if (typeof candidate === "object") {
+      const extracted = extractImageUrl(candidate);
+      if (extracted) {
+        return extracted;
+      }
     }
   }
   return null;
@@ -267,7 +326,37 @@ function toClassKey(entry: any): string | null {
   return fallback && FALLBACK_CLASS_KEYS.includes(fallback) ? fallback : null;
 }
 
-async function fetchClassKeys(): Promise<string[]> {
+function normalizeClassMetadata(entry: any): CatalogClassMetadata | null {
+  const key = toClassKey(entry);
+  if (!key) {
+    return null;
+  }
+  const fallback = FALLBACK_CLASS_METADATA.find((meta) => meta.key === key);
+  const defaultLabel = fallback?.name ?? key.charAt(0).toUpperCase() + key.slice(1);
+  const labelSources = [entry?.name, entry?.title, entry?.shortName];
+  let name = defaultLabel;
+  for (const source of labelSources) {
+    const candidate = normalizeLabel(source, defaultLabel);
+    if (candidate && candidate !== defaultLabel) {
+      name = candidate;
+      break;
+    }
+  }
+  const icon = extractClassIcon(entry) ?? fallback?.icon ?? null;
+  return { key, name, icon };
+}
+
+function dedupeClassMetadata(entries: CatalogClassMetadata[]): CatalogClassMetadata[] {
+  const map = new Map<string, CatalogClassMetadata>();
+  entries.forEach((entry) => {
+    if (!map.has(entry.key)) {
+      map.set(entry.key, entry);
+    }
+  });
+  return Array.from(map.values());
+}
+
+async function fetchClassMetadata(): Promise<CatalogClassMetadata[]> {
   const params = new URLSearchParams();
   params.set("$limit", "40");
   params.set("$skip", "0");
@@ -276,28 +365,33 @@ async function fetchClassKeys(): Promise<string[]> {
   try {
     const payload = await fetchJson(url);
     const dataset = extractDataset(payload);
-    const keys = dataset
-      .map((entry: any) => toClassKey(entry))
-      .filter((value): value is string => Boolean(value));
-    const unique = Array.from(new Set(keys));
-    return unique.length ? unique : [...FALLBACK_CLASS_KEYS];
+    const metadata = dataset
+      .map((entry: any) => normalizeClassMetadata(entry))
+      .filter((value): value is CatalogClassMetadata => Boolean(value));
+    const unique = dedupeClassMetadata(metadata);
+    return unique.length ? unique : [...FALLBACK_CLASS_METADATA];
   } catch (error) {
     console.warn("Failed to load class keys", error);
-    return [...FALLBACK_CLASS_KEYS];
+    return [...FALLBACK_CLASS_METADATA];
   }
 }
 
-function buildCatalogFromItems(items: CatalogItem[], classes: string[]): Catalog {
+function buildCatalogFromItems(items: CatalogItem[], classEntries: CatalogClassMetadata[]): Catalog {
   const bySlot = Object.fromEntries(
     SLOTS.map((slot) => [slot, items.filter((item) => item.slot === slot)]),
   ) as Record<TrainingSlotKey, CatalogItem[]>;
   const themes = Array.from(new Set(items.flatMap((item) => item.themeTags))).filter(Boolean);
+  const classMetadata = Object.fromEntries(
+    classEntries.map((entry) => [entry.key, entry] as [string, CatalogClassMetadata]),
+  );
+  const classes = classEntries.map((entry) => entry.key);
   return {
     updatedAt: Date.now(),
     items,
     bySlot,
     themes,
     classes,
+    classMetadata,
   };
 }
 
@@ -402,7 +496,7 @@ function buildFallbackCatalog(): Catalog {
       rendererKey: null,
     },
   ];
-  return buildCatalogFromItems(fallbackItems, [...FALLBACK_CLASS_KEYS]);
+  return buildCatalogFromItems(fallbackItems, [...FALLBACK_CLASS_METADATA]);
 }
 
 let catalogCache: Catalog | null = null;
@@ -412,7 +506,7 @@ export async function getCatalog(): Promise<Catalog> {
     return catalogCache;
   }
   try {
-    const classKeys = await fetchClassKeys();
+    const classEntries = await fetchClassMetadata();
     const seed = `${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`;
     const itemsBySlot = await Promise.all(
       SLOTS.map(async (slot) => {
@@ -429,7 +523,10 @@ export async function getCatalog(): Promise<Catalog> {
       catalogCache = fallback;
       return fallback;
     }
-    const catalog = buildCatalogFromItems(items, classKeys.length ? classKeys : [...FALLBACK_CLASS_KEYS]);
+    const catalog = buildCatalogFromItems(
+      items,
+      classEntries.length ? classEntries : [...FALLBACK_CLASS_METADATA],
+    );
     catalogCache = catalog;
     return catalog;
   } catch (error) {

@@ -5,6 +5,10 @@ describe("training random generation", () => {
   it("produces candidates with palette and items", async () => {
     const candidate = await generateCandidate();
     expect(candidate.id).toBeTruthy();
+    expect(candidate.classKey).toBeTruthy();
+    expect(typeof candidate.className).toBe("string");
+    expect(candidate.className.length).toBeGreaterThan(0);
+    expect(["string", "object"].includes(typeof candidate.classIcon)).toBe(true);
     expect(candidate.palette.colors.hair).toMatch(/^#/);
     expect(Object.keys(candidate.palette.colors)).toHaveLength(6);
     expect(candidate.items.length).toBeGreaterThan(0);

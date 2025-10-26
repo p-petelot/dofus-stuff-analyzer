@@ -38,12 +38,19 @@ export interface CatalogItem {
   rendererKey?: string | null;
 }
 
+export interface CatalogClassMetadata {
+  key: string;
+  name: string;
+  icon: string | null;
+}
+
 export interface Catalog {
   updatedAt: number;
   items: CatalogItem[];
   bySlot: Record<TrainingSlotKey, CatalogItem[]>;
   themes: string[];
   classes: string[];
+  classMetadata: Record<string, CatalogClassMetadata>;
 }
 
 export interface CandidateItemPick {
@@ -66,6 +73,8 @@ export interface CandidatePreviewDescriptor {
 export interface GeneratedCandidate {
   id: string;
   classKey: string;
+  className: string;
+  classIcon: string | null;
   sex: TrainingSex;
   palette: PaletteSummary;
   slotCoverage: TrainingSlotKey[];
@@ -76,6 +85,7 @@ export interface GeneratedCandidate {
   policyId?: string;
   imageUrl?: string | null;
   preview?: CandidatePreviewDescriptor | null;
+  generation?: number;
 }
 
 export interface EvaluationBreakdown {

@@ -174,6 +174,14 @@ function pickItem(
   return { slot, item: fallback.item, assignedColor: targetColor, isJoker: fallback.item.isJoker };
 }
 
+function fallbackClassName(key: string): string {
+  if (typeof key !== "string" || !key.trim()) {
+    return "Classe inconnue";
+  }
+  const trimmed = key.trim();
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
 export async function generateCandidate(params?: GenParams): Promise<GeneratedCandidate> {
   const catalog = await getCatalog();
   const seed = `${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`;
@@ -183,6 +191,7 @@ export async function generateCandidate(params?: GenParams): Promise<GeneratedCa
     availableClasses.map((cls) => [cls, 1 / availableClasses.length]),
   );
   const classKey = weightedSample(classDistribution, rng) || availableClasses[0];
+  const classMetadata = catalog.classMetadata[classKey];
   const sexDistribution = params?.sexDist ?? { male: 0.5, female: 0.5 };
   const sexRoll = rng.next();
   const sex = sexRoll < (sexDistribution.male ?? 0.5) ? "male" : "female";
@@ -243,6 +252,8 @@ export async function generateCandidate(params?: GenParams): Promise<GeneratedCa
   return {
     id: seed,
     classKey,
+    className: classMetadata?.name ?? fallbackClassName(classKey),
+    classIcon: classMetadata?.icon ?? null,
     sex,
     palette,
     slotCoverage,
