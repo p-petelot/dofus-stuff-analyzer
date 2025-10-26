@@ -7,6 +7,194 @@ import type {
   Policy,
 } from "../lib/train/types";
 
+type PreviewStatus = "idle" | "loading" | "loaded" | "error";
+
+interface PreviewState {
+  status: PreviewStatus;
+  thumbUrl: string | null;
+  hdUrl: string | null;
+  error?: string;
+}
+
+interface LookPreviewPayload {
+  dataUrl?: string | null;
+  rendererUrl?: string | null;
+  lookUrl?: string | null;
+}
+
+const previewCache = new Map<string, PreviewState>();
+
+function buildPreviewCacheKey(candidate: EvaluatedCandidate): string | null {
+  const preview = candidate.preview;
+  if (!preview) {
+    return null;
+  }
+  const colorKey = Array.isArray(preview.colors) ? preview.colors.join("-") : "";
+  const itemKey = Array.isArray(preview.itemIds) ? preview.itemIds.join("-") : "";
+  return [
+    preview.classId,
+    preview.faceId,
+    preview.gender,
+    preview.direction,
+    preview.animation,
+    colorKey,
+    itemKey,
+  ].join("|");
+}
+
+function coerceGenderCode(input: string): string {
+  return input === "female" ? "f" : "m";
+}
+
+function resolvePreviewLink(payload: LookPreviewPayload, fallback: string | null): string | null {
+  if (typeof payload.rendererUrl === "string" && payload.rendererUrl.trim().length) {
+    return payload.rendererUrl;
+  }
+  if (typeof payload.lookUrl === "string" && payload.lookUrl.trim().length) {
+    return payload.lookUrl;
+  }
+  return fallback;
+}
+
+function useCandidatePreview(candidate: EvaluatedCandidate): PreviewState {
+  const [state, setState] = useState<PreviewState>(() => {
+    if (candidate.imageUrl) {
+      return { status: "loaded", thumbUrl: candidate.imageUrl, hdUrl: candidate.imageUrl };
+    }
+    return { status: "idle", thumbUrl: null, hdUrl: null };
+  });
+
+  useEffect(() => {
+    if (candidate.imageUrl) {
+      setState({ status: "loaded", thumbUrl: candidate.imageUrl, hdUrl: candidate.imageUrl });
+      return;
+    }
+
+    const preview = candidate.preview;
+    if (!preview) {
+      setState({ status: "error", thumbUrl: null, hdUrl: null, error: "Aperçu indisponible" });
+      return;
+    }
+
+    const cacheKey = buildPreviewCacheKey(candidate);
+    if (cacheKey) {
+      const cached = previewCache.get(cacheKey);
+      if (cached) {
+        setState({ ...cached });
+        return;
+      }
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+    setState({ status: "loading", thumbUrl: null, hdUrl: null });
+
+    const params = new URLSearchParams();
+    params.set("breedId", String(preview.classId));
+    params.set("gender", coerceGenderCode(preview.gender));
+    params.set("faceId", String(preview.faceId));
+    params.set("direction", String(preview.direction));
+    params.set("animation", String(preview.animation));
+    params.set("size", "384");
+    (Array.isArray(preview.itemIds) ? preview.itemIds : []).forEach((id) => {
+      if (Number.isFinite(id)) {
+        params.append("itemIds[]", String(id));
+      }
+    });
+    (Array.isArray(preview.colors) ? preview.colors : []).forEach((value) => {
+      if (Number.isFinite(value)) {
+        params.append("colors[]", String(value));
+      }
+    });
+
+    fetch(`/api/look-preview?${params.toString()}`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) {
+          const message = `HTTP ${response.status}`;
+          throw new Error(message);
+        }
+        const payload = (await response.json()) as LookPreviewPayload & { dataUrl?: string };
+        const thumbUrl = typeof payload.dataUrl === "string" ? payload.dataUrl : null;
+        const hdUrl = resolvePreviewLink(payload, thumbUrl);
+        const nextState: PreviewState = thumbUrl
+          ? { status: "loaded", thumbUrl, hdUrl: hdUrl ?? thumbUrl }
+          : { status: "error", thumbUrl: null, hdUrl: hdUrl ?? null, error: "Aperçu indisponible" };
+        if (cacheKey) {
+          previewCache.set(cacheKey, { ...nextState });
+        }
+        if (!cancelled) {
+          setState({ ...nextState });
+        }
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        const errorState: PreviewState = { status: "error", thumbUrl: null, hdUrl: null, error: message };
+        if (cacheKey) {
+          previewCache.set(cacheKey, { ...errorState });
+        }
+        if (!cancelled) {
+          setState({ ...errorState });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [candidate.id, candidate.imageUrl, candidate.preview]);
+
+  return state;
+}
+
+interface TrainingCandidateCardProps {
+  candidate: EvaluatedCandidate;
+  onFeedback: (candidateId: string, like: boolean) => void;
+}
+
+function TrainingCandidateCard({ candidate, onFeedback }: TrainingCandidateCardProps) {
+  const preview = useCandidatePreview(candidate);
+  const themeLabel = candidate.theme ?? "Sans thème";
+  const scoreLabel = formatScore(candidate.evaluation.score);
+  const feedbackLike = () => onFeedback(candidate.id, true);
+  const feedbackDislike = () => onFeedback(candidate.id, false);
+
+  return (
+    <div className="training-candidate">
+      <div className={`training-candidate__thumb training-candidate__thumb--${preview.status}`}>
+        {preview.thumbUrl ? (
+          <img src={preview.thumbUrl} alt={candidate.classKey} loading="lazy" />
+        ) : (
+          <span className="training-candidate__placeholder">
+            {preview.status === "loading" ? "Aperçu en cours…" : "Aperçu indisponible"}
+          </span>
+        )}
+      </div>
+      <div className="training-candidate__meta">
+        <strong>{candidate.classKey}</strong>
+        <span>Score {scoreLabel}</span>
+        <span>{themeLabel}</span>
+        <span>{candidate.jokerCount} joker(s)</span>
+      </div>
+      <footer className="training-candidate__actions">
+        {preview.hdUrl ? (
+          <a href={preview.hdUrl} target="_blank" rel="noreferrer">
+            Voir
+          </a>
+        ) : null}
+        <button type="button" onClick={feedbackLike} aria-label="J'aime cette proposition">
+          👍
+        </button>
+        <button type="button" onClick={feedbackDislike} aria-label="Je n'aime pas cette proposition">
+          👎
+        </button>
+      </footer>
+    </div>
+  );
+}
+
 interface StatusResponse {
   runs: TrainingRunRecord[];
   activeRunId: string | null;
@@ -363,34 +551,11 @@ function TrainingPage() {
                 </header>
                 <div className="training-candidate-grid">
                   {iteration.candidates.map((candidate) => (
-                    <div key={candidate.id} className="training-candidate">
-                      <div className="training-candidate__thumb">
-                        {candidate.imageUrl ? (
-                          <img src={candidate.imageUrl} alt={candidate.classKey} loading="lazy" />
-                        ) : (
-                          <span className="training-candidate__placeholder">Aperçu en cours…</span>
-                        )}
-                      </div>
-                      <div className="training-candidate__meta">
-                        <strong>{candidate.classKey}</strong>
-                        <span>Score {formatScore(candidate.evaluation.score)}</span>
-                        <span>{candidate.theme ?? "Sans thème"}</span>
-                        <span>{candidate.jokerCount} joker(s)</span>
-                      </div>
-                      <footer className="training-candidate__actions">
-                        {candidate.imageUrl ? (
-                          <a href={candidate.imageUrl} target="_blank" rel="noreferrer">
-                            Voir
-                          </a>
-                        ) : null}
-                        <button type="button" onClick={() => handleFeedback(candidate.id, true)}>
-                          👍
-                        </button>
-                        <button type="button" onClick={() => handleFeedback(candidate.id, false)}>
-                          👎
-                        </button>
-                      </footer>
-                    </div>
+                    <TrainingCandidateCard
+                      key={candidate.id}
+                      candidate={candidate}
+                      onFeedback={handleFeedback}
+                    />
                   ))}
                 </div>
               </article>

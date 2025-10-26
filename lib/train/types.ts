@@ -61,6 +61,16 @@ export interface CandidateItemPick {
   isJoker: boolean;
 }
 
+export interface CandidatePreviewDescriptor {
+  classId: number;
+  faceId: number;
+  gender: TrainingSex;
+  colors: number[];
+  itemIds: number[];
+  animation: number;
+  direction: number;
+}
+
 export interface GeneratedCandidate {
   id: string;
   classKey: string;
@@ -73,6 +83,7 @@ export interface GeneratedCandidate {
   notes: string[];
   policyId?: string;
   imageUrl?: string | null;
+  preview?: CandidatePreviewDescriptor | null;
 }
 
 export interface EvaluationBreakdown {

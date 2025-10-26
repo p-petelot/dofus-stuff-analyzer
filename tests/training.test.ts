@@ -10,6 +10,7 @@ describe("training pipeline", () => {
     expect(candidate.items.length).toBeGreaterThan(0);
     expect(candidate.slotCoverage.length).toBe(candidate.items.length);
     expect(candidate.palette.colors.hair).toMatch(/^#/);
+    expect(candidate.preview).toBeDefined();
   });
 
   it("evaluates candidate with bounded score", async () => {
@@ -33,5 +34,14 @@ describe("training pipeline", () => {
     expect(updated).not.toBe(basePolicy);
     const classWeight = updated.classDist[candidate.classKey] ?? 0;
     expect(classWeight).toBeGreaterThan(basePolicy.classDist[candidate.classKey] ?? 0);
+  });
+
+  it("builds preview descriptors for known classes", async () => {
+    const candidate = await generateCandidate({
+      classDist: { iop: 1 },
+      sexDist: { male: 1, female: 0 },
+    });
+    expect(candidate.preview).not.toBeNull();
+    expect(candidate.preview?.colors.length ?? 0).toBeGreaterThan(0);
   });
 });

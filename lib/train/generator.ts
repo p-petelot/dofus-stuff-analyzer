@@ -11,6 +11,7 @@ import type {
   PaletteSource,
   TrainingSlotKey,
 } from "./types";
+import { buildCandidatePreview } from "./look";
 
 const SLOT_TO_COLOR: Record<TrainingSlotKey, keyof PaletteSummary["colors"]> = {
   coiffe: "hair",
@@ -236,5 +237,7 @@ export async function generateCandidate(params?: GenParams): Promise<GeneratedCa
     theme,
     jokerCount,
     notes,
+    imageUrl: null,
+    preview: buildCandidatePreview(classKey, sex, palette, picks),
   };
 }
