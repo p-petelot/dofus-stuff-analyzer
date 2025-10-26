@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
+import Link from "next/link";
 import { useRouter } from "next/router";
 import {
   DEFAULT_LANGUAGE,
@@ -1428,11 +1429,12 @@ const SHAPE_STRONG_THRESHOLD = 0.18;
 const TONE_CONFIDENCE_DISTANCE = 0.72;
 const TONE_CONFIDENCE_WEIGHT = 0.18;
 const MIN_ALPHA_WEIGHT = 0.05;
-const MAX_RECOMMENDATIONS = 12;
+const MAX_RECOMMENDATIONS = 24;
 const PANEL_ITEMS_LIMIT = 5;
-const GALLERY_PROPOSAL_OPTIONS = Object.freeze([6, 9, 12, 15]);
+const ANALYZER_PROPOSAL_COUNT = 8;
+const GALLERY_PROPOSAL_OPTIONS = Object.freeze([12, 16, 20, 24]);
 const DEFAULT_GALLERY_PROPOSAL_COUNT =
-  GALLERY_PROPOSAL_OPTIONS[2] ?? GALLERY_PROPOSAL_OPTIONS[0] ?? 12;
+  GALLERY_PROPOSAL_OPTIONS[1] ?? GALLERY_PROPOSAL_OPTIONS[0] ?? 16;
 const GALLERY_GENDER_ICONS = Object.freeze({
   m: "/icons/gender-male.svg",
   f: "/icons/gender-female.svg",
@@ -3906,9 +3908,7 @@ export default function Home({
   const [downloadingPreviewId, setDownloadingPreviewId] = useState(null);
   const [copyingPreviewId, setCopyingPreviewId] = useState(null);
   const [supportsImageClipboard, setSupportsImageClipboard] = useState(false);
-  const [activeView, setActiveView] = useState(
-    initialView === "gallery" ? "gallery" : "analyzer"
-  );
+  const activeView = initialView === "gallery" ? "gallery" : "analyzer";
   const [galleryRefreshToken, setGalleryRefreshToken] = useState(0);
   const [galleryAssignments, setGalleryAssignments] = useState([]);
   const [galleryProposalCount, setGalleryProposalCount] = useState(
@@ -5233,7 +5233,10 @@ export default function Home({
           return;
         }
 
-        const limit = Math.min(galleryProposalCount, pool.length);
+        const limit = Math.min(
+          isGalleryView ? galleryProposalCount : ANALYZER_PROPOSAL_COUNT,
+          pool.length
+        );
         const { indexes, changed: normalizedChanged } = normalizeSelection(previous?.[type], limit, pool.length);
         next[type] = indexes;
         if (normalizedChanged) {
@@ -5257,7 +5260,7 @@ export default function Home({
 
       return next;
     });
-  }, [galleryProposalCount, recommendations]);
+  }, [galleryProposalCount, isGalleryView, recommendations]);
 
   useEffect(() => {
     if (!isGalleryView || !galleryRefreshToken || !recommendations) {
@@ -5323,7 +5326,10 @@ export default function Home({
       ...ITEM_TYPES.map((type) => (recommendations[type]?.length ?? 0))
     );
 
-    const total = Math.min(galleryProposalCount, maxLength || 0);
+    const desiredTotal = isGalleryView
+      ? galleryProposalCount
+      : ANALYZER_PROPOSAL_COUNT;
+    const total = Math.min(desiredTotal, maxLength || 0);
     const combos = [];
     const assignmentPool =
       isGalleryView && Array.isArray(galleryAssignments) && galleryAssignments.length
@@ -6712,7 +6718,10 @@ export default function Home({
       let nextSelection = null;
 
       if (Number.isFinite(proposalIndex)) {
-        const limit = Math.min(galleryProposalCount, pool.length);
+        const limit = Math.min(
+          isGalleryView ? galleryProposalCount : ANALYZER_PROPOSAL_COUNT,
+          pool.length
+        );
         if (proposalIndex >= 0 && proposalIndex < limit) {
           setProposalItemIndexes((previous = {}) => {
             const prevIndexes = Array.isArray(previous[type]) ? previous[type] : [];
@@ -6747,8 +6756,13 @@ export default function Home({
           });
         }
       }
-    },
-    [galleryProposalCount, recommendations, selectedItemsBySlot]
+  },
+    [
+      galleryProposalCount,
+      isGalleryView,
+      recommendations,
+      selectedItemsBySlot,
+    ]
   );
 
   const inputRef = useRef(null);
@@ -7307,24 +7321,14 @@ export default function Home({
       typeof analyzerRaw === "string" ? analyzerRaw : "Analyse";
     const galleryLabel = typeof galleryRaw === "string" ? galleryRaw : "Galerie";
     return [
-      { key: "analyzer", label: analyzerLabel },
-      { key: "gallery", label: galleryLabel },
+      { key: "analyzer", label: analyzerLabel, href: "/" },
+      { key: "gallery", label: galleryLabel, href: "/gallery" },
     ];
   }, [t]);
 
   const viewNavigationLabelRaw = t("tabs.navigation");
   const viewNavigationLabel =
     typeof viewNavigationLabelRaw === "string" ? viewNavigationLabelRaw : "";
-
-  const handleViewSelect = useCallback(
-    (nextView) => {
-      if (!nextView || nextView === activeView) {
-        return;
-      }
-      setActiveView(nextView);
-    },
-    [activeView, setActiveView]
-  );
 
   return (
     <>
@@ -7369,23 +7373,18 @@ export default function Home({
           <h1>{BRAND_NAME}</h1>
         </header>
         <nav className="page-tabs" aria-label={viewNavigationLabel}>
-          <ul className="page-tabs__list" role="tablist">
+          <ul className="page-tabs__list">
             {viewTabs.map((tab) => {
               const isActive = tab.key === activeView;
               return (
-                <li key={tab.key} className="page-tabs__item" role="presentation">
-                  <button
-                    type="button"
+                <li key={tab.key} className="page-tabs__item">
+                  <Link
+                    href={tab.href}
                     className={`page-tabs__button${isActive ? " is-active" : ""}`}
-                    onClick={() => handleViewSelect(tab.key)}
-                    role="tab"
-                    aria-selected={isActive}
                     aria-current={isActive ? "page" : undefined}
-                    aria-controls={tab.key === "analyzer" ? "view-analyzer" : "view-gallery"}
-                    id={`tab-${tab.key}`}
                   >
                     <span>{tab.label}</span>
-                  </button>
+                  </Link>
                 </li>
               );
             })}
@@ -7436,14 +7435,8 @@ export default function Home({
             })}
           </div>
         </div>
-
-        <div
-          id="view-analyzer"
-          className={`view view--analyzer${isGalleryView ? " is-hidden" : ""}`}
-          hidden={isGalleryView}
-          role="tabpanel"
-          aria-labelledby="tab-analyzer"
-        >
+        {!isGalleryView ? (
+          <div id="view-analyzer" className="view view--analyzer">
           <div className="workspace-layout">
           <section className="workspace">
           <div className={referenceClassName}>
@@ -9091,14 +9084,10 @@ export default function Home({
         </section>
           </div>
         </div>
-        <div
-          id="view-gallery"
-          className={`view view--gallery${isGalleryView ? " is-active" : ""}`}
-          hidden={!isGalleryView}
-          role="tabpanel"
-          aria-labelledby="tab-gallery"
-        >
-          <section className="gallery">
+        ) : null}
+        {isGalleryView ? (
+          <div id="view-gallery" className="view view--gallery">
+            <section className="gallery">
             <header className="gallery__header">
               <div className="gallery__titles">
                 <h2>{t("gallery.title")}</h2>
@@ -9168,46 +9157,31 @@ export default function Home({
                     const equipmentLabel = t("gallery.card.items");
                     return (
                       <article key={proposal.id} className="gallery-card">
-                        <div className="gallery-card__preview">
-                          {lookLoaded ? (
-                            <img src={previewUrl} alt={lookLabel} loading="lazy" />
-                          ) : lookLoading ? (
-                            <PaletteLoader label={t("gallery.loading")} />
-                          ) : (
-                            <div className="gallery-card__placeholder">
-                              {typeof error === "string" && error.length
-                                ? error
-                                : t("errors.previewUnavailable")}
-                            </div>
-                          )}
-                        </div>
-                        <div className="gallery-card__body">
-                          <header className="gallery-card__header">
-                            <div className="gallery-card__header-top">
-                              <span className="gallery-card__generation" aria-label={generationLabel}>
-                                {generationBadge}
+                        <header className="gallery-card__header">
+                          <div className="gallery-card__header-top">
+                            <span className="gallery-card__generation" aria-label={generationLabel}>
+                              {generationBadge}
+                            </span>
+                            {genderIcon ? (
+                              <span className="gallery-card__gender" title={genderLabel}>
+                                <span className="sr-only">{genderLabel}</span>
+                                <img src={genderIcon} alt="" aria-hidden="true" loading="lazy" />
                               </span>
-                              {genderIcon ? (
-                                <span className="gallery-card__gender" title={genderLabel}>
-                                  <span className="sr-only">{genderLabel}</span>
-                                  <img src={genderIcon} alt="" aria-hidden="true" loading="lazy" />
-                                </span>
-                              ) : null}
+                            ) : null}
+                          </div>
+                          <div className="gallery-card__identity">
+                            {proposal.classIcon ? (
+                              <span className="gallery-card__class-icon" aria-hidden="true">
+                                <img src={proposal.classIcon} alt="" loading="lazy" />
+                              </span>
+                            ) : null}
+                            <div className="gallery-card__identity-details">
+                              <h3 className="gallery-card__title">{displayName}</h3>
+                              {subtitle ? <p className="gallery-card__subtitle">{subtitle}</p> : null}
                             </div>
-                            <div className="gallery-card__identity">
-                              {proposal.classIcon ? (
-                                <span className="gallery-card__class-icon" aria-hidden="true">
-                                  <img src={proposal.classIcon} alt="" loading="lazy" />
-                                </span>
-                              ) : null}
-                              <div className="gallery-card__identity-details">
-                                <h3 className="gallery-card__title">{displayName}</h3>
-                                {subtitle ? (
-                                  <p className="gallery-card__subtitle">{subtitle}</p>
-                                ) : null}
-                              </div>
-                            </div>
-                          </header>
+                          </div>
+                        </header>
+                        <div className="gallery-card__visual">
                           <div
                             className="gallery-card__swatches"
                             role="list"
@@ -9233,8 +9207,22 @@ export default function Home({
                               </span>
                             )}
                           </div>
-                          <div className="gallery-card__equipment" role="list" aria-label={equipmentLabel}>
-                            {equipmentItems.map((item) => {
+                          <div className="gallery-card__preview-block">
+                            <div className="gallery-card__preview">
+                              {lookLoaded ? (
+                                <img src={previewUrl} alt={lookLabel} loading="lazy" />
+                              ) : lookLoading ? (
+                                <PaletteLoader label={t("gallery.loading")} />
+                              ) : (
+                                <div className="gallery-card__placeholder">
+                                  {typeof error === "string" && error.length
+                                    ? error
+                                    : t("errors.previewUnavailable")}
+                                </div>
+                              )}
+                            </div>
+                            <div className="gallery-card__equipment" role="list" aria-label={equipmentLabel}>
+                              {equipmentItems.map((item) => {
                               const slotLabelKey = ITEM_TYPE_LABEL_KEYS[item.slotType];
                               const slotLabel = slotLabelKey ? t(slotLabelKey) : item.slotType;
                               const itemName = item.name ?? slotLabel;
@@ -9300,7 +9288,8 @@ export default function Home({
                               );
                             })}
                           </div>
-                          <div className="gallery-card__actions">
+                        </div>
+                        <div className="gallery-card__actions">
                             {lookLoaded ? (
                               <button
                                 type="button"
@@ -9344,8 +9333,9 @@ export default function Home({
                 </div>
               )}
             </div>
-          </section>
-        </div>
+            </section>
+          </div>
+        ) : null}
       </main>
     </>
   );
