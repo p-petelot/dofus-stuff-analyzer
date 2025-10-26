@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
+import Link from "next/link";
 import { useRouter } from "next/router";
 import {
   DEFAULT_LANGUAGE,
@@ -6973,6 +6974,12 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         </div>
         <header className="hero">
           <h1>{BRAND_NAME}</h1>
+          <div className="hero__actions">
+            <Link href="/training" className="hero__cta">
+              <span>Centre d&apos;entraînement</span>
+              <span aria-hidden="true">→</span>
+            </Link>
+          </div>
         </header>
         <div className="preference-switchers">
           <div className="theme-switcher" role="radiogroup" aria-label={themeSelectorAria}>
