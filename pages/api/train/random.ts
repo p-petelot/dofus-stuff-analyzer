@@ -13,7 +13,7 @@ interface RandomGenerationResponse {
 }
 
 const DEFAULT_COUNT = 12;
-const MAX_COUNT = 24;
+const MAX_COUNT = 48;
 
 function sanitizeCount(value: unknown): number {
   if (Array.isArray(value)) {

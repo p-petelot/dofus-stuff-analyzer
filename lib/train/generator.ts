@@ -25,8 +25,8 @@ const SLOT_TO_COLOR: Record<TrainingSlotKey, keyof PaletteSummary["colors"]> = {
   ailes: "accent",
 };
 
-const COHERENCE_LAB_STRICT = 26;
-const COHERENCE_LAB_SOFT = 38;
+const COHERENCE_LAB_STRICT = 22;
+const COHERENCE_LAB_SOFT = 32;
 
 const CLASS_NAME_OVERRIDES: Record<string, string> = {
   feca: "Féca",
@@ -173,33 +173,60 @@ function uniquePaletteColors(values: string[]): string[] {
   return result;
 }
 
+function selectClusterColors(palettePool: string[], anchor: string, rng: Rng): string[] {
+  if (!palettePool.length) {
+    return [anchor];
+  }
+  const scored = palettePool
+    .map((color) => ({ color, delta: labDelta(color, anchor) }))
+    .sort((a, b) => a.delta - b.delta);
+  const cluster: string[] = [];
+  for (const entry of scored) {
+    if (cluster.length >= 3) {
+      break;
+    }
+    const already = cluster.some((existing) => labDelta(existing, entry.color) < 2.5);
+    if (!already) {
+      cluster.push(entry.color);
+    }
+  }
+  if (!cluster.includes(anchor)) {
+    cluster.unshift(anchor);
+  }
+  while (cluster.length < 3) {
+    const hueJitter = jitter(0, 6, rng);
+    const satShift = rng.next() * 0.06 - 0.03;
+    const lightShift = rng.next() * 0.12 - 0.06;
+    const variation = shiftHexColor(anchor, hueJitter, satShift, lightShift);
+    if (!cluster.includes(variation)) {
+      cluster.push(variation);
+    }
+  }
+  return cluster.slice(0, 3);
+}
+
 function buildCoherentPalette(
   basePalette: PaletteSummary,
   catalog: Catalog,
   seed: string,
 ): PaletteSummary {
   const rng = createRng(`${seed}-coherence`);
-  const palettePool = uniquePaletteColors(
-    catalog.items.flatMap((item) => item.palette.slice(0, 4)),
-  );
-  const fallbackPrimary = basePalette.colors.primary ?? hslToHex(rng.next() * 360, 0.62, 0.5);
-  const primary = palettePool.length ? palettePool[rng.int(palettePool.length)] : fallbackPrimary;
-  const primaryHue = hueFromHex(primary);
-  const secondary = shiftHexColor(primary, 10 + rng.next() * 8 - 4, -0.05, 0.12);
-  const accentCandidate = palettePool.length
-    ? palettePool[rng.int(palettePool.length)]
-    : shiftHexColor(primary, 160 + rng.next() * 30 - 15, 0.1, 0.02);
-  const accent = labDelta(primary, accentCandidate) < 18
-    ? shiftHexColor(primary, 150 + rng.next() * 30 - 15, 0.12, 0.04)
-    : accentCandidate;
-  const detail = shiftHexColor(accent, -8 + rng.next() * 6 - 3, -0.04, 0.08);
-  const hair = shiftHexColor(primary, -14 + rng.next() * 10 - 5, -0.08, -0.18);
-  const skinBaseHue = clampHue(primaryHue + 38 + rng.next() * 12 - 6);
-  const skin = hslToHex(skinBaseHue, 0.32, 0.78);
+  const palettePool = uniquePaletteColors(catalog.items.flatMap((item) => item.palette.slice(0, 3)));
+  const fallback = basePalette.colors.primary ?? hslToHex(rng.next() * 360, 0.6, 0.46);
+  const anchor = palettePool.length ? palettePool[rng.int(palettePool.length)] : fallback;
+  const cluster = selectClusterColors(palettePool, anchor, rng);
+  const [baseHair, basePrimary, baseSecondary] = cluster;
+  const hair = baseHair;
+  const primary = basePrimary ?? shiftHexColor(baseHair, jitter(0, 6, rng), 0.04, -0.02);
+  const secondary = baseSecondary ?? shiftHexColor(primary, jitter(0, 6, rng), -0.02, 0.06);
+  const accent = shiftHexColor(primary, jitter(0, 4, rng), 0.08, 0.05);
+  const detail = shiftHexColor(accent, jitter(0, 4, rng), -0.06, 0.07);
+  const skin = shiftHexColor(hair, 0, -0.4 + rng.next() * -0.05, 0.32 + rng.next() * 0.06);
+  const anchorHue = hueFromHex(primary);
 
   return {
     ...basePalette,
-    anchorHue: primaryHue,
+    anchorHue,
     colors: {
       hair,
       skin,
@@ -225,7 +252,7 @@ function pickItem(
   const targetColorKey = SLOT_TO_COLOR[slot] ?? "primary";
   const targetColor = palette.colors[targetColorKey] ?? palette.colors.primary;
   const targetHue = hueFromHex(targetColor);
-  const pool = options.filter((item) => {
+  let pool = options.filter((item) => {
     if (!item) return false;
     const normalizedTags = item.classTags
       .map((tag) =>
@@ -245,6 +272,15 @@ function pickItem(
       .replace(/[^a-z0-9]/g, "");
     return normalizedTags.includes(normalizedClassKey);
   });
+  if (enforceColorCoherence) {
+    const filtered = pool.filter((item) =>
+      item.palette.some((hex) => labDelta(hex, targetColor) <= COHERENCE_LAB_SOFT),
+    );
+    if (filtered.length) {
+      pool = filtered;
+    }
+  }
+
   if (!pool.length) {
     return { slot, item: null, assignedColor: targetColor, isJoker: false };
   }
@@ -261,7 +297,7 @@ function pickItem(
       : [labDelta(targetColor, targetColor)];
     const minLabDistance = Math.min(...labDistances);
     const coherenceScore = enforceColorCoherence
-      ? Math.max(0.12, 1 - Math.min(minLabDistance, 60) / 60)
+      ? Math.max(0.1, 1 - Math.min(minLabDistance, COHERENCE_LAB_SOFT) / COHERENCE_LAB_SOFT)
       : 1;
     const weight = Math.max(
       0.01,
@@ -280,7 +316,8 @@ function pickItem(
       : scored
           .filter((entry) => entry.labDistance <= COHERENCE_LAB_SOFT)
           .sort((a, b) => a.labDistance - b.labDistance || b.weight - a.weight);
-    const selection = (strictMatches.length ? strictMatches : softMatches.length ? softMatches : scored)[0];
+    const ranked = strictMatches.length ? strictMatches : softMatches.length ? softMatches : scored;
+    const selection = ranked[0];
     const item = selection?.item ?? pool[0];
     const assignedColor = item ? findClosestColor(item, targetHue, targetColor) : targetColor;
     return { slot, item: item ?? null, assignedColor, isJoker: Boolean(item?.isJoker) };

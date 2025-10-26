@@ -56,11 +56,11 @@ describe("training random generation", () => {
       worstPaletteDelta = Math.max(worstPaletteDelta, paletteDelta);
     });
     expect(worstItemDelta).toBeLessThanOrEqual(2);
-    expect(worstPaletteDelta).toBeLessThanOrEqual(28);
+    expect(worstPaletteDelta).toBeLessThanOrEqual(20);
     expect(assignedSet.size).toBeGreaterThanOrEqual(Math.min(candidate.items.length, 3));
     const coiffe = candidate.items.find((pick) => pick.slot === "coiffe" && pick.item);
     if (coiffe) {
-      expect(candidate.palette.colors.hair.toUpperCase()).toBe(coiffe.assignedColor.toUpperCase());
+      expect(labDelta(candidate.palette.colors.hair, coiffe.assignedColor)).toBeLessThanOrEqual(6);
     }
   });
 });

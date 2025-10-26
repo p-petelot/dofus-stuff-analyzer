@@ -1,6 +1,8 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Head from "next/head";
-import type { CandidateItemPick, GeneratedCandidate } from "../lib/train/types";
+import Link from "next/link";
+import type { GeneratedCandidate } from "../lib/train/types";
+import { SLOTS } from "../lib/config/suggestions";
 
 interface RandomResponse {
   candidates: GeneratedCandidate[];
@@ -8,9 +10,10 @@ interface RandomResponse {
 
 const DEFAULT_BATCH_SIZE = 12;
 const MIN_COUNT = 4;
-const MAX_COUNT = 24;
+const MAX_COUNT = 48;
 const COUNT_STEP = 4;
-const SKELETON_ITEMS = 7;
+const SLOT_ORDER = SLOTS;
+const SKELETON_ITEMS = SLOT_ORDER.length;
 
 type TrainingCardEntry = GeneratedCandidate | null;
 
@@ -95,6 +98,13 @@ function TrainingCard({ candidate, index }: { candidate: TrainingCardEntry; inde
   const generationNumber = candidate.generation ?? index + 1;
   const generationLabel = formatGenerationLabel(generationNumber);
   const paletteTitle = `Palette générée pour ${className}`;
+  const orderedItems = [...candidate.items].sort((a, b) => {
+    const aIndex = SLOT_ORDER.indexOf(a.slot);
+    const bIndex = SLOT_ORDER.indexOf(b.slot);
+    const safeA = aIndex === -1 ? Number.MAX_SAFE_INTEGER : aIndex;
+    const safeB = bIndex === -1 ? Number.MAX_SAFE_INTEGER : bIndex;
+    return safeA - safeB;
+  });
 
   return (
     <article className="training-card" aria-busy={isLoading}>
@@ -141,7 +151,7 @@ function TrainingCard({ candidate, index }: { candidate: TrainingCardEntry; inde
         </span>
       </div>
       <ul className="training-card__items-strip" aria-label="Équipements choisis">
-        {candidate.items.map((pick) => {
+        {orderedItems.map((pick) => {
           const label = pick.item?.label ?? "Aucun objet";
           const tooltip = label;
           return (
@@ -151,6 +161,8 @@ function TrainingCard({ candidate, index }: { candidate: TrainingCardEntry; inde
                 style={{ borderColor: pick.assignedColor }}
                 title={tooltip}
                 aria-label={tooltip}
+                data-tooltip={tooltip}
+                tabIndex={0}
               >
                 {pick.item?.imageUrl ? (
                   <img src={pick.item.imageUrl} alt="" loading="lazy" />
@@ -260,12 +272,15 @@ export default function TrainingPage(): JSX.Element {
         <title>Galerie de skins — Génération aléatoire</title>
       </Head>
       <main className="training-page">
-        <section className="training-hero">
-          <div className="training-hero__content">
-            <span className="training-hero__eyebrow">Galerie</span>
-            <h1>Galerie de skins</h1>
-            <p>Découvre des rendus Dofus générés aléatoirement et ajuste la galerie en fonction de tes envies.</p>
-          </div>
+      <section className="training-hero">
+        <div className="training-hero__content">
+          <span className="training-hero__eyebrow">Galerie</span>
+          <h1>Galerie de skins</h1>
+          <p>Découvre des rendus Dofus générés aléatoirement et ajuste la galerie en fonction de tes envies.</p>
+          <Link href="/" className="training-hero__back-link">
+            ← Retour à l&apos;accueil
+          </Link>
+        </div>
           <form className="training-hero__controls" onSubmit={handleSubmit}>
             <div className="training-hero__row">
               <label htmlFor="training-count" className="training-hero__label">
