@@ -153,6 +153,7 @@ const THEME_KEYS = Object.freeze({
 });
 
 const THEME_STORAGE_KEY = "krospalette.theme";
+const ANALYZER_STATE_STORAGE_KEY = "krospalette.analyzer-state";
 const DEFAULT_THEME_KEY = THEME_KEYS.DARK;
 
 const THEME_OPTIONS = [
@@ -3981,6 +3982,176 @@ export default function Home({
     {}
   );
   const [previewBackgroundSwatches, setPreviewBackgroundSwatches] = useState({});
+  const analyzerStateHydratedRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const stored = window.localStorage.getItem(ANALYZER_STATE_STORAGE_KEY);
+      if (!stored) {
+        analyzerStateHydratedRef.current = true;
+        return;
+      }
+
+      const parsed = JSON.parse(stored);
+      if (!parsed || typeof parsed !== "object") {
+        analyzerStateHydratedRef.current = true;
+        return;
+      }
+
+      if (Array.isArray(parsed.colors)) {
+        setColors(parsed.colors);
+      }
+
+      if (typeof parsed.selectedColor === "string" || parsed.selectedColor === null) {
+        setSelectedColor(parsed.selectedColor ?? null);
+      }
+
+      if (Number.isFinite(parsed.selectedBreedId) || parsed.selectedBreedId === null) {
+        setSelectedBreedId(parsed.selectedBreedId);
+      }
+
+      if (parsed.selectedGender === "male" || parsed.selectedGender === "female") {
+        setSelectedGender(parsed.selectedGender);
+      }
+
+      if (parsed.selectedItemsBySlot && typeof parsed.selectedItemsBySlot === "object") {
+        setSelectedItemsBySlot({ ...parsed.selectedItemsBySlot });
+      }
+
+      if (parsed.familierFilters && typeof parsed.familierFilters === "object") {
+        setFamilierFilters((prev) => ({ ...prev, ...parsed.familierFilters }));
+      }
+
+      if (parsed.itemFlagFilters && typeof parsed.itemFlagFilters === "object") {
+        setItemFlagFilters((prev) => ({ ...prev, ...parsed.itemFlagFilters }));
+      }
+
+      if (parsed.itemSlotFilters && typeof parsed.itemSlotFilters === "object") {
+        setItemSlotFilters((prev) => ({ ...prev, ...parsed.itemSlotFilters }));
+      }
+
+      if (typeof parsed.useCustomSkinTone === "boolean") {
+        setUseCustomSkinTone(parsed.useCustomSkinTone);
+      }
+
+      if (parsed.inputMode === "image" || parsed.inputMode === "color" || parsed.inputMode === "items") {
+        setInputMode(parsed.inputMode);
+      }
+
+      if (typeof parsed.lookDirection === "number" || typeof parsed.lookDirection === "string") {
+        setLookDirection(parsed.lookDirection);
+      }
+
+      if (typeof parsed.lookAnimation === "string") {
+        setLookAnimation(parsed.lookAnimation);
+      }
+
+      if (typeof parsed.isPreviewBackgroundEnabled === "boolean") {
+        setPreviewBackgroundEnabled(parsed.isPreviewBackgroundEnabled);
+      }
+
+      const previewModes = Object.values(PREVIEW_BACKGROUND_MODES);
+      if (
+        typeof parsed.previewBackgroundMode === "string" &&
+        previewModes.includes(parsed.previewBackgroundMode)
+      ) {
+        setPreviewBackgroundMode(parsed.previewBackgroundMode);
+      }
+
+      if (
+        typeof parsed.selectedPreviewBackgroundId === "string" ||
+        parsed.selectedPreviewBackgroundId === null
+      ) {
+        setSelectedPreviewBackgroundId(parsed.selectedPreviewBackgroundId ?? null);
+      }
+
+      if (parsed.randomPreviewBackgroundAssignments && typeof parsed.randomPreviewBackgroundAssignments === "object") {
+        setRandomPreviewBackgroundAssignments({
+          ...parsed.randomPreviewBackgroundAssignments,
+        });
+      }
+
+      if (Number.isInteger(parsed.activeProposal) && parsed.activeProposal >= 0) {
+        setActiveProposal(parsed.activeProposal);
+      }
+    } catch (error) {
+      console.error("Failed to restore analyzer preferences", error);
+    } finally {
+      analyzerStateHydratedRef.current = true;
+    }
+  }, [
+    setActiveProposal,
+    setColors,
+    setFamilierFilters,
+    setInputMode,
+    setItemFlagFilters,
+    setItemSlotFilters,
+    setLookAnimation,
+    setLookDirection,
+    setPreviewBackgroundEnabled,
+    setPreviewBackgroundMode,
+    setRandomPreviewBackgroundAssignments,
+    setSelectedBreedId,
+    setSelectedColor,
+    setSelectedGender,
+    setSelectedItemsBySlot,
+    setSelectedPreviewBackgroundId,
+    setUseCustomSkinTone,
+  ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !analyzerStateHydratedRef.current) {
+      return;
+    }
+
+    const payload = {
+      colors,
+      selectedColor,
+      selectedBreedId,
+      selectedGender,
+      selectedItemsBySlot,
+      familierFilters,
+      itemFlagFilters,
+      itemSlotFilters,
+      useCustomSkinTone,
+      inputMode,
+      lookDirection,
+      lookAnimation,
+      isPreviewBackgroundEnabled,
+      previewBackgroundMode,
+      selectedPreviewBackgroundId,
+      randomPreviewBackgroundAssignments,
+      activeProposal,
+    };
+
+    try {
+      window.localStorage.setItem(ANALYZER_STATE_STORAGE_KEY, JSON.stringify(payload));
+    } catch (error) {
+      console.error("Failed to persist analyzer preferences", error);
+    }
+  }, [
+    activeProposal,
+    colors,
+    familierFilters,
+    inputMode,
+    isPreviewBackgroundEnabled,
+    itemFlagFilters,
+    itemSlotFilters,
+    lookAnimation,
+    lookDirection,
+    previewBackgroundMode,
+    randomPreviewBackgroundAssignments,
+    selectedBreedId,
+    selectedColor,
+    selectedGender,
+    selectedItemsBySlot,
+    selectedPreviewBackgroundId,
+    useCustomSkinTone,
+  ]);
   const previewBackgroundById = useMemo(() => {
     const map = new Map();
     previewBackgroundOptions.forEach((entry) => {
@@ -7369,74 +7540,78 @@ export default function Home({
             </div>
           ) : null}
         </div>
-        <header className="hero">
-          <h1>{BRAND_NAME}</h1>
-        </header>
-        <nav className="page-tabs" aria-label={viewNavigationLabel}>
-          <ul className="page-tabs__list">
-            {viewTabs.map((tab) => {
-              const isActive = tab.key === activeView;
-              return (
-                <li key={tab.key} className="page-tabs__item">
-                  <Link
-                    href={tab.href}
-                    className={`page-tabs__button${isActive ? " is-active" : ""}`}
-                    aria-current={isActive ? "page" : undefined}
-                  >
-                    <span>{tab.label}</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-        <div className="preference-switchers">
-          <div className="theme-switcher" role="radiogroup" aria-label={themeSelectorAria}>
-            {themeOptions.map((option) => {
-              const isActiveTheme = option.key === theme;
-              return (
-                <button
-                  key={option.key}
-                  type="button"
-                  className={`theme-switcher__option${isActiveTheme ? " is-active" : ""}`}
-                  onClick={() => handleThemeSelect(option.key)}
-                  role="radio"
-                  aria-checked={isActiveTheme}
-                  aria-label={option.accessibleLabel}
-                  title={option.accessibleLabel}
-                >
-                  <span className="theme-switcher__icon" aria-hidden="true">{option.icon}</span>
-                  <span className="theme-switcher__label" aria-hidden="true">{option.label}</span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="language-switcher" role="group" aria-label={t("language.selectorAria")}>
-            {languageOptions.map((option) => {
-              const isActive = option.code === language;
-              return (
-                <button
-                  key={option.code}
-                  type="button"
-                  className={`language-switcher__option${isActive ? " is-active" : ""}`}
-                  onClick={() => handleLanguageSelect(option.code)}
-                  aria-pressed={isActive}
-                  aria-label={option.accessibleLabel}
-                  title={option.accessibleLabel}
-                >
-                  <span className="language-switcher__flag" aria-hidden="true">
-                    <img src={option.flag} alt="" loading="lazy" />
-                  </span>
-                  <span className="language-switcher__code" aria-hidden="true">
-                    {option.shortLabel ?? option.code.toUpperCase()}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        {!isGalleryView ? (
-          <div id="view-analyzer" className="view view--analyzer">
+        <div className="page__shell">
+          <nav className="page-menu" aria-label={viewNavigationLabel}>
+            <ul className="page-menu__list">
+              {viewTabs.map((tab) => {
+                const isActive = tab.key === activeView;
+                return (
+                  <li key={tab.key} className="page-menu__item">
+                    <Link
+                      href={tab.href}
+                      className={`page-menu__link${isActive ? " is-active" : ""}`}
+                      aria-current={isActive ? "page" : undefined}
+                    >
+                      <span>{tab.label}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+          <div className="page__content">
+            <div className="page__header">
+              <header className="hero">
+                <h1>{BRAND_NAME}</h1>
+              </header>
+              <div className="preference-switchers">
+                <div className="theme-switcher" role="radiogroup" aria-label={themeSelectorAria}>
+                  {themeOptions.map((option) => {
+                    const isActiveTheme = option.key === theme;
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        className={`theme-switcher__option${isActiveTheme ? " is-active" : ""}`}
+                        onClick={() => handleThemeSelect(option.key)}
+                        role="radio"
+                        aria-checked={isActiveTheme}
+                        aria-label={option.accessibleLabel}
+                        title={option.accessibleLabel}
+                      >
+                        <span className="theme-switcher__icon" aria-hidden="true">{option.icon}</span>
+                        <span className="theme-switcher__label" aria-hidden="true">{option.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="language-switcher" role="group" aria-label={t("language.selectorAria")}>
+                  {languageOptions.map((option) => {
+                    const isActive = option.code === language;
+                    return (
+                      <button
+                        key={option.code}
+                        type="button"
+                        className={`language-switcher__option${isActive ? " is-active" : ""}`}
+                        onClick={() => handleLanguageSelect(option.code)}
+                        aria-pressed={isActive}
+                        aria-label={option.accessibleLabel}
+                        title={option.accessibleLabel}
+                      >
+                        <span className="language-switcher__flag" aria-hidden="true">
+                          <img src={option.flag} alt="" loading="lazy" />
+                        </span>
+                        <span className="language-switcher__code" aria-hidden="true">
+                          {option.shortLabel ?? option.code.toUpperCase()}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            {!isGalleryView ? (
+              <div id="view-analyzer" className="view view--analyzer">
           <div className="workspace-layout">
           <section className="workspace">
           <div className={referenceClassName}>
@@ -9336,6 +9511,8 @@ export default function Home({
             </section>
           </div>
         ) : null}
+          </div>
+        </div>
       </main>
     </>
   );
