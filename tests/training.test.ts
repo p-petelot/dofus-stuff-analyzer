@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { generateCandidate } from "../lib/train/generator";
-import { hexToRgb, rgbToHue } from "../lib/train/color";
+import { hexToRgb, labDelta, rgbToHue } from "../lib/train/color";
 
 function hueFromHex(hex: string): number {
   const [r, g, b] = hexToRgb(hex);
@@ -40,32 +40,27 @@ describe("training random generation", () => {
   it("aligns item colors when coherence is enforced", async () => {
     const candidate = await generateCandidate({ enforceColorCoherence: true });
     const paletteValues = Object.values(candidate.palette.colors).map((color) => color.toUpperCase());
-    let worstDistance = 0;
-    let paletteCoverage = 0;
+    const assignedSet = new Set<string>();
+    let worstItemDelta = 0;
+    let worstPaletteDelta = 0;
     candidate.items.forEach((pick) => {
-      if (!pick.item || pick.item.palette.length === 0) {
-        return;
+      const assigned = pick.assignedColor.toUpperCase();
+      assignedSet.add(assigned);
+      if (pick.item && pick.item.palette.length) {
+        const paletteUpper = pick.item.palette.map((hex) => hex.toUpperCase());
+        expect(paletteUpper).toContain(assigned);
+        const closestItemDelta = Math.min(...paletteUpper.map((hex) => labDelta(hex, assigned)));
+        worstItemDelta = Math.max(worstItemDelta, closestItemDelta);
       }
-      expect(pick.item.palette.map((hex) => hex.toUpperCase())).toContain(pick.assignedColor.toUpperCase());
-      const assignedHue = hueFromHex(pick.assignedColor);
-      const bestItemHue = Math.min(
-        ...pick.item.palette.map((hex) => hueDistance(assignedHue, hueFromHex(hex))),
-      );
-      worstDistance = Math.max(worstDistance, bestItemHue);
-      const paletteMatch = paletteValues.some((hex) => hex === pick.assignedColor.toUpperCase());
-      if (paletteMatch) {
-        paletteCoverage += 1;
-      }
+      const paletteDelta = Math.min(...paletteValues.map((hex) => labDelta(hex, assigned)));
+      worstPaletteDelta = Math.max(worstPaletteDelta, paletteDelta);
     });
-    expect(worstDistance).toBeLessThanOrEqual(35);
-    expect(paletteCoverage).toBeGreaterThan(0);
-    const paletteHueDistances = paletteValues.map((hex) => hueFromHex(hex));
-    candidate.items.forEach((pick) => {
-      const assignedHue = hueFromHex(pick.assignedColor);
-      const bestPaletteDistance = Math.min(
-        ...paletteHueDistances.map((hue) => hueDistance(assignedHue, hue)),
-      );
-      expect(bestPaletteDistance).toBeLessThanOrEqual(25);
-    });
+    expect(worstItemDelta).toBeLessThanOrEqual(2);
+    expect(worstPaletteDelta).toBeLessThanOrEqual(28);
+    expect(assignedSet.size).toBeGreaterThanOrEqual(Math.min(candidate.items.length, 3));
+    const coiffe = candidate.items.find((pick) => pick.slot === "coiffe" && pick.item);
+    if (coiffe) {
+      expect(candidate.palette.colors.hair.toUpperCase()).toBe(coiffe.assignedColor.toUpperCase());
+    }
   });
 });

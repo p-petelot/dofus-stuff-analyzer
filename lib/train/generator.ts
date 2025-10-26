@@ -32,6 +32,10 @@ const COHERENCE_BASE_SLOT_PRIORITY: TrainingSlotKey[] = [
   "epauliere",
 ];
 
+const COHERENCE_MAX_ANCHORS = 3;
+const COHERENCE_LAB_STRICT = 26;
+const COHERENCE_LAB_SOFT = 38;
+
 const CLASS_NAME_OVERRIDES: Record<string, string> = {
   feca: "Féca",
   osamodas: "Osamodas",
@@ -56,6 +60,11 @@ const CLASS_NAME_OVERRIDES: Record<string, string> = {
 
 const HARMONIES: PaletteHarmony[] = ["triad", "split", "analogous", "complementary"];
 const DEFAULT_PALETTE_SOURCE: PaletteSource = "random";
+
+interface CoherenceAnchor {
+  slot: TrainingSlotKey;
+  item: CatalogItem;
+}
 
 interface PaletteContext {
   source: PaletteSource;
@@ -267,21 +276,28 @@ function harmonizePaletteWithPicks(
   };
 }
 
-function selectCoherenceAnchor(
+function selectCoherenceAnchors(
   slots: TrainingSlotKey[],
   catalog: Catalog,
   rng: Rng,
-): { slot: TrainingSlotKey; item: CatalogItem } | null {
+): CoherenceAnchor[] {
   const ordered = [
     ...COHERENCE_BASE_SLOT_PRIORITY.filter((slot) => slots.includes(slot)),
     ...slots.filter((slot) => !COHERENCE_BASE_SLOT_PRIORITY.includes(slot)),
   ];
+  const anchors: CoherenceAnchor[] = [];
+  const seenIds = new Set<number>();
   for (const slot of ordered) {
+    if (anchors.length >= COHERENCE_MAX_ANCHORS) {
+      break;
+    }
     const options = catalog.bySlot[slot];
     if (!options || options.length === 0) {
       continue;
     }
-    const sorted = [...options].sort((a, b) => {
+    const paletteRich = options.filter((item) => item.palette.length >= 2);
+    const remainder = options.filter((item) => item.palette.length < 2);
+    const sorted = [...paletteRich, ...remainder].sort((a, b) => {
       const paletteDiff = (b.palette.length || 0) - (a.palette.length || 0);
       if (paletteDiff !== 0) {
         return paletteDiff;
@@ -292,13 +308,93 @@ function selectCoherenceAnchor(
       }
       return (b.rarity ?? 0) - (a.rarity ?? 0);
     });
-    const selectionPool = sorted.slice(0, Math.min(24, sorted.length));
+    const selectionPool: CatalogItem[] = [];
+    for (const entry of sorted) {
+      if (seenIds.has(entry.id)) {
+        continue;
+      }
+      selectionPool.push(entry);
+      if (selectionPool.length >= 24) {
+        break;
+      }
+    }
+    if (!selectionPool.length) {
+      continue;
+    }
     const candidate = selectionPool[rng.int(selectionPool.length)];
     if (candidate) {
-      return { slot, item: candidate };
+      anchors.push({ slot, item: candidate });
+      seenIds.add(candidate.id);
     }
   }
-  return null;
+  return anchors;
+}
+
+function buildCoherencePlan(
+  slots: TrainingSlotKey[],
+  basePalette: PaletteSummary,
+  anchors: CoherenceAnchor[],
+): { palette: PaletteSummary; targets: Record<TrainingSlotKey, string> } {
+  if (!anchors.length) {
+    const targets: Record<TrainingSlotKey, string> = {};
+    slots.forEach((slot) => {
+      const colorKey = SLOT_TO_COLOR[slot] ?? "primary";
+      targets[slot] = basePalette.colors[colorKey] ?? basePalette.colors.primary;
+    });
+    return { palette: basePalette, targets };
+  }
+
+  const colors: PaletteSummary["colors"] = { ...basePalette.colors };
+  const targets: Record<TrainingSlotKey, string> = {};
+  const colorPool = uniquePaletteColors([
+    ...anchors.flatMap((entry) => entry.item.palette),
+    basePalette.colors.hair,
+    basePalette.colors.primary,
+    basePalette.colors.secondary,
+    basePalette.colors.accent,
+    basePalette.colors.detail,
+  ]);
+
+  const order: Array<{ key: keyof PaletteSummary["colors"]; index: number }> = [
+    { key: "hair", index: 0 },
+    { key: "primary", index: 1 },
+    { key: "secondary", index: 2 },
+    { key: "accent", index: 3 },
+    { key: "detail", index: 4 },
+  ];
+  order.forEach(({ key, index }) => {
+    const candidate = colorPool[index] ?? colorPool[colorPool.length - 1];
+    if (candidate) {
+      colors[key] = candidate;
+    }
+  });
+
+  anchors.forEach((anchor) => {
+    const colorKey = SLOT_TO_COLOR[anchor.slot] ?? "primary";
+    const chosen = chooseRepresentativeColor(anchor.item.palette, colors[colorKey]);
+    colors[colorKey] = chosen;
+    targets[anchor.slot] = chosen;
+  });
+
+  if (targets.coiffe) {
+    colors.hair = targets.coiffe;
+  }
+
+  slots.forEach((slot) => {
+    if (targets[slot]) {
+      return;
+    }
+    const colorKey = SLOT_TO_COLOR[slot] ?? "primary";
+    targets[slot] = colors[colorKey] ?? basePalette.colors.primary;
+  });
+
+  return {
+    palette: {
+      ...basePalette,
+      colors,
+    },
+    targets,
+  };
 }
 
 function pickItem(
@@ -308,12 +404,14 @@ function pickItem(
   classKey: string,
   preferJokers: boolean,
   enforceColorCoherence: boolean,
+  targetOverrides: Partial<Record<TrainingSlotKey, string>> | null,
   rngSeed: string,
   options: CatalogItem[],
 ): CandidateItemPick {
   const rng = createRng(`${rngSeed}-${slot}`);
   const targetColorKey = SLOT_TO_COLOR[slot] ?? "primary";
-  const targetColor = palette.colors[targetColorKey] ?? palette.colors.primary;
+  const override = targetOverrides?.[slot];
+  const targetColor = override ?? palette.colors[targetColorKey] ?? palette.colors.primary;
   const targetHue = hueFromHex(targetColor);
   const pool = options.filter((item) => {
     if (!item) return false;
@@ -346,14 +444,32 @@ function pickItem(
     const jokerScore = item.isJoker ? (preferJokers ? 1.2 : 1.05) : 1;
     const colorableScore = item.isColorable ? 1.05 : 1;
     const rarityScore = item.rarity ? 1 + Math.min(item.rarity, 5) * 0.01 : 1;
-    const weight = Math.max(0.01, hueScore * themeScore * jokerScore * colorableScore * rarityScore);
-    return { item, weight, minDistance };
+    const labDistances = item.palette.length
+      ? item.palette.map((hex) => labDelta(hex, targetColor))
+      : [labDelta(targetColor, targetColor)];
+    const minLabDistance = Math.min(...labDistances);
+    const coherenceScore = enforceColorCoherence
+      ? Math.max(0.12, 1 - Math.min(minLabDistance, 60) / 60)
+      : 1;
+    const weight = Math.max(
+      0.01,
+      hueScore * themeScore * jokerScore * colorableScore * rarityScore * coherenceScore,
+    );
+    return { item, weight, minDistance, labDistance: minLabDistance };
   });
   scored.sort((a, b) => b.weight - a.weight);
   const top = scored.slice(0, Math.min(12, scored.length));
   if (enforceColorCoherence) {
-    const [best] = scored.sort((a, b) => a.minDistance - b.minDistance);
-    const item = best?.item ?? pool[0];
+    const strictMatches = scored
+      .filter((entry) => entry.labDistance <= COHERENCE_LAB_STRICT)
+      .sort((a, b) => a.labDistance - b.labDistance || b.weight - a.weight);
+    const softMatches = strictMatches.length
+      ? strictMatches
+      : scored
+          .filter((entry) => entry.labDistance <= COHERENCE_LAB_SOFT)
+          .sort((a, b) => a.labDistance - b.labDistance || b.weight - a.weight);
+    const selection = (strictMatches.length ? strictMatches : softMatches.length ? softMatches : scored)[0];
+    const item = selection?.item ?? pool[0];
     const assignedColor = item ? findClosestColor(item, targetHue, targetColor) : targetColor;
     return { slot, item: item ?? null, assignedColor, isJoker: Boolean(item?.isJoker) };
   }
@@ -447,27 +563,38 @@ export async function generateCandidate(params?: GenParams): Promise<GeneratedCa
   });
   const preferJokers = Boolean(params?.preferJokers);
   const enforceColorCoherence = Boolean(params?.enforceColorCoherence);
-  let anchor: { slot: TrainingSlotKey; item: CatalogItem } | null = null;
+  let anchorMap: Partial<Record<TrainingSlotKey, CatalogItem>> = {};
+  let coherenceTargets: Record<TrainingSlotKey, string> | null = null;
   if (enforceColorCoherence) {
-    anchor = selectCoherenceAnchor(slotCoverage, catalog, rng);
-    if (anchor) {
-      palette = derivePaletteFromItem(anchor.item, palette);
+    const anchors = selectCoherenceAnchors(slotCoverage, catalog, rng);
+    if (anchors.length) {
+      anchorMap = anchors.reduce<Partial<Record<TrainingSlotKey, CatalogItem>>>((acc, entry) => {
+        acc[entry.slot] = entry.item;
+        return acc;
+      }, {});
+      const plan = buildCoherencePlan(slotCoverage, palette, anchors);
+      palette = plan.palette;
+      coherenceTargets = plan.targets;
     }
   }
   const picks: CandidateItemPick[] = [];
   let jokerCount = 0;
   for (const slot of slotCoverage) {
     const options = catalog.bySlot[slot] ?? [];
-    if (enforceColorCoherence && anchor && slot === anchor.slot) {
+    const anchorItem = anchorMap[slot];
+    if (enforceColorCoherence && anchorItem) {
       const colorKey = SLOT_TO_COLOR[slot] ?? "primary";
-      const targetColor = palette.colors[colorKey] ?? palette.colors.primary;
+      const targetColor =
+        (coherenceTargets && coherenceTargets[slot]) ??
+        palette.colors[colorKey] ??
+        palette.colors.primary;
       const targetHue = hueFromHex(targetColor);
-      const assignedColor = findClosestColor(anchor.item, targetHue, targetColor);
+      const assignedColor = findClosestColor(anchorItem, targetHue, targetColor);
       const pick = {
         slot,
-        item: anchor.item,
+        item: anchorItem,
         assignedColor,
-        isJoker: Boolean(anchor.item.isJoker),
+        isJoker: Boolean(anchorItem.isJoker),
       };
       picks.push(pick);
       if (pick.isJoker) {
@@ -482,6 +609,7 @@ export async function generateCandidate(params?: GenParams): Promise<GeneratedCa
       classKey,
       preferJokers,
       enforceColorCoherence,
+      coherenceTargets,
       seed,
       options,
     );

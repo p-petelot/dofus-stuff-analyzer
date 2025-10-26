@@ -10,7 +10,7 @@ const DEFAULT_BATCH_SIZE = 12;
 const MIN_COUNT = 4;
 const MAX_COUNT = 24;
 const COUNT_STEP = 4;
-const SKELETON_ITEMS = 6;
+const SKELETON_ITEMS = 7;
 
 type TrainingCardEntry = GeneratedCandidate | null;
 
@@ -70,8 +70,15 @@ function TrainingCard({ candidate, index }: { candidate: TrainingCardEntry; inde
   if (!candidate) {
     return (
       <article className="training-card training-card--loading" aria-busy="true">
-        <div className="training-card__visual">
-          <span className="skeleton-block skeleton-block--image" />
+        <div className="training-card__visual-block">
+          <div className="training-card__visual">
+            <span className="skeleton-block skeleton-block--image" />
+          </div>
+          <div className="training-card__palette-column" aria-hidden="true">
+            {Array.from({ length: SKELETON_ITEMS }).map((_, paletteIndex) => (
+              <span key={`palette-skeleton-${paletteIndex}`} className="skeleton-dot skeleton-dot--tall" />
+            ))}
+          </div>
         </div>
         <div className="training-card__meta training-card__meta--loading" aria-hidden="true">
           <span className="skeleton-line skeleton-line--title" />
@@ -84,12 +91,8 @@ function TrainingCard({ candidate, index }: { candidate: TrainingCardEntry; inde
             </li>
           ))}
         </ul>
-        <div className="training-card__details">
-          <div className="training-card__palette-strip" aria-hidden="true">
-            {Array.from({ length: SKELETON_ITEMS }).map((_, paletteIndex) => (
-              <span key={`palette-skeleton-${paletteIndex}`} className="skeleton-dot" />
-            ))}
-          </div>
+        <div className="training-card__details training-card__details--loading" aria-hidden="true">
+          <span className="skeleton-line skeleton-line--subtitle" />
         </div>
       </article>
     );
@@ -103,16 +106,29 @@ function TrainingCard({ candidate, index }: { candidate: TrainingCardEntry; inde
 
   return (
     <article className="training-card" aria-busy={isLoading}>
-      <div className="training-card__visual">
-        {candidate.imageUrl ? (
-          <img
-            src={candidate.imageUrl}
-            alt={`Aperçu de skin pour ${className} (${formatSexLabel(candidate.sex)})`}
-            loading="lazy"
-          />
-        ) : (
-          <div className="training-card__visual-fallback">Rendu indisponible</div>
-        )}
+      <div className="training-card__visual-block">
+        <div className="training-card__visual">
+          {candidate.imageUrl ? (
+            <img
+              src={candidate.imageUrl}
+              alt={`Aperçu de skin pour ${className} (${formatSexLabel(candidate.sex)})`}
+              loading="lazy"
+            />
+          ) : (
+            <div className="training-card__visual-fallback">Rendu indisponible</div>
+          )}
+        </div>
+        <div className="training-card__palette-column" aria-label={paletteTitle}>
+          {paletteEntries.map(({ key, color }) => (
+            <span
+              key={`${candidate.id}-palette-${key}`}
+              className="training-card__palette-dot"
+              style={{ backgroundColor: color }}
+              title={`${key} : ${color}`}
+              aria-label={`${key} : ${color}`}
+            />
+          ))}
+        </div>
       </div>
       <div className="training-card__meta">
         <div className="training-card__class-chip">
@@ -154,26 +170,15 @@ function TrainingCard({ candidate, index }: { candidate: TrainingCardEntry; inde
           );
         })}
       </ul>
-      <div className="training-card__details">
-        <div className="training-card__palette-strip" aria-label={paletteTitle}>
-          {paletteEntries.map(({ key, color }) => (
-            <span
-              key={`${candidate.id}-palette-${key}`}
-              className="training-card__palette-dot"
-              style={{ backgroundColor: color }}
-              title={`${key} : ${color}`}
-              aria-label={`${key} : ${color}`}
-            />
-          ))}
-        </div>
-        {candidate.notes.length ? (
+      {candidate.notes.length ? (
+        <div className="training-card__details">
           <ul className="training-card__notes" aria-label="Remarques">
             {candidate.notes.map((note, noteIndex) => (
               <li key={`${candidate.id}-note-${noteIndex}`}>{note}</li>
             ))}
           </ul>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </article>
   );
 }
