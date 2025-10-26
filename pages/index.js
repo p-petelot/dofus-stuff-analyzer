@@ -1430,7 +1430,7 @@ const TONE_CONFIDENCE_WEIGHT = 0.18;
 const MIN_ALPHA_WEIGHT = 0.05;
 const MAX_RECOMMENDATIONS = 12;
 const PANEL_ITEMS_LIMIT = 5;
-const PROPOSAL_COUNT = 5;
+const PROPOSAL_COUNT = 12;
 const HASH_CONFIDENCE_DISTANCE = 0.32;
 const HASH_CONFIDENCE_WEIGHT = 0.18;
 const HASH_STRONG_THRESHOLD = 0.12;
@@ -1571,7 +1571,7 @@ const BARBOFUS_SLOT_BY_TYPE = {
   costume: "12",
 };
 
-const LOOK_PREVIEW_SIZE = 512;
+const LOOK_PREVIEW_SIZE = 420;
 const BARBOFUS_FACE_ID_BY_CLASS = Object.freeze({
   1: { male: 1, female: 9 },
   2: { male: 17, female: 25 },
@@ -3904,6 +3904,7 @@ export default function Home({
     initialView === "gallery" ? "gallery" : "analyzer"
   );
   const [galleryRefreshToken, setGalleryRefreshToken] = useState(0);
+  const [galleryAssignments, setGalleryAssignments] = useState([]);
   const galleryInitializedRef = useRef(false);
   const isGalleryView = activeView === "gallery";
 
@@ -4388,6 +4389,20 @@ export default function Home({
     return found ?? null;
   }, [breeds, selectedBreedId]);
 
+  const breedsById = useMemo(() => {
+    if (!Array.isArray(breeds) || breeds.length === 0) {
+      return new Map();
+    }
+
+    const map = new Map();
+    breeds.forEach((breed) => {
+      if (breed && Number.isFinite(breed.id)) {
+        map.set(breed.id, breed);
+      }
+    });
+    return map;
+  }, [breeds]);
+
   const activeGenderConfig = useMemo(() => {
     if (!activeBreed) {
       return null;
@@ -4406,6 +4421,50 @@ export default function Home({
     ? activeGenderConfig.lookId
     : BARBOFUS_DEFAULTS.faceId;
   const activeClassFaceId = getBarbofusFaceId(activeClassId, selectedGender, fallbackFaceId);
+
+  const genderLabels = useMemo(
+    () => ({
+      male: t("identity.gender.male"),
+      female: t("identity.gender.female"),
+    }),
+    [t]
+  );
+
+  const generateGalleryAssignments = useCallback(() => {
+    if (!Array.isArray(breeds) || breeds.length === 0) {
+      return [];
+    }
+
+    const pool = [];
+
+    breeds.forEach((breed) => {
+      if (!breed || !Number.isFinite(breed.id)) {
+        return;
+      }
+
+      if (breed.male) {
+        pool.push({ breedId: breed.id, gender: "male" });
+      }
+
+      if (breed.female) {
+        pool.push({ breedId: breed.id, gender: "female" });
+      }
+    });
+
+    if (!pool.length) {
+      return [];
+    }
+
+    const shuffled = [...pool];
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      const temp = shuffled[index];
+      shuffled[index] = shuffled[swapIndex];
+      shuffled[swapIndex] = temp;
+    }
+
+    return shuffled;
+  }, [breeds]);
 
   const fallbackColorValues = useMemo(() => {
     if (!colors.length) {
@@ -4821,17 +4880,7 @@ export default function Home({
     const randomGender = Math.random() > 0.5 ? "female" : "male";
     setSelectedGender(randomGender);
 
-    const allowedDirections =
-      lookAnimation === 2
-        ? ALL_LOOK_DIRECTIONS.filter(
-            (direction) => !COMBAT_POSE_DISABLED_DIRECTIONS.includes(direction)
-          )
-        : ALL_LOOK_DIRECTIONS;
-    if (allowedDirections.length) {
-      const randomDirection =
-        allowedDirections[Math.floor(Math.random() * allowedDirections.length)];
-      setLookDirection(randomDirection);
-    }
+    setLookDirection(DEFAULT_LOOK_DIRECTION);
     setUseCustomSkinTone(false);
     setSelectedItemsBySlot((previous = {}) => {
       let changed = false;
@@ -4870,6 +4919,27 @@ export default function Home({
       handleGalleryShuffle();
     }
   }, [handleGalleryShuffle, isGalleryView]);
+
+  useEffect(() => {
+    if (!isGalleryView) {
+      return;
+    }
+
+    if (!Array.isArray(breeds) || breeds.length === 0) {
+      setGalleryAssignments([]);
+      return;
+    }
+
+    setGalleryAssignments(() => {
+      const generated = generateGalleryAssignments();
+      if (!generated.length) {
+        return [];
+      }
+
+      const desired = Math.min(PROPOSAL_COUNT, generated.length);
+      return generated.slice(0, desired);
+    });
+  }, [breeds, generateGalleryAssignments, galleryRefreshToken, isGalleryView]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -5224,14 +5294,10 @@ export default function Home({
 
     const total = Math.min(PROPOSAL_COUNT, maxLength || 0);
     const combos = [];
-    const subtitleParts = [];
-    if (activeBreed?.name) {
-      subtitleParts.push(activeBreed.name);
-    }
-    if (activeGenderLabel) {
-      subtitleParts.push(activeGenderLabel);
-    }
-    const sharedSubtitle = subtitleParts.join(" · ");
+    const assignmentPool =
+      isGalleryView && Array.isArray(galleryAssignments) && galleryAssignments.length
+        ? galleryAssignments
+        : null;
 
     for (let index = 0; index < total; index += 1) {
       const items = ITEM_TYPES.map((type) => {
@@ -5325,14 +5391,91 @@ export default function Home({
         )
       ).sort((a, b) => a - b);
 
-      const lookGenderCode =
-        activeGenderValue === BARBOFUS_GENDER_VALUES.female ? "f" : "m";
+      const assignment = assignmentPool
+        ? assignmentPool[index % assignmentPool.length]
+        : null;
+
+      let proposalBreed = activeBreed;
+      let proposalGenderKey = selectedGender;
+      let proposalGenderValue =
+        BARBOFUS_GENDER_VALUES[selectedGender] ?? BARBOFUS_DEFAULTS.gender;
+      const fallbackGenderLabel =
+        typeof activeGenderLabel === "string" && activeGenderLabel.trim().length
+          ? activeGenderLabel
+          : genderLabels[selectedGender] ?? genderLabels.male;
+      let proposalGenderLabel = fallbackGenderLabel;
+      let proposalClassDefaults = activeClassDefaults;
+      let proposalClassFaceId = activeClassFaceId;
+      let proposalClassId = activeClassId;
+      let proposalClassName = activeBreed?.name ?? null;
+      let proposalClassIcon = activeBreed?.icon ?? null;
+
+      if (assignment) {
+        const genderKey = assignment.gender === "female" ? "female" : "male";
+        const assignedBreed = breedsById.get(assignment.breedId) ?? null;
+
+        if (assignedBreed) {
+          proposalBreed = assignedBreed;
+          if (Number.isFinite(assignedBreed.id)) {
+            proposalClassId = assignedBreed.id;
+          }
+          if (assignedBreed.name) {
+            proposalClassName = assignedBreed.name;
+          }
+          if (assignedBreed.icon) {
+            proposalClassIcon = assignedBreed.icon;
+          }
+        }
+
+        proposalGenderKey = genderKey;
+        proposalGenderValue =
+          BARBOFUS_GENDER_VALUES[genderKey] ?? BARBOFUS_GENDER_VALUES.male;
+        proposalGenderLabel = genderLabels[genderKey] ?? proposalGenderLabel;
+
+        const fallbackConfig =
+          genderKey === "female"
+            ? BARBOFUS_DEFAULT_BREED.female
+            : BARBOFUS_DEFAULT_BREED.male;
+
+        const resolvedGenderConfig = (() => {
+          if (!proposalBreed) {
+            return fallbackConfig;
+          }
+          const candidate =
+            genderKey === "female"
+              ? proposalBreed.female ?? fallbackConfig
+              : proposalBreed.male ?? fallbackConfig;
+          return candidate ?? fallbackConfig;
+        })();
+
+        proposalClassDefaults = resolvedGenderConfig?.colors?.numeric ?? [];
+        const fallbackFace = Number.isFinite(resolvedGenderConfig?.faceId)
+          ? resolvedGenderConfig.faceId
+          : Number.isFinite(resolvedGenderConfig?.lookId)
+          ? resolvedGenderConfig.lookId
+          : BARBOFUS_DEFAULTS.faceId;
+        const computedFaceId = getBarbofusFaceId(proposalClassId, genderKey, fallbackFace);
+        if (Number.isFinite(computedFaceId)) {
+          proposalClassFaceId = computedFaceId;
+        }
+      }
+
+      const lookGenderCode = proposalGenderKey === "female" ? "f" : "m";
+      const subtitleParts = [];
+      if (proposalClassName) {
+        subtitleParts.push(proposalClassName);
+      }
+      if (proposalGenderLabel) {
+        subtitleParts.push(proposalGenderLabel);
+      }
+      const subtitle = subtitleParts.join(" · ");
+
       const barbofusLink = buildBarbofusLink(items, paletteSample, fallbackColorValues, {
         useCustomSkinTone,
-        classId: activeClassId,
-        gender: activeGenderValue,
-        faceId: activeClassFaceId,
-        classDefaults: activeClassDefaults,
+        classId: proposalClassId,
+        gender: proposalGenderValue,
+        faceId: proposalClassFaceId,
+        classDefaults: proposalClassDefaults,
       });
 
       const lookColors = (() => {
@@ -5351,8 +5494,8 @@ export default function Home({
           values.push(normalized);
         };
 
-        if (!useCustomSkinTone && Array.isArray(activeClassDefaults) && activeClassDefaults.length) {
-          const defaultSkin = activeClassDefaults.find((entry) => Number.isFinite(entry));
+        if (!useCustomSkinTone && Array.isArray(proposalClassDefaults) && proposalClassDefaults.length) {
+          const defaultSkin = proposalClassDefaults.find((entry) => Number.isFinite(entry));
           if (defaultSkin !== undefined) {
             register(defaultSkin);
           }
@@ -5367,8 +5510,8 @@ export default function Home({
 
         fallbackColorValues.forEach(register);
 
-        if (!useCustomSkinTone && Array.isArray(activeClassDefaults) && activeClassDefaults.length) {
-          activeClassDefaults.forEach((value, index) => {
+        if (!useCustomSkinTone && Array.isArray(proposalClassDefaults) && proposalClassDefaults.length) {
+          proposalClassDefaults.forEach((value, index) => {
             if (index === 0) {
               return;
             }
@@ -5380,10 +5523,10 @@ export default function Home({
       })();
 
       const baseKeyParts = [];
-      if (Number.isFinite(activeClassId)) {
-        baseKeyParts.push(activeClassId);
+      if (Number.isFinite(proposalClassId)) {
+        baseKeyParts.push(proposalClassId);
       }
-      const lookFaceId = Number.isFinite(activeClassFaceId) ? activeClassFaceId : null;
+      const lookFaceId = Number.isFinite(proposalClassFaceId) ? proposalClassFaceId : null;
       if (lookFaceId) {
         baseKeyParts.push(`head${lookFaceId}`);
       }
@@ -5408,8 +5551,8 @@ export default function Home({
       const lookKey = lookBaseKey ? `${lookBaseKey}-d${directionCode}` : null;
       const lookKeyNoStuff = lookBaseKeyNoStuff ? `${lookBaseKeyNoStuff}-d${directionCode}` : null;
       const souffLink = buildSouffLink({
-        classId: activeClassId,
-        faceId: activeClassFaceId,
+        classId: proposalClassId,
+        faceId: proposalClassFaceId,
         gender: lookGenderCode,
         itemIds: lookItemIds,
         colors: lookColors,
@@ -5425,11 +5568,11 @@ export default function Home({
         heroImage: items.find((item) => item.imageUrl)?.imageUrl ?? null,
         barbofusLink,
         souffLink,
-        className: activeBreed?.name ?? null,
-        classId: Number.isFinite(activeClassId) ? activeClassId : null,
-        genderLabel: activeGenderLabel,
-        classIcon: activeBreed?.icon ?? null,
-        subtitle: sharedSubtitle,
+        className: proposalClassName ?? null,
+        classId: Number.isFinite(proposalClassId) ? proposalClassId : null,
+        genderLabel: proposalGenderLabel,
+        classIcon: proposalClassIcon ?? null,
+        subtitle,
         lookGender: lookGenderCode,
         lookFaceId,
         lookItemIds,
@@ -5451,10 +5594,15 @@ export default function Home({
     activeClassId,
     activeGenderLabel,
     activeGenderValue,
+    breedsById,
+    galleryAssignments,
+    genderLabels,
+    isGalleryView,
     fallbackColorValues,
     proposalItemIndexes,
     recommendations,
     selectedItemsBySlot,
+    selectedGender,
     useCustomSkinTone,
     lookAnimation,
     lookDirection,
@@ -5570,10 +5718,7 @@ export default function Home({
     return map;
   }, [previewBackgroundOptions, previewBackgroundSwatches, proposals]);
 
-  const galleryActiveDirection = useMemo(
-    () => normalizeLookDirection(lookDirection),
-    [lookDirection]
-  );
+  const galleryActiveDirection = DEFAULT_LOOK_DIRECTION;
 
   const galleryCards = useMemo(() => {
     if (!Array.isArray(proposals) || !proposals.length) {
@@ -6011,11 +6156,15 @@ export default function Home({
 
     const timeoutHandles = [];
     const activeDirection = normalizeLookDirection(lookDirection);
+    const priorityDirections = [DEFAULT_LOOK_DIRECTION];
+    if (!priorityDirections.includes(activeDirection)) {
+      priorityDirections.push(activeDirection);
+    }
 
     lookPreviewDescriptors.forEach((descriptor) => {
       const orderedDirections = [
-        activeDirection,
-        ...ALL_LOOK_DIRECTIONS.filter((value) => value !== activeDirection),
+        ...priorityDirections,
+        ...ALL_LOOK_DIRECTIONS.filter((value) => !priorityDirections.includes(value)),
       ];
 
       orderedDirections.forEach((direction, index) => {
