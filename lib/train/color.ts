@@ -20,6 +20,25 @@ export function hexToRgb(hex: string): [number, number, number] {
   return [r, g, b];
 }
 
+export interface Hsl {
+  h: number;
+  s: number;
+  l: number;
+}
+
+export function clamp01(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  if (value < 0) {
+    return 0;
+  }
+  if (value > 1) {
+    return 1;
+  }
+  return value;
+}
+
 export function rgbToHue(r: number, g: number, b: number): number {
   const rf = r / 255;
   const gf = g / 255;
@@ -59,8 +78,8 @@ export function paletteToHues(palette: string[]): number[] {
 
 export function hslToHex(h: number, s: number, l: number): string {
   const hue = clampHue(h) / 360;
-  const satur = Math.max(0, Math.min(1, s));
-  const light = Math.max(0, Math.min(1, l));
+  const satur = clamp01(s);
+  const light = clamp01(l);
   const q = light < 0.5 ? light * (1 + satur) : light + satur - light * satur;
   const p = 2 * light - q;
   const convert = (t: number): string => {
@@ -104,4 +123,50 @@ export function rgbToLab(r: number, g: number, b: number): Lab {
 
 export function labDelta(hexA: string, hexB: string): number {
   return deltaE2000(hexToLab(hexA), hexToLab(hexB));
+}
+
+export function rgbToHsl(r: number, g: number, b: number): Hsl {
+  const rf = r / 255;
+  const gf = g / 255;
+  const bf = b / 255;
+  const max = Math.max(rf, gf, bf);
+  const min = Math.min(rf, gf, bf);
+  const delta = max - min;
+  let hue = 0;
+  if (delta !== 0) {
+    switch (max) {
+      case rf:
+        hue = ((gf - bf) / delta) % 6;
+        break;
+      case gf:
+        hue = (bf - rf) / delta + 2;
+        break;
+      default:
+        hue = (rf - gf) / delta + 4;
+        break;
+    }
+    hue *= 60;
+    if (hue < 0) {
+      hue += 360;
+    }
+  }
+  const light = (max + min) / 2;
+  let satur = 0;
+  if (delta !== 0) {
+    satur = light > 0.5 ? delta / (2 - max - min) : delta / (max + min);
+  }
+  return { h: clampHue(hue), s: clamp01(satur), l: clamp01(light) };
+}
+
+export function hexToHsl(hex: string): Hsl {
+  const [r, g, b] = hexToRgb(hex);
+  return rgbToHsl(r, g, b);
+}
+
+export function shiftHexColor(hex: string, deltaH = 0, deltaS = 0, deltaL = 0): string {
+  const { h, s, l } = hexToHsl(hex);
+  const nextH = clampHue(h + deltaH);
+  const nextS = clamp01(s + deltaS);
+  const nextL = clamp01(l + deltaL);
+  return hslToHex(nextH, nextS, nextL);
 }

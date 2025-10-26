@@ -36,14 +36,6 @@ function formatSexLabel(sex: GeneratedCandidate["sex"]): string {
   return sex === "female" ? "Féminin" : "Masculin";
 }
 
-function formatSlotLabel(slot: CandidateItemPick["slot"]): string {
-  if (typeof slot !== "string" || !slot.trim()) {
-    return "Emplacement";
-  }
-  const normalized = slot.trim();
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
-}
-
 function buildPaletteEntries(candidate: GeneratedCandidate): Array<{ key: string; color: string }> {
   return Object.entries(candidate.palette.colors).map(([key, color]) => ({
     key,
@@ -151,7 +143,7 @@ function TrainingCard({ candidate, index }: { candidate: TrainingCardEntry; inde
       <ul className="training-card__items-strip" aria-label="Équipements choisis">
         {candidate.items.map((pick) => {
           const label = pick.item?.label ?? "Aucun objet";
-          const tooltip = `${formatSlotLabel(pick.slot)} · ${label}`;
+          const tooltip = label;
           return (
             <li key={`${candidate.id}-${pick.slot}`}>
               <span

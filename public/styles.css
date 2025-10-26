@@ -710,16 +710,17 @@ a {
 
 .training-card__items-strip {
   display: grid;
-  grid-template-columns: repeat(7, 30px);
-  grid-auto-rows: 30px;
+  grid-template-columns: repeat(7, minmax(0, 28px));
+  grid-auto-rows: 28px;
   justify-content: center;
-  gap: 6px;
-  margin: 0;
-  padding: 8px 14px 8px;
+  gap: 4px;
+  margin: 0 auto;
+  padding: 6px 12px 6px;
   list-style: none;
   background: rgba(var(--surface-7-rgb), 0.66);
   border-top: 1px solid rgba(var(--surface-9-rgb), 0.42);
   border-bottom: 1px solid rgba(var(--surface-9-rgb), 0.42);
+  max-width: 236px;
 }
 
 .training-card__items-strip li {
@@ -729,8 +730,8 @@ a {
 }
 
 .training-card__item-chip {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border-radius: 9px;
   border: 2px solid rgba(var(--white-rgb), 0.14);
   background: rgba(var(--surface-4-rgb), 0.6);
@@ -866,8 +867,8 @@ a {
 }
 
 .skeleton-chip {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border-radius: 10px;
 }
 
