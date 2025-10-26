@@ -101,6 +101,11 @@ export default async function handler(
           localNotes.push(`Mode COULEUR appliqué pour ${slot} (ΔE ${
             colorCandidates[0].reasons.deltaE?.toFixed(2) ?? "n/a"
           }).`);
+          if (colorCandidates[0].isColorable) {
+            localNotes.push(
+              `Suggestion ${slot} colorisable → vérifier avec les couleurs du personnage.`,
+            );
+          }
         }
       } else if (!candidates.length && !isVisible) {
         localNotes.push(`Slot ${slot} trop masqué → aucune suggestion.`);

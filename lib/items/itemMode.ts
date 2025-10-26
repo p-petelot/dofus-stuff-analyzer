@@ -62,6 +62,7 @@ export async function itemModeSuggest(
       continue;
     }
     const shape = (1 - chamfer + ssimScore) / 2;
+    const isColorable = candidate.tags?.includes("colorable") ?? false;
     const score =
       WEIGHTS_ITEM.clip * clipScore +
       WEIGHTS_ITEM.orb * orbRatio +
@@ -75,6 +76,7 @@ export async function itemModeSuggest(
       verified: true,
       thumb: candidate.thumb ?? candidate.sprite,
       setId: candidate.setId ?? undefined,
+      isColorable,
       reasons: {
         clip: clipScore,
         orb: orbRatio,

@@ -41,8 +41,10 @@ export interface CandidateReasons {
   chamfer?: number;
   poseAligned?: boolean;
   colorScore?: number;
+  colorScoreRaw?: number;
   ssimEdges?: number;
   deltaE?: number;
+  colorablePenalty?: number;
 }
 
 export interface Candidate {
@@ -54,6 +56,7 @@ export interface Candidate {
   verified: boolean;
   reasons: CandidateReasons;
   setId?: number | null;
+  isColorable?: boolean;
 }
 
 export interface ItemMeta {
