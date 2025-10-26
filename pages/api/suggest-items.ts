@@ -8,9 +8,12 @@ import {
   SLOTS,
 } from "../../lib/config/suggestions";
 import {
+  buildDofusColorSlots,
   extractPaletteLABBySlot,
   extractPaletteLABGlobal,
+  extractVisualZonePalettes,
   snapToDofusPalette,
+  snapVisualZonesToDofus,
 } from "../../lib/colors/palette";
 import { colorModeSuggest } from "../../lib/items/colorMode";
 import { itemModeSuggest } from "../../lib/items/itemMode";
@@ -58,8 +61,24 @@ export default async function handler(
 
     const paletteGlobalLab = extractPaletteLABGlobal(img512, mask);
     const paletteBySlotLab = extractPaletteLABBySlot(img512, boxes, mask);
-    const paletteGlobal = snapToDofusPalette(paletteGlobalLab);
+    const visualZonesLab = extractVisualZonePalettes(img512, mask);
+    const visualZones = snapVisualZonesToDofus(visualZonesLab);
+    const colorSlots = buildDofusColorSlots(visualZones);
+    const fallbackGlobal = snapToDofusPalette(paletteGlobalLab);
+    const paletteGlobal = {
+      primary: visualZones.hair.primary ?? fallbackGlobal.primary,
+      secondary: visualZones.outfit.primary ?? fallbackGlobal.secondary,
+      tertiary: visualZones.accent.primary ?? fallbackGlobal.tertiary,
+    };
     const paletteBySlot = snapToDofusPalette(paletteBySlotLab);
+
+    paletteBySlot.coiffe = visualZones.hair;
+    for (const slot of ["cape", "epauliere", "costume", "ailes"] as const) {
+      paletteBySlot[slot] = visualZones.outfit;
+    }
+    for (const slot of ["bouclier", "familier"] as const) {
+      paletteBySlot[slot] = visualZones.accent;
+    }
 
     const perSlot = Object.fromEntries(
       SLOTS.map((slot) => [slot, { candidates: [], confidence: 0, notes: [] as string[] }]),
@@ -158,7 +177,12 @@ export default async function handler(
     };
 
     const response: SuggestionOutput = {
-      palette: { global: paletteGlobal, bySlot: paletteBySlot },
+      palette: {
+        global: paletteGlobal,
+        bySlot: paletteBySlot,
+        zones: visualZones,
+        colorSlots,
+      },
       slots,
       confidence,
       visibility,

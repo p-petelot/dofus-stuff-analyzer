@@ -1,12 +1,15 @@
 import { ROI, SLOTS } from "../config/suggestions";
 import type {
   BoundingBox,
+  DofusColorSlots,
   DofusPalette,
   ImageDataLike,
   Lab,
   Mask,
   Palette,
   SlotKey,
+  VisualZoneKey,
+  ColorSlotKey,
 } from "../types";
 
 const DOFUS_HEX = [
@@ -29,6 +32,32 @@ interface LabAccumulator {
   L: number;
   a: number;
   b: number;
+}
+
+const VISUAL_ZONE_KEYS: VisualZoneKey[] = ["hair", "skin", "outfit", "accent"];
+
+const ZONE_BOUNDS: Record<Exclude<VisualZoneKey, "accent">, { yMin: number; yMax: number }> = {
+  hair: { yMin: 0, yMax: 0.25 },
+  skin: { yMin: 0.25, yMax: 0.48 },
+  outfit: { yMin: 0.5, yMax: 0.75 },
+};
+
+const ACCENT_DELTA_THRESHOLD = 8;
+
+const FALLBACK_LAB: Lab = { L: 60, a: 0, b: 0 };
+
+function reorderOutfitPalette(palette: Palette): Palette {
+  const unique: Lab[] = [];
+  for (const lab of [palette.primary, palette.secondary, palette.tertiary]) {
+    if (!unique.some((entry) => deltaE2000(entry, lab) < 1)) {
+      unique.push(lab);
+    }
+  }
+  unique.sort((a, b) => b.b - a.b);
+  const primary = unique[0] ?? FALLBACK_LAB;
+  const secondary = unique[1] ?? primary;
+  const tertiary = unique[2] ?? unique[1] ?? primary;
+  return { primary, secondary, tertiary };
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -125,6 +154,87 @@ function collectLabs(
   return acc;
 }
 
+function zoneFilter(
+  zone: Exclude<VisualZoneKey, "accent">,
+  height: number,
+): (x: number, y: number) => boolean {
+  const bounds = ZONE_BOUNDS[zone];
+  const minY = Math.floor(bounds.yMin * height);
+  const maxY = Math.ceil(bounds.yMax * height);
+  return (_x: number, y: number) => y >= minY && y < maxY;
+}
+
+export function extractVisualZonePalettes(
+  img512: ImageDataLike,
+  mask: Mask,
+): Record<VisualZoneKey, Palette> {
+  const globalBuckets = collectLabs(img512, mask, () => true);
+  const globalPalette = bucketsToPalette(globalBuckets);
+
+  const zonePalettes = {} as Record<VisualZoneKey, Palette>;
+
+  for (const zone of ["hair", "skin", "outfit"] as const) {
+    const buckets = collectLabs(img512, mask, zoneFilter(zone, img512.height));
+    const palette = bucketsToPalette(buckets);
+    zonePalettes[zone] = zone === "outfit" ? reorderOutfitPalette(palette) : palette;
+  }
+
+  const accentCandidates = [
+    globalPalette.primary,
+    globalPalette.secondary,
+    globalPalette.tertiary,
+  ];
+
+  const anchorColours = [
+    zonePalettes.hair.primary,
+    zonePalettes.skin.primary,
+    zonePalettes.outfit.primary,
+  ];
+
+  const accentLab =
+    accentCandidates.find((candidate) =>
+      anchorColours.every((anchor) => deltaE2000(candidate, anchor) >= ACCENT_DELTA_THRESHOLD),
+    ) ?? zonePalettes.outfit.tertiary ?? globalPalette.tertiary;
+
+  zonePalettes.accent = {
+    primary: accentLab,
+    secondary: zonePalettes.outfit.secondary,
+    tertiary: zonePalettes.outfit.tertiary,
+  };
+
+  return zonePalettes;
+}
+
+export function snapVisualZonesToDofus(
+  zones: Record<VisualZoneKey, Palette>,
+): Record<VisualZoneKey, DofusPalette> {
+  const result = {} as Record<VisualZoneKey, DofusPalette>;
+  for (const zone of VISUAL_ZONE_KEYS) {
+    const palette = zones[zone];
+    result[zone] = paletteToDofus(palette);
+  }
+  return result;
+}
+
+export function buildDofusColorSlots(zones: Record<VisualZoneKey, DofusPalette>): DofusColorSlots {
+  const slots: Record<ColorSlotKey, string> = {
+    1: zones.hair.primary,
+    2: zones.skin.primary,
+    3: zones.outfit.primary,
+    4: zones.outfit.secondary ?? zones.outfit.primary,
+    5: zones.accent.primary ?? zones.outfit.tertiary ?? zones.outfit.primary,
+  };
+
+  const byZone: Record<VisualZoneKey, string> = {
+    hair: slots[1],
+    skin: slots[2],
+    outfit: slots[3],
+    accent: slots[5],
+  };
+
+  return { slots, byZone };
+}
+
 /** Extract a LAB palette for the whole normalized image. */
 export function extractPaletteLABGlobal(img512: ImageDataLike, mask: Mask): Palette {
   const buckets = collectLabs(img512, mask, () => true);
@@ -177,7 +287,7 @@ function nearestDofusColour(lab: Lab): string {
   return best;
 }
 
-function paletteToDofus(palette: Palette): DofusPalette {
+export function paletteToDofus(palette: Palette): DofusPalette {
   return {
     primary: nearestDofusColour(palette.primary),
     secondary: nearestDofusColour(palette.secondary),
