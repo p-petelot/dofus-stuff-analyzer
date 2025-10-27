@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deltaE2000 } from "../lib/colors/palette";
+import { deltaE2000 } from "../lib/color/palette";
 
 function hexToLab(hex: string) {
   const cleaned = hex.replace("#", "");

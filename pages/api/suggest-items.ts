@@ -11,7 +11,7 @@ import {
   extractPaletteLABBySlot,
   extractPaletteLABGlobal,
   snapToDofusPalette,
-} from "../../lib/colors/palette";
+} from "../../lib/color/palette";
 import { colorModeSuggest } from "../../lib/items/colorMode";
 import { itemModeSuggest } from "../../lib/items/itemMode";
 import { applySetBonus, finalizeSlot } from "../../lib/items/rerank";
