@@ -6936,10 +6936,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
             </div>
           ) : null}
         </div>
-        <header className="hero">
-          <h1>{BRAND_NAME}</h1>
-        </header>
-
         <div className="workspace-layout">
           <section className="workspace">
           <div className={referenceClassName}>

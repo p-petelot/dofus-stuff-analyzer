@@ -97,9 +97,7 @@ export default function AppHeader({ onSelectLanguage, onSelectTheme }) {
                   <span className="theme-switcher__icon" aria-hidden="true">
                     {option.icon}
                   </span>
-                  <span className="theme-switcher__label" aria-hidden="true">
-                    {option.label}
-                  </span>
+                  <span className="sr-only">{option.label}</span>
                 </button>
               );
             })}
@@ -120,9 +118,7 @@ export default function AppHeader({ onSelectLanguage, onSelectTheme }) {
                   <span className="language-switcher__flag" aria-hidden="true">
                     <img src={option.flag} alt="" loading="lazy" />
                   </span>
-                  <span className="language-switcher__code" aria-hidden="true">
-                    {option.shortLabel ?? option.code.toUpperCase()}
-                  </span>
+                  <span className="sr-only">{option.accessibleLabel}</span>
                 </button>
               );
             })}
