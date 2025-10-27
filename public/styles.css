@@ -3501,259 +3501,295 @@ a {
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 36px 0;
+  padding: 44px 0;
 }
 
-.palette-loader__aurora {
+.palette-loader__galaxy {
   position: relative;
-  width: 120px;
-  height: 120px;
+  width: 200px;
+  height: 200px;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: visible;
 }
 
-.palette-loader__halo {
+.palette-loader__starfield {
   position: absolute;
-  inset: -18px;
+  inset: -42px;
   border-radius: 50%;
-  background: radial-gradient(circle at center, rgba(34, 211, 238, 0.35), rgba(26, 212, 141, 0.1) 55%, transparent 70%);
+  background:
+    radial-gradient(circle at 22% 32%, rgba(255, 255, 255, 0.14) 0%, transparent 45%),
+    radial-gradient(circle at 72% 24%, rgba(var(--accent-cool-rgb), 0.2) 0%, transparent 60%),
+    radial-gradient(circle at 50% 80%, rgba(var(--accent-secondary-rgb), 0.15) 0%, transparent 70%),
+    rgba(6, 12, 24, 0.55);
   filter: blur(22px);
-  opacity: 0.9;
-  animation: palette-loader-halo 5.4s ease-in-out infinite;
+  opacity: 0.65;
+  animation: palette-loader-starfield 18s linear infinite;
   z-index: 0;
 }
 
-.palette-loader__spectrum {
+.palette-loader__orbit-trail {
   position: absolute;
-  inset: 0;
-  display: block;
-  transform-origin: 50% 50%;
-  animation: palette-loader-rotate 8s linear infinite;
-  filter: drop-shadow(0 22px 34px rgba(var(--accent-sky-rgb), 0.24));
+  width: 188px;
+  height: 188px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent 56%, rgba(15, 23, 42, 0.85) 57%, transparent 61%),
+    conic-gradient(
+      from 120deg,
+      rgba(var(--accent-tertiary-rgb), 0.06) 0deg 60deg,
+      rgba(var(--accent-primary-rgb), 0.24) 60deg 210deg,
+      rgba(var(--accent-secondary-rgb), 0.16) 210deg 360deg
+    );
+  transform: rotate(-18deg) scaleX(1.12) scaleY(0.86);
+  filter: drop-shadow(0 18px 36px rgba(var(--accent-sky-rgb), 0.25));
+  opacity: 0.78;
+  animation: palette-loader-trail 14s linear infinite;
   z-index: 1;
 }
 
-.palette-loader__ring {
+.palette-loader__planet {
+  position: relative;
+  width: 94px;
+  height: 94px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: palette-loader-planet-float 3.8s ease-in-out infinite;
+  z-index: 3;
+}
+
+.palette-loader__planet-halo {
+  position: absolute;
+  inset: -32px;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, rgba(var(--accent-sky-rgb), 0.35), transparent 68%);
+  filter: blur(12px);
+  opacity: 0.75;
+  animation: palette-loader-planet-halo 5.6s ease-in-out infinite;
+}
+
+.palette-loader__planet-core {
+  position: relative;
+  width: 82px;
+  height: 82px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 28%, rgba(255, 255, 255, 0.9), transparent 48%),
+    radial-gradient(circle at 70% 38%, rgba(224, 242, 254, 0.5), transparent 60%),
+    linear-gradient(145deg, #061229 0%, #0ea5e9 38%, #1dd6c7 62%, #bef264 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 18px 32px rgba(var(--accent-sky-rgb), 0.35),
+    inset 0 -16px 22px rgba(14, 116, 144, 0.45);
+  overflow: hidden;
+}
+
+.palette-loader__planet-core::after {
+  content: "";
+  position: absolute;
+  inset: 20% 18% 32% 26%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 60% 30%, rgba(255, 255, 255, 0.75), transparent 70%);
+  opacity: 0.75;
+}
+
+.palette-loader__orbit {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: conic-gradient(
-    from 90deg,
-    rgba(34, 211, 238, 0) 0deg,
-    rgba(34, 211, 238, 0.45) 110deg,
-    rgba(250, 204, 21, 0.4) 220deg,
-    rgba(168, 85, 247, 0.55) 310deg,
-    rgba(34, 211, 238, 0) 360deg
-  );
-  mask: radial-gradient(circle, transparent 58%, #000 64%);
-  -webkit-mask: radial-gradient(circle, transparent 58%, #000 64%);
-  mix-blend-mode: screen;
-  opacity: 0.85;
-  animation: palette-loader-spin 3.8s linear infinite;
-}
-
-.palette-loader__ring--inner {
-  inset: 18px;
-  background: conic-gradient(
-    from 0deg,
-    rgba(31, 221, 141, 0.65) 20deg,
-    rgba(251, 146, 60, 0.5) 180deg,
-    rgba(168, 85, 247, 0.45) 290deg,
-    rgba(31, 221, 141, 0.65) 360deg
-  );
-  mask: radial-gradient(circle, transparent 68%, #000 74%);
-  -webkit-mask: radial-gradient(circle, transparent 68%, #000 74%);
-  opacity: 0.75;
-  animation-duration: 2.6s;
-  animation-direction: reverse;
-}
-
-.palette-loader__core {
-  position: relative;
-  width: 56px;
-  height: 56px;
-  border-radius: 18%;
-  transform: rotate(45deg);
-  background: linear-gradient(135deg, #0f172a, #0ea5e9 32%, #22d3ee 52%, #34d399 74%, #facc15 100%);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.18),
-    0 14px 30px rgba(var(--accent-sky-rgb), 0.32),
-    inset 0 -12px 18px rgba(14, 116, 144, 0.4);
-  animation: palette-loader-core 2.8s ease-in-out infinite;
+  animation: palette-loader-orbit 18s linear infinite;
   z-index: 2;
 }
 
-.palette-loader__core::after {
+.palette-loader__dofus {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transform: rotate(var(--palette-loader-angle));
+  transform-origin: center;
+  animation: palette-loader-dofus-sway 6s ease-in-out infinite;
+  animation-delay: var(--palette-loader-delay);
+}
+
+.palette-loader__dofus-positioner {
+  position: relative;
+  display: block;
+  transform: translateX(var(--palette-loader-radius)) translateY(0);
+  animation: palette-loader-dofus-drift 4.6s ease-in-out infinite;
+  animation-delay: var(--palette-loader-delay);
+}
+
+.palette-loader__dofus-shell {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 46px;
+  height: 62px;
+  transform: translate(-50%, -50%) rotate(var(--palette-loader-angle-negative));
+  border-radius: 48% 48% 56% 56% / 72% 72% 44% 44%;
+  background:
+    radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.88), transparent 58%),
+    radial-gradient(circle at 72% 76%, rgba(255, 255, 255, 0.32), transparent 65%),
+    linear-gradient(148deg, var(--palette-loader-dofus-highlight) 0%, var(--palette-loader-dofus-base) 48%, var(--palette-loader-dofus-shadow) 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 14px 30px rgba(15, 23, 42, 0.32),
+    0 0 30px var(--palette-loader-dofus-glow);
+  overflow: hidden;
+  animation: palette-loader-dofus-breathe 3.6s ease-in-out infinite;
+  animation-delay: calc(var(--palette-loader-delay) * 0.85);
+}
+
+.palette-loader__dofus-shell::before {
   content: "";
   position: absolute;
   inset: 12% 18% 42% 20%;
-  border-radius: 45%;
-  background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0));
+  border-radius: 52% 50% 58% 58% / 70% 68% 40% 42%;
+  background: radial-gradient(circle at 28% 26%, rgba(255, 255, 255, 0.85), transparent 70%);
   opacity: 0.85;
+  mix-blend-mode: screen;
 }
 
-.palette-loader__pulse {
-  position: absolute;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.68), var(--palette-loader-color));
-  box-shadow:
-    0 0 0 2px rgba(255, 255, 255, 0.1),
-    0 12px 20px rgba(15, 23, 42, 0.3);
-  filter: saturate(1.1);
-  animation: palette-loader-pulse 2.6s ease-in-out infinite;
-  animation-delay: calc(var(--palette-loader-index, 0) * 0.18s);
-  z-index: 1;
-}
-
-.palette-loader__pulse--0 {
-  top: -8px;
-  left: 50%;
-  transform: translate(-50%, 0);
-}
-
-.palette-loader__pulse--1 {
-  top: 20px;
-  right: -4px;
-}
-
-.palette-loader__pulse--2 {
-  bottom: 16px;
-  right: 16px;
-}
-
-.palette-loader__pulse--3 {
-  bottom: -10px;
-  left: 34px;
-}
-
-.palette-loader__pulse--4 {
-  top: 30px;
-  left: -6px;
-}
-
-.palette-loader__pulse::after {
+.palette-loader__dofus-shell::after {
   content: "";
   position: absolute;
-  inset: 3px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0));
+  inset: 60% 26% 10% 30%;
+  border-radius: 60% 50% 68% 58% / 48% 52% 70% 62%;
+  background: radial-gradient(circle at 50% 18%, rgba(0, 0, 0, 0.2), transparent 70%);
+  opacity: 0.55;
 }
 
-@keyframes palette-loader-rotate {
+.palette-loader__dofus-cap {
+  position: absolute;
+  top: 16%;
+  left: 50%;
+  width: 58%;
+  height: 26%;
+  border-radius: 58% 58% 42% 42% / 70% 70% 36% 36%;
+  transform: translateX(-50%);
+  background: radial-gradient(circle at 50% 28%, var(--palette-loader-dofus-sheen), transparent 80%);
+  opacity: 0.85;
+  mix-blend-mode: screen;
+}
+
+.palette-loader__dofus-glow {
+  position: absolute;
+  inset: 24% 26% 22% 26%;
+  border-radius: 48% 50% 58% 56% / 64% 64% 42% 40%;
+  background: radial-gradient(circle at 50% 40%, var(--palette-loader-dofus-sheen), transparent 70%);
+  opacity: 0.75;
+  mix-blend-mode: screen;
+}
+
+.palette-loader__dofus-rune {
+  position: absolute;
+  inset: 42% 32% 18% 36%;
+  border-radius: 48% 60% 68% 40% / 60% 60% 44% 46%;
+  background: linear-gradient(155deg, transparent 0 18%, rgba(255, 255, 255, 0.38) 22%, var(--palette-loader-dofus-rune) 58%, rgba(255, 255, 255, 0.2) 100%);
+  opacity: 0.78;
+  filter: blur(0.6px);
+  transform: rotate(-10deg);
+}
+
+.palette-loader__dofus-shell--emerald .palette-loader__dofus-rune {
+  transform: rotate(-6deg) skewX(-4deg);
+  background: linear-gradient(150deg, transparent 0 22%, rgba(255, 255, 255, 0.45) 28%, var(--palette-loader-dofus-rune) 60%, rgba(255, 255, 255, 0.25) 100%);
+}
+
+.palette-loader__dofus-shell--turquoise .palette-loader__dofus-rune {
+  transform: rotate(-16deg) skewX(4deg);
+  background: linear-gradient(160deg, transparent 0 20%, rgba(255, 255, 255, 0.4) 32%, var(--palette-loader-dofus-rune) 62%, rgba(255, 255, 255, 0.28) 100%);
+}
+
+.palette-loader__dofus-shell--ivoire .palette-loader__dofus-rune {
+  transform: rotate(-4deg) skewX(-6deg);
+  background: linear-gradient(150deg, transparent 0 18%, rgba(255, 255, 255, 0.32) 26%, var(--palette-loader-dofus-rune) 58%, rgba(255, 255, 255, 0.22) 100%);
+}
+
+.palette-loader__dofus-shell--ocre .palette-loader__dofus-rune {
+  transform: rotate(-18deg) skewX(6deg);
+  background: linear-gradient(162deg, transparent 0 25%, rgba(255, 255, 255, 0.35) 38%, var(--palette-loader-dofus-rune) 66%, rgba(255, 255, 255, 0.22) 100%);
+}
+
+.palette-loader__dofus-shell--pourpre .palette-loader__dofus-rune {
+  transform: rotate(-12deg) skewX(-5deg);
+  background: linear-gradient(158deg, transparent 0 22%, rgba(255, 255, 255, 0.4) 34%, var(--palette-loader-dofus-rune) 64%, rgba(255, 255, 255, 0.24) 100%);
+}
+
+.palette-loader__dofus-shell--ebene .palette-loader__dofus-rune {
+  transform: rotate(-20deg) skewX(8deg);
+  background: linear-gradient(165deg, transparent 0 24%, rgba(255, 255, 255, 0.38) 38%, var(--palette-loader-dofus-rune) 70%, rgba(255, 255, 255, 0.26) 100%);
+  opacity: 0.68;
+}
+
+@keyframes palette-loader-orbit {
   to {
     transform: rotate(360deg);
   }
 }
 
-@keyframes palette-loader-spin {
+@keyframes palette-loader-dofus-drift {
+  0%,
+  100% {
+    transform: translateX(var(--palette-loader-radius)) translateY(0);
+  }
+  50% {
+    transform: translateX(var(--palette-loader-radius)) translateY(-8px);
+  }
+}
+
+@keyframes palette-loader-dofus-breathe {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) rotate(var(--palette-loader-angle-negative)) scale(0.98);
+  }
+  50% {
+    transform: translate(-50%, -50%) rotate(var(--palette-loader-angle-negative)) scale(1.03);
+  }
+}
+
+@keyframes palette-loader-dofus-sway {
+  0%,
+  100% {
+    transform: rotate(calc(var(--palette-loader-angle) - 3deg));
+  }
+  50% {
+    transform: rotate(calc(var(--palette-loader-angle) + 3deg));
+  }
+}
+
+@keyframes palette-loader-starfield {
   to {
     transform: rotate(360deg);
   }
 }
 
-@keyframes palette-loader-pulse {
+@keyframes palette-loader-trail {
+  to {
+    transform: rotate(342deg) scaleX(1.12) scaleY(0.86);
+  }
+}
+
+@keyframes palette-loader-planet-float {
   0%,
   100% {
-    transform: translate(-50%, 0) scale(0.85);
-    opacity: 0.75;
+    transform: translateY(0) scale(0.98);
   }
   50% {
-    transform: translate(-50%, -4px) scale(1.12);
-    opacity: 1;
+    transform: translateY(-4px) scale(1.04);
   }
 }
 
-.palette-loader__pulse--1 {
-  animation-name: palette-loader-pulse-right;
-}
-
-.palette-loader__pulse--2 {
-  animation-name: palette-loader-pulse-lower-right;
-}
-
-.palette-loader__pulse--3 {
-  animation-name: palette-loader-pulse-lower-left;
-}
-
-.palette-loader__pulse--4 {
-  animation-name: palette-loader-pulse-left;
-}
-
-@keyframes palette-loader-pulse-right {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(0.85);
-    opacity: 0.75;
-  }
-  50% {
-    transform: translate(0, -5px) scale(1.15);
-    opacity: 1;
-  }
-}
-
-@keyframes palette-loader-pulse-lower-right {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(0.85);
-    opacity: 0.78;
-  }
-  50% {
-    transform: translate(2px, -4px) scale(1.15);
-    opacity: 1;
-  }
-}
-
-@keyframes palette-loader-pulse-lower-left {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(0.85);
-    opacity: 0.78;
-  }
-  50% {
-    transform: translate(-2px, -5px) scale(1.12);
-    opacity: 1;
-  }
-}
-
-@keyframes palette-loader-pulse-left {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(0.85);
-    opacity: 0.75;
-  }
-  50% {
-    transform: translate(0, -6px) scale(1.18);
-    opacity: 1;
-  }
-}
-
-@keyframes palette-loader-core {
-  0%,
-  100% {
-    transform: rotate(45deg) scale(0.96);
-    box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.2),
-      0 10px 24px rgba(var(--accent-sky-rgb), 0.26),
-      inset 0 -14px 18px rgba(14, 116, 144, 0.42);
-  }
-  50% {
-    transform: rotate(45deg) scale(1.03);
-    box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.28),
-      0 16px 34px rgba(var(--accent-sky-rgb), 0.36),
-      inset 0 -12px 16px rgba(14, 116, 144, 0.32);
-  }
-}
-
-@keyframes palette-loader-halo {
+@keyframes palette-loader-planet-halo {
   0%,
   100% {
     opacity: 0.7;
-    transform: scale(0.92);
+    transform: scale(0.95);
   }
   50% {
     opacity: 1;
