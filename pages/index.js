@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
+import Link from "next/link";
 import { useRouter } from "next/router";
 import {
   DEFAULT_LANGUAGE,
@@ -152,6 +153,7 @@ const THEME_KEYS = Object.freeze({
 });
 
 const THEME_STORAGE_KEY = "krospalette.theme";
+const ANALYZER_STATE_STORAGE_KEY = "krospalette.analyzer-state";
 const DEFAULT_THEME_KEY = THEME_KEYS.DARK;
 
 const THEME_OPTIONS = [
@@ -1428,9 +1430,16 @@ const SHAPE_STRONG_THRESHOLD = 0.18;
 const TONE_CONFIDENCE_DISTANCE = 0.72;
 const TONE_CONFIDENCE_WEIGHT = 0.18;
 const MIN_ALPHA_WEIGHT = 0.05;
-const MAX_RECOMMENDATIONS = 12;
+const MAX_RECOMMENDATIONS = 24;
 const PANEL_ITEMS_LIMIT = 5;
-const PROPOSAL_COUNT = 5;
+const ANALYZER_PROPOSAL_COUNT = 8;
+const GALLERY_PROPOSAL_OPTIONS = Object.freeze([12, 16, 20, 24]);
+const DEFAULT_GALLERY_PROPOSAL_COUNT =
+  GALLERY_PROPOSAL_OPTIONS[1] ?? GALLERY_PROPOSAL_OPTIONS[0] ?? 16;
+const GALLERY_GENDER_ICONS = Object.freeze({
+  m: "/icons/gender-male.svg",
+  f: "/icons/gender-female.svg",
+});
 const HASH_CONFIDENCE_DISTANCE = 0.32;
 const HASH_CONFIDENCE_WEIGHT = 0.18;
 const HASH_STRONG_THRESHOLD = 0.12;
@@ -1571,7 +1580,7 @@ const BARBOFUS_SLOT_BY_TYPE = {
   costume: "12",
 };
 
-const LOOK_PREVIEW_SIZE = 512;
+const LOOK_PREVIEW_SIZE = 420;
 const BARBOFUS_FACE_ID_BY_CLASS = Object.freeze({
   1: { male: 1, female: 9 },
   2: { male: 17, female: 25 },
@@ -3720,7 +3729,11 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
   return enriched;
 }
 
-export default function Home({ initialBreeds = [], previewBackgrounds: initialPreviewBackgrounds = [] }) {
+export default function Home({
+  initialBreeds = [],
+  previewBackgrounds: initialPreviewBackgrounds = [],
+  initialView = "analyzer",
+}) {
   const router = useRouter();
   const routerLang = router?.query?.lang;
   const { language, languages: languageOptions, setLanguage, t } = useLanguage();
@@ -3896,6 +3909,14 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const [downloadingPreviewId, setDownloadingPreviewId] = useState(null);
   const [copyingPreviewId, setCopyingPreviewId] = useState(null);
   const [supportsImageClipboard, setSupportsImageClipboard] = useState(false);
+  const activeView = initialView === "gallery" ? "gallery" : "analyzer";
+  const [galleryRefreshToken, setGalleryRefreshToken] = useState(0);
+  const [galleryAssignments, setGalleryAssignments] = useState([]);
+  const [galleryProposalCount, setGalleryProposalCount] = useState(
+    DEFAULT_GALLERY_PROPOSAL_COUNT
+  );
+  const galleryInitializedRef = useRef(false);
+  const isGalleryView = activeView === "gallery";
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -3961,6 +3982,176 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     {}
   );
   const [previewBackgroundSwatches, setPreviewBackgroundSwatches] = useState({});
+  const analyzerStateHydratedRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const stored = window.localStorage.getItem(ANALYZER_STATE_STORAGE_KEY);
+      if (!stored) {
+        analyzerStateHydratedRef.current = true;
+        return;
+      }
+
+      const parsed = JSON.parse(stored);
+      if (!parsed || typeof parsed !== "object") {
+        analyzerStateHydratedRef.current = true;
+        return;
+      }
+
+      if (Array.isArray(parsed.colors)) {
+        setColors(parsed.colors);
+      }
+
+      if (typeof parsed.selectedColor === "string" || parsed.selectedColor === null) {
+        setSelectedColor(parsed.selectedColor ?? null);
+      }
+
+      if (Number.isFinite(parsed.selectedBreedId) || parsed.selectedBreedId === null) {
+        setSelectedBreedId(parsed.selectedBreedId);
+      }
+
+      if (parsed.selectedGender === "male" || parsed.selectedGender === "female") {
+        setSelectedGender(parsed.selectedGender);
+      }
+
+      if (parsed.selectedItemsBySlot && typeof parsed.selectedItemsBySlot === "object") {
+        setSelectedItemsBySlot({ ...parsed.selectedItemsBySlot });
+      }
+
+      if (parsed.familierFilters && typeof parsed.familierFilters === "object") {
+        setFamilierFilters((prev) => ({ ...prev, ...parsed.familierFilters }));
+      }
+
+      if (parsed.itemFlagFilters && typeof parsed.itemFlagFilters === "object") {
+        setItemFlagFilters((prev) => ({ ...prev, ...parsed.itemFlagFilters }));
+      }
+
+      if (parsed.itemSlotFilters && typeof parsed.itemSlotFilters === "object") {
+        setItemSlotFilters((prev) => ({ ...prev, ...parsed.itemSlotFilters }));
+      }
+
+      if (typeof parsed.useCustomSkinTone === "boolean") {
+        setUseCustomSkinTone(parsed.useCustomSkinTone);
+      }
+
+      if (parsed.inputMode === "image" || parsed.inputMode === "color" || parsed.inputMode === "items") {
+        setInputMode(parsed.inputMode);
+      }
+
+      if (typeof parsed.lookDirection === "number" || typeof parsed.lookDirection === "string") {
+        setLookDirection(parsed.lookDirection);
+      }
+
+      if (typeof parsed.lookAnimation === "string") {
+        setLookAnimation(parsed.lookAnimation);
+      }
+
+      if (typeof parsed.isPreviewBackgroundEnabled === "boolean") {
+        setPreviewBackgroundEnabled(parsed.isPreviewBackgroundEnabled);
+      }
+
+      const previewModes = Object.values(PREVIEW_BACKGROUND_MODES);
+      if (
+        typeof parsed.previewBackgroundMode === "string" &&
+        previewModes.includes(parsed.previewBackgroundMode)
+      ) {
+        setPreviewBackgroundMode(parsed.previewBackgroundMode);
+      }
+
+      if (
+        typeof parsed.selectedPreviewBackgroundId === "string" ||
+        parsed.selectedPreviewBackgroundId === null
+      ) {
+        setSelectedPreviewBackgroundId(parsed.selectedPreviewBackgroundId ?? null);
+      }
+
+      if (parsed.randomPreviewBackgroundAssignments && typeof parsed.randomPreviewBackgroundAssignments === "object") {
+        setRandomPreviewBackgroundAssignments({
+          ...parsed.randomPreviewBackgroundAssignments,
+        });
+      }
+
+      if (Number.isInteger(parsed.activeProposal) && parsed.activeProposal >= 0) {
+        setActiveProposal(parsed.activeProposal);
+      }
+    } catch (error) {
+      console.error("Failed to restore analyzer preferences", error);
+    } finally {
+      analyzerStateHydratedRef.current = true;
+    }
+  }, [
+    setActiveProposal,
+    setColors,
+    setFamilierFilters,
+    setInputMode,
+    setItemFlagFilters,
+    setItemSlotFilters,
+    setLookAnimation,
+    setLookDirection,
+    setPreviewBackgroundEnabled,
+    setPreviewBackgroundMode,
+    setRandomPreviewBackgroundAssignments,
+    setSelectedBreedId,
+    setSelectedColor,
+    setSelectedGender,
+    setSelectedItemsBySlot,
+    setSelectedPreviewBackgroundId,
+    setUseCustomSkinTone,
+  ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !analyzerStateHydratedRef.current) {
+      return;
+    }
+
+    const payload = {
+      colors,
+      selectedColor,
+      selectedBreedId,
+      selectedGender,
+      selectedItemsBySlot,
+      familierFilters,
+      itemFlagFilters,
+      itemSlotFilters,
+      useCustomSkinTone,
+      inputMode,
+      lookDirection,
+      lookAnimation,
+      isPreviewBackgroundEnabled,
+      previewBackgroundMode,
+      selectedPreviewBackgroundId,
+      randomPreviewBackgroundAssignments,
+      activeProposal,
+    };
+
+    try {
+      window.localStorage.setItem(ANALYZER_STATE_STORAGE_KEY, JSON.stringify(payload));
+    } catch (error) {
+      console.error("Failed to persist analyzer preferences", error);
+    }
+  }, [
+    activeProposal,
+    colors,
+    familierFilters,
+    inputMode,
+    isPreviewBackgroundEnabled,
+    itemFlagFilters,
+    itemSlotFilters,
+    lookAnimation,
+    lookDirection,
+    previewBackgroundMode,
+    randomPreviewBackgroundAssignments,
+    selectedBreedId,
+    selectedColor,
+    selectedGender,
+    selectedItemsBySlot,
+    selectedPreviewBackgroundId,
+    useCustomSkinTone,
+  ]);
   const previewBackgroundById = useMemo(() => {
     const map = new Map();
     previewBackgroundOptions.forEach((entry) => {
@@ -4378,6 +4569,20 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     return found ?? null;
   }, [breeds, selectedBreedId]);
 
+  const breedsById = useMemo(() => {
+    if (!Array.isArray(breeds) || breeds.length === 0) {
+      return new Map();
+    }
+
+    const map = new Map();
+    breeds.forEach((breed) => {
+      if (breed && Number.isFinite(breed.id)) {
+        map.set(breed.id, breed);
+      }
+    });
+    return map;
+  }, [breeds]);
+
   const activeGenderConfig = useMemo(() => {
     if (!activeBreed) {
       return null;
@@ -4396,6 +4601,50 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     ? activeGenderConfig.lookId
     : BARBOFUS_DEFAULTS.faceId;
   const activeClassFaceId = getBarbofusFaceId(activeClassId, selectedGender, fallbackFaceId);
+
+  const genderLabels = useMemo(
+    () => ({
+      male: t("identity.gender.male"),
+      female: t("identity.gender.female"),
+    }),
+    [t]
+  );
+
+  const generateGalleryAssignments = useCallback(() => {
+    if (!Array.isArray(breeds) || breeds.length === 0) {
+      return [];
+    }
+
+    const pool = [];
+
+    breeds.forEach((breed) => {
+      if (!breed || !Number.isFinite(breed.id)) {
+        return;
+      }
+
+      if (breed.male) {
+        pool.push({ breedId: breed.id, gender: "male" });
+      }
+
+      if (breed.female) {
+        pool.push({ breedId: breed.id, gender: "female" });
+      }
+    });
+
+    if (!pool.length) {
+      return [];
+    }
+
+    const shuffled = [...pool];
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      const temp = shuffled[index];
+      shuffled[index] = shuffled[swapIndex];
+      shuffled[swapIndex] = temp;
+    }
+
+    return shuffled;
+  }, [breeds]);
 
   const fallbackColorValues = useMemo(() => {
     if (!colors.length) {
@@ -4784,6 +5033,115 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     setImageSrc(null);
   }, [applyColorSeed, inputMode, selectedColor]);
 
+  const handleGalleryShuffle = useCallback(() => {
+    const palette = CURATED_COLOR_SWATCHES.length
+      ? CURATED_COLOR_SWATCHES
+      : [
+          `#${Math.floor(Math.random() * 0xffffff)
+            .toString(16)
+            .padStart(6, "0")
+            .toUpperCase()}`,
+        ];
+    const randomColor = palette[Math.floor(Math.random() * palette.length)];
+    if (randomColor) {
+      const normalizedColor = randomColor.toUpperCase();
+      setInputMode("color");
+      setSelectedColor(normalizedColor);
+      applyColorSeed(normalizedColor);
+    }
+
+    if (Array.isArray(breeds) && breeds.length) {
+      const randomBreed = breeds[Math.floor(Math.random() * breeds.length)];
+      if (randomBreed?.id) {
+        setSelectedBreedId(randomBreed.id);
+      }
+    }
+
+    const randomGender = Math.random() > 0.5 ? "female" : "male";
+    setSelectedGender(randomGender);
+
+    setLookDirection(DEFAULT_LOOK_DIRECTION);
+    setUseCustomSkinTone(false);
+    setSelectedItemsBySlot((previous = {}) => {
+      let changed = false;
+      const next = { ...previous };
+      ITEM_TYPES.forEach((type) => {
+        if (next[type]) {
+          next[type] = null;
+          changed = true;
+        }
+      });
+      return changed ? next : previous;
+    });
+
+    setGalleryRefreshToken(Date.now());
+  }, [
+    applyColorSeed,
+    breeds,
+    lookAnimation,
+    setInputMode,
+    setLookDirection,
+    setSelectedColor,
+    setSelectedBreedId,
+    setSelectedGender,
+    setUseCustomSkinTone,
+    setSelectedItemsBySlot,
+  ]);
+
+  const handleGalleryCountChange = useCallback(
+    (event) => {
+      const value = Number.parseInt(event?.target?.value, 10);
+      if (!Number.isFinite(value)) {
+        return;
+      }
+
+      const normalized = GALLERY_PROPOSAL_OPTIONS.includes(value)
+        ? value
+        : DEFAULT_GALLERY_PROPOSAL_COUNT;
+      setGalleryProposalCount(normalized);
+    },
+    [setGalleryProposalCount]
+  );
+
+  useEffect(() => {
+    if (!isGalleryView) {
+      galleryInitializedRef.current = false;
+      return;
+    }
+
+    if (!galleryInitializedRef.current) {
+      galleryInitializedRef.current = true;
+      handleGalleryShuffle();
+    }
+  }, [handleGalleryShuffle, isGalleryView]);
+
+  useEffect(() => {
+    if (!isGalleryView) {
+      return;
+    }
+
+    if (!Array.isArray(breeds) || breeds.length === 0) {
+      setGalleryAssignments([]);
+      return;
+    }
+
+    setGalleryAssignments(() => {
+      const generated = generateGalleryAssignments();
+      if (!generated.length) {
+        return [];
+      }
+
+      const desired = Math.min(galleryProposalCount, generated.length);
+      return generated.slice(0, desired);
+    });
+  }, [
+    breeds,
+    galleryProposalCount,
+    generateGalleryAssignments,
+    galleryRefreshToken,
+    isGalleryView,
+  ]);
+
   useEffect(() => {
     if (typeof window === "undefined") {
       return undefined;
@@ -5046,7 +5404,10 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           return;
         }
 
-        const limit = Math.min(PROPOSAL_COUNT, pool.length);
+        const limit = Math.min(
+          isGalleryView ? galleryProposalCount : ANALYZER_PROPOSAL_COUNT,
+          pool.length
+        );
         const { indexes, changed: normalizedChanged } = normalizeSelection(previous?.[type], limit, pool.length);
         next[type] = indexes;
         if (normalizedChanged) {
@@ -5070,7 +5431,61 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
 
       return next;
     });
-  }, [recommendations]);
+  }, [galleryProposalCount, isGalleryView, recommendations]);
+
+  useEffect(() => {
+    if (!isGalleryView || !galleryRefreshToken || !recommendations) {
+      return;
+    }
+
+    const buildIndexes = (pool = [], limit = 0) => {
+      if (!Array.isArray(pool) || pool.length === 0 || limit <= 0) {
+        return [];
+      }
+      const max = Math.min(limit, pool.length);
+      const used = new Set();
+      const indexes = [];
+      while (indexes.length < max && used.size < pool.length) {
+        const candidate = Math.floor(Math.random() * pool.length);
+        if (!used.has(candidate)) {
+          used.add(candidate);
+          indexes.push(candidate);
+        }
+      }
+      if (!indexes.length) {
+        indexes.push(0);
+      }
+      return indexes;
+    };
+
+    setPanelItemIndexes(() => {
+      const next = {};
+      ITEM_TYPES.forEach((type) => {
+        const pool = recommendations[type] ?? [];
+        next[type] = buildIndexes(pool, PANEL_ITEMS_LIMIT);
+      });
+      return next;
+    });
+
+    setProposalItemIndexes(() => {
+      const next = {};
+      ITEM_TYPES.forEach((type) => {
+        const pool = recommendations[type] ?? [];
+        next[type] = buildIndexes(pool, galleryProposalCount);
+      });
+      return next;
+    });
+
+    setActiveProposal(0);
+  }, [
+    galleryRefreshToken,
+    isGalleryView,
+    galleryProposalCount,
+    recommendations,
+    setActiveProposal,
+    setPanelItemIndexes,
+    setProposalItemIndexes,
+  ]);
 
   const proposals = useMemo(() => {
     if (!recommendations || !Number.isFinite(activeClassId)) {
@@ -5082,16 +5497,15 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       ...ITEM_TYPES.map((type) => (recommendations[type]?.length ?? 0))
     );
 
-    const total = Math.min(PROPOSAL_COUNT, maxLength || 0);
+    const desiredTotal = isGalleryView
+      ? galleryProposalCount
+      : ANALYZER_PROPOSAL_COUNT;
+    const total = Math.min(desiredTotal, maxLength || 0);
     const combos = [];
-    const subtitleParts = [];
-    if (activeBreed?.name) {
-      subtitleParts.push(activeBreed.name);
-    }
-    if (activeGenderLabel) {
-      subtitleParts.push(activeGenderLabel);
-    }
-    const sharedSubtitle = subtitleParts.join(" · ");
+    const assignmentPool =
+      isGalleryView && Array.isArray(galleryAssignments) && galleryAssignments.length
+        ? galleryAssignments
+        : null;
 
     for (let index = 0; index < total; index += 1) {
       const items = ITEM_TYPES.map((type) => {
@@ -5185,14 +5599,91 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         )
       ).sort((a, b) => a - b);
 
-      const lookGenderCode =
-        activeGenderValue === BARBOFUS_GENDER_VALUES.female ? "f" : "m";
+      const assignment = assignmentPool
+        ? assignmentPool[index % assignmentPool.length]
+        : null;
+
+      let proposalBreed = activeBreed;
+      let proposalGenderKey = selectedGender;
+      let proposalGenderValue =
+        BARBOFUS_GENDER_VALUES[selectedGender] ?? BARBOFUS_DEFAULTS.gender;
+      const fallbackGenderLabel =
+        typeof activeGenderLabel === "string" && activeGenderLabel.trim().length
+          ? activeGenderLabel
+          : genderLabels[selectedGender] ?? genderLabels.male;
+      let proposalGenderLabel = fallbackGenderLabel;
+      let proposalClassDefaults = activeClassDefaults;
+      let proposalClassFaceId = activeClassFaceId;
+      let proposalClassId = activeClassId;
+      let proposalClassName = activeBreed?.name ?? null;
+      let proposalClassIcon = activeBreed?.icon ?? null;
+
+      if (assignment) {
+        const genderKey = assignment.gender === "female" ? "female" : "male";
+        const assignedBreed = breedsById.get(assignment.breedId) ?? null;
+
+        if (assignedBreed) {
+          proposalBreed = assignedBreed;
+          if (Number.isFinite(assignedBreed.id)) {
+            proposalClassId = assignedBreed.id;
+          }
+          if (assignedBreed.name) {
+            proposalClassName = assignedBreed.name;
+          }
+          if (assignedBreed.icon) {
+            proposalClassIcon = assignedBreed.icon;
+          }
+        }
+
+        proposalGenderKey = genderKey;
+        proposalGenderValue =
+          BARBOFUS_GENDER_VALUES[genderKey] ?? BARBOFUS_GENDER_VALUES.male;
+        proposalGenderLabel = genderLabels[genderKey] ?? proposalGenderLabel;
+
+        const fallbackConfig =
+          genderKey === "female"
+            ? BARBOFUS_DEFAULT_BREED.female
+            : BARBOFUS_DEFAULT_BREED.male;
+
+        const resolvedGenderConfig = (() => {
+          if (!proposalBreed) {
+            return fallbackConfig;
+          }
+          const candidate =
+            genderKey === "female"
+              ? proposalBreed.female ?? fallbackConfig
+              : proposalBreed.male ?? fallbackConfig;
+          return candidate ?? fallbackConfig;
+        })();
+
+        proposalClassDefaults = resolvedGenderConfig?.colors?.numeric ?? [];
+        const fallbackFace = Number.isFinite(resolvedGenderConfig?.faceId)
+          ? resolvedGenderConfig.faceId
+          : Number.isFinite(resolvedGenderConfig?.lookId)
+          ? resolvedGenderConfig.lookId
+          : BARBOFUS_DEFAULTS.faceId;
+        const computedFaceId = getBarbofusFaceId(proposalClassId, genderKey, fallbackFace);
+        if (Number.isFinite(computedFaceId)) {
+          proposalClassFaceId = computedFaceId;
+        }
+      }
+
+      const lookGenderCode = proposalGenderKey === "female" ? "f" : "m";
+      const subtitleParts = [];
+      if (proposalClassName) {
+        subtitleParts.push(proposalClassName);
+      }
+      if (proposalGenderLabel) {
+        subtitleParts.push(proposalGenderLabel);
+      }
+      const subtitle = subtitleParts.join(" · ");
+
       const barbofusLink = buildBarbofusLink(items, paletteSample, fallbackColorValues, {
         useCustomSkinTone,
-        classId: activeClassId,
-        gender: activeGenderValue,
-        faceId: activeClassFaceId,
-        classDefaults: activeClassDefaults,
+        classId: proposalClassId,
+        gender: proposalGenderValue,
+        faceId: proposalClassFaceId,
+        classDefaults: proposalClassDefaults,
       });
 
       const lookColors = (() => {
@@ -5211,8 +5702,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           values.push(normalized);
         };
 
-        if (!useCustomSkinTone && Array.isArray(activeClassDefaults) && activeClassDefaults.length) {
-          const defaultSkin = activeClassDefaults.find((entry) => Number.isFinite(entry));
+        if (!useCustomSkinTone && Array.isArray(proposalClassDefaults) && proposalClassDefaults.length) {
+          const defaultSkin = proposalClassDefaults.find((entry) => Number.isFinite(entry));
           if (defaultSkin !== undefined) {
             register(defaultSkin);
           }
@@ -5227,8 +5718,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
 
         fallbackColorValues.forEach(register);
 
-        if (!useCustomSkinTone && Array.isArray(activeClassDefaults) && activeClassDefaults.length) {
-          activeClassDefaults.forEach((value, index) => {
+        if (!useCustomSkinTone && Array.isArray(proposalClassDefaults) && proposalClassDefaults.length) {
+          proposalClassDefaults.forEach((value, index) => {
             if (index === 0) {
               return;
             }
@@ -5240,10 +5731,10 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       })();
 
       const baseKeyParts = [];
-      if (Number.isFinite(activeClassId)) {
-        baseKeyParts.push(activeClassId);
+      if (Number.isFinite(proposalClassId)) {
+        baseKeyParts.push(proposalClassId);
       }
-      const lookFaceId = Number.isFinite(activeClassFaceId) ? activeClassFaceId : null;
+      const lookFaceId = Number.isFinite(proposalClassFaceId) ? proposalClassFaceId : null;
       if (lookFaceId) {
         baseKeyParts.push(`head${lookFaceId}`);
       }
@@ -5268,8 +5759,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       const lookKey = lookBaseKey ? `${lookBaseKey}-d${directionCode}` : null;
       const lookKeyNoStuff = lookBaseKeyNoStuff ? `${lookBaseKeyNoStuff}-d${directionCode}` : null;
       const souffLink = buildSouffLink({
-        classId: activeClassId,
-        faceId: activeClassFaceId,
+        classId: proposalClassId,
+        faceId: proposalClassFaceId,
         gender: lookGenderCode,
         itemIds: lookItemIds,
         colors: lookColors,
@@ -5285,11 +5776,11 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         heroImage: items.find((item) => item.imageUrl)?.imageUrl ?? null,
         barbofusLink,
         souffLink,
-        className: activeBreed?.name ?? null,
-        classId: Number.isFinite(activeClassId) ? activeClassId : null,
-        genderLabel: activeGenderLabel,
-        classIcon: activeBreed?.icon ?? null,
-        subtitle: sharedSubtitle,
+        className: proposalClassName ?? null,
+        classId: Number.isFinite(proposalClassId) ? proposalClassId : null,
+        genderLabel: proposalGenderLabel,
+        classIcon: proposalClassIcon ?? null,
+        subtitle,
         lookGender: lookGenderCode,
         lookFaceId,
         lookItemIds,
@@ -5311,10 +5802,16 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     activeClassId,
     activeGenderLabel,
     activeGenderValue,
+    breedsById,
+    galleryAssignments,
+    galleryProposalCount,
+    genderLabels,
+    isGalleryView,
     fallbackColorValues,
     proposalItemIndexes,
     recommendations,
     selectedItemsBySlot,
+    selectedGender,
     useCustomSkinTone,
     lookAnimation,
     lookDirection,
@@ -5429,6 +5926,50 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
 
     return map;
   }, [previewBackgroundOptions, previewBackgroundSwatches, proposals]);
+
+  const galleryActiveDirection = DEFAULT_LOOK_DIRECTION;
+
+  const galleryCards = useMemo(() => {
+    if (!Array.isArray(proposals) || !proposals.length) {
+      return [];
+    }
+
+    return proposals.map((proposal) => {
+      const withGroup = proposal?.lookBaseKey
+        ? lookPreviews?.[proposal.lookBaseKey] ?? null
+        : null;
+      const withoutGroup = proposal?.lookBaseKeyNoStuff
+        ? lookPreviews?.[proposal.lookBaseKeyNoStuff] ?? null
+        : null;
+      const withEntry = withGroup?.directions?.[galleryActiveDirection] ?? null;
+      const withoutEntry =
+        withoutGroup?.directions?.[galleryActiveDirection] ?? null;
+
+      let status = withEntry?.status ?? null;
+      if (!status && proposal?.lookBaseKey) {
+        status = withGroup ? "idle" : "loading";
+      }
+      if (!status) {
+        status = "ready";
+      }
+      if (status === "loaded") {
+        status = "ready";
+      }
+
+      const previewUrl =
+        withEntry?.dataUrl ?? withEntry?.rendererUrl ?? proposal?.heroImage ?? null;
+      const bareUrl = withoutEntry?.dataUrl ?? withoutEntry?.rendererUrl ?? null;
+      const errorMessage = withEntry?.error ?? null;
+
+      return {
+        proposal,
+        previewUrl,
+        bareUrl,
+        status,
+        error: errorMessage,
+      };
+    });
+  }, [galleryActiveDirection, lookPreviews, proposals]);
 
   useEffect(() => {
     if (
@@ -5824,11 +6365,15 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
 
     const timeoutHandles = [];
     const activeDirection = normalizeLookDirection(lookDirection);
+    const priorityDirections = [DEFAULT_LOOK_DIRECTION];
+    if (!priorityDirections.includes(activeDirection)) {
+      priorityDirections.push(activeDirection);
+    }
 
     lookPreviewDescriptors.forEach((descriptor) => {
       const orderedDirections = [
-        activeDirection,
-        ...ALL_LOOK_DIRECTIONS.filter((value) => value !== activeDirection),
+        ...priorityDirections,
+        ...ALL_LOOK_DIRECTIONS.filter((value) => !priorityDirections.includes(value)),
       ];
 
       orderedDirections.forEach((direction, index) => {
@@ -6344,7 +6889,10 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       let nextSelection = null;
 
       if (Number.isFinite(proposalIndex)) {
-        const limit = Math.min(PROPOSAL_COUNT, pool.length);
+        const limit = Math.min(
+          isGalleryView ? galleryProposalCount : ANALYZER_PROPOSAL_COUNT,
+          pool.length
+        );
         if (proposalIndex >= 0 && proposalIndex < limit) {
           setProposalItemIndexes((previous = {}) => {
             const prevIndexes = Array.isArray(previous[type]) ? previous[type] : [];
@@ -6379,8 +6927,13 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           });
         }
       }
-    },
-    [recommendations, selectedItemsBySlot]
+  },
+    [
+      galleryProposalCount,
+      isGalleryView,
+      recommendations,
+      selectedItemsBySlot,
+    ]
   );
 
   const inputRef = useRef(null);
@@ -6932,6 +7485,22 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
 
   const pageTitle = tagline ? `${BRAND_NAME} · ${tagline}` : BRAND_NAME;
 
+  const viewTabs = useMemo(() => {
+    const analyzerRaw = t("tabs.analyzer");
+    const galleryRaw = t("tabs.gallery");
+    const analyzerLabel =
+      typeof analyzerRaw === "string" ? analyzerRaw : "Analyse";
+    const galleryLabel = typeof galleryRaw === "string" ? galleryRaw : "Galerie";
+    return [
+      { key: "analyzer", label: analyzerLabel, href: "/" },
+      { key: "gallery", label: galleryLabel, href: "/gallery" },
+    ];
+  }, [t]);
+
+  const viewNavigationLabelRaw = t("tabs.navigation");
+  const viewNavigationLabel =
+    typeof viewNavigationLabelRaw === "string" ? viewNavigationLabelRaw : "";
+
   return (
     <>
       <Head>
@@ -6971,56 +7540,79 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
             </div>
           ) : null}
         </div>
-        <header className="hero">
-          <h1>{BRAND_NAME}</h1>
-        </header>
-        <div className="preference-switchers">
-          <div className="theme-switcher" role="radiogroup" aria-label={themeSelectorAria}>
-            {themeOptions.map((option) => {
-              const isActiveTheme = option.key === theme;
-              return (
-                <button
-                  key={option.key}
-                  type="button"
-                  className={`theme-switcher__option${isActiveTheme ? " is-active" : ""}`}
-                  onClick={() => handleThemeSelect(option.key)}
-                  role="radio"
-                  aria-checked={isActiveTheme}
-                  aria-label={option.accessibleLabel}
-                  title={option.accessibleLabel}
-                >
-                  <span className="theme-switcher__icon" aria-hidden="true">{option.icon}</span>
-                  <span className="theme-switcher__label" aria-hidden="true">{option.label}</span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="language-switcher" role="group" aria-label={t("language.selectorAria")}>
-            {languageOptions.map((option) => {
-              const isActive = option.code === language;
-              return (
-                <button
-                  key={option.code}
-                  type="button"
-                  className={`language-switcher__option${isActive ? " is-active" : ""}`}
-                  onClick={() => handleLanguageSelect(option.code)}
-                  aria-pressed={isActive}
-                  aria-label={option.accessibleLabel}
-                  title={option.accessibleLabel}
-                >
-                  <span className="language-switcher__flag" aria-hidden="true">
-                    <img src={option.flag} alt="" loading="lazy" />
-                  </span>
-                  <span className="language-switcher__code" aria-hidden="true">
-                    {option.shortLabel ?? option.code.toUpperCase()}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="workspace-layout">
+        <div className="page__shell">
+          <nav className="page-menu" aria-label={viewNavigationLabel}>
+            <ul className="page-menu__list">
+              {viewTabs.map((tab) => {
+                const isActive = tab.key === activeView;
+                return (
+                  <li key={tab.key} className="page-menu__item">
+                    <Link
+                      href={tab.href}
+                      className={`page-menu__link${isActive ? " is-active" : ""}`}
+                      aria-current={isActive ? "page" : undefined}
+                    >
+                      <span>{tab.label}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+          <div className="page__content">
+            <div className="page__header">
+              <header className="hero">
+                <h1>{BRAND_NAME}</h1>
+              </header>
+              <div className="preference-switchers">
+                <div className="theme-switcher" role="radiogroup" aria-label={themeSelectorAria}>
+                  {themeOptions.map((option) => {
+                    const isActiveTheme = option.key === theme;
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        className={`theme-switcher__option${isActiveTheme ? " is-active" : ""}`}
+                        onClick={() => handleThemeSelect(option.key)}
+                        role="radio"
+                        aria-checked={isActiveTheme}
+                        aria-label={option.accessibleLabel}
+                        title={option.accessibleLabel}
+                      >
+                        <span className="theme-switcher__icon" aria-hidden="true">{option.icon}</span>
+                        <span className="theme-switcher__label" aria-hidden="true">{option.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="language-switcher" role="group" aria-label={t("language.selectorAria")}>
+                  {languageOptions.map((option) => {
+                    const isActive = option.code === language;
+                    return (
+                      <button
+                        key={option.code}
+                        type="button"
+                        className={`language-switcher__option${isActive ? " is-active" : ""}`}
+                        onClick={() => handleLanguageSelect(option.code)}
+                        aria-pressed={isActive}
+                        aria-label={option.accessibleLabel}
+                        title={option.accessibleLabel}
+                      >
+                        <span className="language-switcher__flag" aria-hidden="true">
+                          <img src={option.flag} alt="" loading="lazy" />
+                        </span>
+                        <span className="language-switcher__code" aria-hidden="true">
+                          {option.shortLabel ?? option.code.toUpperCase()}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            {!isGalleryView ? (
+              <div id="view-analyzer" className="view view--analyzer">
+          <div className="workspace-layout">
           <section className="workspace">
           <div className={referenceClassName}>
             <div className="reference__header">
@@ -8665,8 +9257,261 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
             </div>
           </section>
         </section>
+          </div>
+        </div>
+        ) : null}
+        {isGalleryView ? (
+          <div id="view-gallery" className="view view--gallery">
+            <section className="gallery">
+            <header className="gallery__header">
+              <div className="gallery__titles">
+                <h2>{t("gallery.title")}</h2>
+                <p>{t("gallery.subtitle")}</p>
+              </div>
+              <div className="gallery__actions">
+                <label className="gallery__count-control">
+                  <span className="gallery__count-label">{t("gallery.countLabel")}</span>
+                  <select
+                    className="gallery__count-select"
+                    value={String(galleryProposalCount)}
+                    onChange={handleGalleryCountChange}
+                  >
+                    {GALLERY_PROPOSAL_OPTIONS.map((count) => (
+                      <option key={count} value={String(count)}>
+                        {t("gallery.countOption", { count })}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button type="button" className="gallery__shuffle" onClick={handleGalleryShuffle}>
+                  <span className="gallery__shuffle-icon" aria-hidden="true">↻</span>
+                  <span>{t("gallery.shuffle")}</span>
+                </button>
+              </div>
+            </header>
+            <div className="gallery__content" aria-live="polite">
+              {galleryCards.length === 0 ? (
+                <div className="gallery__status">
+                  {itemsLoading || isProcessing ? (
+                    <PaletteLoader label={t("gallery.loading")} />
+                  ) : (
+                    <p>{t("gallery.empty")}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="gallery__grid">
+                  {galleryCards.map(({ proposal, previewUrl, status, error }) => {
+                    const defaultName = t("suggestions.render.defaultName", {
+                      index: proposal.index + 1,
+                    });
+                    const displayName =
+                      proposal.className ??
+                      (typeof defaultName === "string" ? defaultName : proposal.id);
+                    const subtitle = proposal.subtitle || "";
+                    const paletteValues = Array.isArray(proposal.palette)
+                      ? proposal.palette
+                      : [];
+                    const lookLabel = t("suggestions.render.alt", {
+                      index: proposal.index + 1,
+                    });
+                    const lookLoaded = status === "ready" && previewUrl;
+                    const lookLoading = status === "loading" || status === "idle";
+                    const generationLabel = t("gallery.card.generation", {
+                      index: proposal.index + 1,
+                    });
+                    const generationBadge = `#${String(proposal.index + 1).padStart(2, "0")}`;
+                    const genderCode = proposal.lookGender === "f" ? "f" : "m";
+                    const genderIcon = GALLERY_GENDER_ICONS[genderCode] ?? null;
+                    const genderLabel =
+                      typeof proposal.genderLabel === "string"
+                        ? proposal.genderLabel
+                        : genderCode === "f"
+                        ? t("identity.gender.female")
+                        : t("identity.gender.male");
+                    const equipmentItems = Array.isArray(proposal.items) ? proposal.items : [];
+                    const equipmentLabel = t("gallery.card.items");
+                    return (
+                      <article key={proposal.id} className="gallery-card">
+                        <header className="gallery-card__header">
+                          <div className="gallery-card__header-top">
+                            <span className="gallery-card__generation" aria-label={generationLabel}>
+                              {generationBadge}
+                            </span>
+                            {genderIcon ? (
+                              <span className="gallery-card__gender" title={genderLabel}>
+                                <span className="sr-only">{genderLabel}</span>
+                                <img src={genderIcon} alt="" aria-hidden="true" loading="lazy" />
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="gallery-card__identity">
+                            {proposal.classIcon ? (
+                              <span className="gallery-card__class-icon" aria-hidden="true">
+                                <img src={proposal.classIcon} alt="" loading="lazy" />
+                              </span>
+                            ) : null}
+                            <div className="gallery-card__identity-details">
+                              <h3 className="gallery-card__title">{displayName}</h3>
+                              {subtitle ? <p className="gallery-card__subtitle">{subtitle}</p> : null}
+                            </div>
+                          </div>
+                        </header>
+                        <div className="gallery-card__visual">
+                          <div
+                            className="gallery-card__swatches"
+                            role="list"
+                            aria-label={t("gallery.card.palette")}
+                          >
+                            {paletteValues.length ? (
+                              paletteValues.map((hex) => (
+                                <button
+                                  key={`${proposal.id}-${hex}`}
+                                  type="button"
+                                  className="gallery-card__swatch"
+                                  style={{ backgroundImage: buildGradientFromHex(hex) }}
+                                  onClick={() => handleCopy(hex, { swatch: hex })}
+                                >
+                                  <span className="sr-only">
+                                    {t("gallery.card.copyPalette", { hex })}
+                                  </span>
+                                </button>
+                              ))
+                            ) : (
+                              <span className="gallery-card__swatch gallery-card__swatch--empty">
+                                {t("suggestions.palette.unavailable")}
+                              </span>
+                            )}
+                          </div>
+                          <div className="gallery-card__preview-block">
+                            <div className="gallery-card__preview">
+                              {lookLoaded ? (
+                                <img src={previewUrl} alt={lookLabel} loading="lazy" />
+                              ) : lookLoading ? (
+                                <PaletteLoader label={t("gallery.loading")} />
+                              ) : (
+                                <div className="gallery-card__placeholder">
+                                  {typeof error === "string" && error.length
+                                    ? error
+                                    : t("errors.previewUnavailable")}
+                                </div>
+                              )}
+                            </div>
+                            <div className="gallery-card__equipment" role="list" aria-label={equipmentLabel}>
+                              {equipmentItems.map((item) => {
+                              const slotLabelKey = ITEM_TYPE_LABEL_KEYS[item.slotType];
+                              const slotLabel = slotLabelKey ? t(slotLabelKey) : item.slotType;
+                              const itemName = item.name ?? slotLabel;
+                              const tooltipParts = [slotLabel];
+                              if (itemName && itemName !== slotLabel) {
+                                tooltipParts.push(itemName);
+                              }
+                              const flagEntries = buildItemFlags(item, t);
+                              const flagSummary = flagEntries.map((flag) => flag.label).join(", ");
+                              const baseTooltip = tooltipParts.filter(Boolean).join(" · ");
+                              const combinedTooltip = flagSummary
+                                ? `${baseTooltip}${baseTooltip ? " • " : ""}${flagSummary}`
+                                : baseTooltip;
+                              const finalTooltip =
+                                combinedTooltip || itemName || slotLabel || equipmentLabel;
+                              const compactFlags = flagEntries.slice(0, 2);
+                              const placeholderLabel =
+                                typeof slotLabel === "string" && slotLabel.length
+                                  ? slotLabel.slice(0, 2).toUpperCase()
+                                  : "?";
 
-          
+                              return (
+                                <a
+                                  key={`${proposal.id}-${item.id}`}
+                                  className="gallery-card__equipment-slot"
+                                  href={item.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title={finalTooltip}
+                                  aria-label={finalTooltip}
+                                  role="listitem"
+                                >
+                                  {item.imageUrl ? (
+                                    <img src={item.imageUrl} alt="" loading="lazy" />
+                                  ) : (
+                                    <span
+                                      className="gallery-card__equipment-placeholder"
+                                      aria-hidden="true"
+                                    >
+                                      {placeholderLabel}
+                                    </span>
+                                  )}
+                                  {compactFlags.length ? (
+                                    <span className="gallery-card__equipment-flags" aria-hidden="true">
+                                      {compactFlags.map((flag) => {
+                                        const classes = ["item-flag"];
+                                        if (flag.className) {
+                                          classes.push(flag.className);
+                                        }
+                                        return (
+                                          <span
+                                            key={`${proposal.id}-${item.id}-${flag.key}-gallery`}
+                                            className={classes.join(" ")}
+                                          >
+                                            <img src={flag.icon} alt="" aria-hidden="true" />
+                                          </span>
+                                        );
+                                      })}
+                                    </span>
+                                  ) : null}
+                                  <span className="sr-only">{finalTooltip}</span>
+                                </a>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div className="gallery-card__actions">
+                            {lookLoaded ? (
+                              <button
+                                type="button"
+                                className="gallery-card__action"
+                                onClick={() => handleDownloadPreview(proposal)}
+                                title={t("gallery.card.downloadPreview")}
+                                aria-label={t("gallery.card.downloadPreview")}
+                              >
+                                <img src="/icons/download.svg" alt="" aria-hidden="true" />
+                              </button>
+                            ) : null}
+                            {proposal.barbofusLink ? (
+                              <a
+                                href={proposal.barbofusLink}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="gallery-card__action gallery-card__action--link"
+                                title={t("gallery.card.openBarbofus")}
+                                aria-label={t("gallery.card.openBarbofus")}
+                              >
+                                <img src="/icons/barbofus.svg" alt="" aria-hidden="true" />
+                              </a>
+                            ) : null}
+                            {proposal.souffLink ? (
+                              <a
+                                href={proposal.souffLink}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="gallery-card__action gallery-card__action--link"
+                                title={t("gallery.card.openSouff")}
+                                aria-label={t("gallery.card.openSouff")}
+                              >
+                                <img src="/icons/souff.svg" alt="" aria-hidden="true" />
+                              </a>
+                            ) : null}
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            </section>
+          </div>
+        ) : null}
+          </div>
         </div>
       </main>
     </>
