@@ -118,7 +118,50 @@ const IMAGE_REFERENCE_KEYS = [
   "src",
 ];
 
-const PALETTE_LOADER_COLORS = ["#1bdd8d", "#22d3ee", "#facc15", "#fb923c", "#a855f7"];
+const PALETTE_LOADER_DOFUS = [
+  {
+    id: "emerald",
+    angle: -90,
+    fill:
+      "linear-gradient(140deg, #022c22 0%, #047857 44%, #22d3ee 76%, rgba(255, 255, 255, 0.85) 100%)",
+    glow: "rgba(16, 185, 129, 0.65)",
+  },
+  {
+    id: "turquoise",
+    angle: -30,
+    fill:
+      "linear-gradient(145deg, #082f49 0%, #0ea5e9 42%, #22d3ee 78%, rgba(255, 255, 255, 0.9) 100%)",
+    glow: "rgba(14, 165, 233, 0.7)",
+  },
+  {
+    id: "ivory",
+    angle: 30,
+    fill:
+      "linear-gradient(150deg, #f8fafc 0%, #f5f5f4 36%, #fde68a 68%, #facc15 100%)",
+    glow: "rgba(250, 204, 21, 0.65)",
+  },
+  {
+    id: "ochre",
+    angle: 90,
+    fill:
+      "linear-gradient(145deg, #4a1d03 0%, #b45309 38%, #f97316 72%, rgba(253, 230, 138, 0.95) 100%)",
+    glow: "rgba(249, 115, 22, 0.62)",
+  },
+  {
+    id: "ebony",
+    angle: 150,
+    fill:
+      "linear-gradient(150deg, #020617 0%, #0f172a 34%, #1e293b 68%, rgba(148, 163, 184, 0.75) 100%)",
+    glow: "rgba(30, 41, 59, 0.7)",
+  },
+  {
+    id: "pourpre",
+    angle: 210,
+    fill:
+      "linear-gradient(140deg, #3b0a2a 0%, #86198f 38%, #d946ef 70%, rgba(244, 114, 182, 0.9) 100%)",
+    glow: "rgba(217, 70, 239, 0.66)",
+  },
+];
 
 const PaletteLoader = ({ label }) => (
   <div className="palette-loader" role="status" aria-live="polite">
@@ -128,13 +171,15 @@ const PaletteLoader = ({ label }) => (
       <div className="palette-loader__spectrum">
         <span className="palette-loader__ring palette-loader__ring--outer" />
         <span className="palette-loader__ring palette-loader__ring--inner" />
-        {PALETTE_LOADER_COLORS.map((color, index) => (
+        {PALETTE_LOADER_DOFUS.map((dofus, index) => (
           <span
-            key={`${color}-${index}`}
-            className={`palette-loader__pulse palette-loader__pulse--${index}`}
+            key={dofus.id}
+            className={`palette-loader__dofus palette-loader__dofus--${dofus.id}`}
             style={{
-              "--palette-loader-color": color,
               "--palette-loader-index": String(index),
+              "--palette-loader-angle": `${dofus.angle}`,
+              "--palette-loader-fill": dofus.fill,
+              "--palette-loader-glow": dofus.glow,
             }}
           />
         ))}
@@ -3889,6 +3934,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     pointerId: null,
     lastX: 0,
     remainder: 0,
+    moved: false,
   });
   const isUnmountedRef = useRef(false);
   const [lookAnimation, setLookAnimation] = useState(DEFAULT_LOOK_ANIMATION);
@@ -4523,6 +4569,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         pendingSharedItemsRef.current = null;
       }
 
+      setIsDirectionAutoplay(false);
       setActiveProposal(0);
     },
     [
@@ -4536,6 +4583,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       setLookDirection,
       setItemSlotFilters,
       setActiveProposal,
+      setIsDirectionAutoplay,
     ]
   );
 
@@ -5485,18 +5533,24 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const directionAnnouncement = activeDirectionLabel
     ? t("identity.preview.direction.announce", { direction: activeDirectionLabel })
     : "";
-  const previewDirectionDescription = `${t("aria.previewDirectionControl")}${
-    activeDirectionLabel ? ` - ${activeDirectionLabel}` : ""
-  }. ${t("identity.preview.direction.hint")}`;
-  const directionAutoplayLabelRaw = isDirectionAutoplay
+  const directionInteractionHintRaw = t("identity.preview.direction.hint");
+  const directionInteractionHint =
+    typeof directionInteractionHintRaw === "string" && directionInteractionHintRaw.trim().length
+      ? directionInteractionHintRaw.trim()
+      : "Hold click or touch and drag to rotate. Use the keyboard arrows to pivot.";
+  const directionAutoplayHintRaw = isDirectionAutoplay
     ? t("identity.preview.direction.autoplayStop")
     : t("identity.preview.direction.autoplayPlay");
-  const directionAutoplayLabel =
-    typeof directionAutoplayLabelRaw === "string" && directionAutoplayLabelRaw.trim().length
-      ? directionAutoplayLabelRaw.trim()
+  const directionAutoplayHint =
+    typeof directionAutoplayHintRaw === "string" && directionAutoplayHintRaw.trim().length
+      ? directionAutoplayHintRaw.trim()
       : isDirectionAutoplay
-      ? "Stop automatic rotation"
-      : "Start automatic rotation";
+      ? "Click to stop automatic rotation"
+      : "Click to start automatic rotation";
+  const previewDirectionDescription = `${t("aria.previewDirectionControl")}${
+    activeDirectionLabel ? ` - ${activeDirectionLabel}` : ""
+  }. ${directionAutoplayHint} ${directionInteractionHint}`;
+  const directionPreviewTitle = `${directionAutoplayHint} ${directionInteractionHint}`.trim();
   const comparisonSliderLabelRaw = t("suggestions.render.comparisonAria");
   const comparisonSliderLabel =
     typeof comparisonSliderLabelRaw === "string" && comparisonSliderLabelRaw.trim().length
@@ -5602,15 +5656,17 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   useEffect(() => {
     if (!proposalCount) {
       if (activeProposal !== 0) {
+        setIsDirectionAutoplay(false);
         setActiveProposal(0);
       }
       return;
     }
 
     if (activeProposal >= proposalCount) {
+      setIsDirectionAutoplay(false);
       setActiveProposal(0);
     }
-  }, [activeProposal, proposalCount]);
+  }, [activeProposal, proposalCount, setIsDirectionAutoplay]);
 
   useEffect(() => {
     lookPreviewsRef.current = lookPreviews;
@@ -5916,24 +5972,27 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     if (!proposalCount) {
       return;
     }
+    setIsDirectionAutoplay(false);
     setActiveProposal((previous) => (previous + 1) % proposalCount);
-  }, [proposalCount]);
+  }, [proposalCount, setIsDirectionAutoplay]);
 
   const handlePrevProposal = useCallback(() => {
     if (!proposalCount) {
       return;
     }
+    setIsDirectionAutoplay(false);
     setActiveProposal((previous) => (previous - 1 + proposalCount) % proposalCount);
-  }, [proposalCount]);
+  }, [proposalCount, setIsDirectionAutoplay]);
 
   const handleSelectProposal = useCallback(
     (index) => {
       if (!proposalCount) {
         return;
       }
+      setIsDirectionAutoplay(false);
       setActiveProposal(index);
     },
-    [proposalCount]
+    [proposalCount, setIsDirectionAutoplay]
   );
 
   const handleLookPreviewError = useCallback(
@@ -6282,53 +6341,46 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     };
   }, [isDirectionAutoplay, rotateLookDirection]);
 
-  const handleDirectionAutoplayToggle = useCallback(() => {
-    setIsDirectionAutoplay((previous) => !previous);
-  }, []);
-
   const resetDirectionDragState = useCallback(() => {
     directionDragStateRef.current = {
       active: false,
       pointerId: null,
       lastX: 0,
       remainder: 0,
+      moved: false,
     };
   }, []);
 
-  const handleDirectionPointerDown = useCallback(
-    (event) => {
-      setIsDirectionAutoplay(false);
+  const handleDirectionPointerDown = useCallback((event) => {
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
 
-      if (event.pointerType === "mouse" && event.button !== 0) {
-        return;
+    const target = event.currentTarget;
+    if (typeof target.focus === "function") {
+      target.focus({ preventScroll: true });
+    }
+
+    if (typeof target.setPointerCapture === "function") {
+      try {
+        target.setPointerCapture(event.pointerId);
+      } catch (_error) {
+        // Ignore capture errors.
       }
+    }
 
-      const target = event.currentTarget;
-      if (typeof target.focus === "function") {
-        target.focus({ preventScroll: true });
-      }
+    directionDragStateRef.current = {
+      active: true,
+      pointerId: event.pointerId,
+      lastX: Number.isFinite(event.clientX) ? event.clientX : 0,
+      remainder: 0,
+      moved: false,
+    };
 
-      if (typeof target.setPointerCapture === "function") {
-        try {
-          target.setPointerCapture(event.pointerId);
-        } catch (_error) {
-          // Ignore capture errors.
-        }
-      }
-
-      directionDragStateRef.current = {
-        active: true,
-        pointerId: event.pointerId,
-        lastX: Number.isFinite(event.clientX) ? event.clientX : 0,
-        remainder: 0,
-      };
-
-      if (event.pointerType === "touch") {
-        event.preventDefault();
-      }
-    },
-    [setIsDirectionAutoplay]
-  );
+    if (event.pointerType === "touch") {
+      event.preventDefault();
+    }
+  }, []);
 
   const handleDirectionPointerMove = useCallback(
     (event) => {
@@ -6363,6 +6415,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       }
 
       if (steps !== 0) {
+        state.moved = true;
+        setIsDirectionAutoplay(false);
         rotateLookDirection(steps);
       }
 
@@ -6380,6 +6434,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         return;
       }
 
+      const wasMoved = Boolean(state.moved);
       const target = event.currentTarget;
       if (typeof target.releasePointerCapture === "function") {
         try {
@@ -6391,11 +6446,17 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
 
       resetDirectionDragState();
 
+      const isPrimaryPointer =
+        event.pointerType !== "mouse" || event.button === 0 || event.button === -1;
+      if (!wasMoved && isPrimaryPointer) {
+        setIsDirectionAutoplay((previous) => !previous);
+      }
+
       if (event.pointerType === "touch") {
         event.preventDefault();
       }
     },
-    [resetDirectionDragState]
+    [resetDirectionDragState, setIsDirectionAutoplay]
   );
 
   const handleDirectionPointerCancel = useCallback(
@@ -6421,6 +6482,12 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
 
   const handleDirectionKeyDown = useCallback(
     (event) => {
+      if (event.key === " " || event.key === "Spacebar" || event.key === "Enter") {
+        event.preventDefault();
+        setIsDirectionAutoplay((previous) => !previous);
+        return;
+      }
+
       if (
         event.key === "ArrowLeft" ||
         event.key === "ArrowUp" ||
@@ -6441,7 +6508,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         rotateLookDirection(1);
       }
     },
-    [rotateLookDirection]
+    [rotateLookDirection, setIsDirectionAutoplay]
   );
 
   const toggleDetailedMatches = useCallback(() => {
@@ -7008,12 +7075,16 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     [handleFile, isImageMode]
   );
 
-  const handleColorInput = useCallback((event) => {
-    const value = event.target.value;
-    if (typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)) {
-      setSelectedColor(value.toUpperCase());
-    }
-  }, []);
+  const handleColorInput = useCallback(
+    (event) => {
+      const value = event.target.value;
+      if (typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)) {
+        setIsDirectionAutoplay(false);
+        setSelectedColor(value.toUpperCase());
+      }
+    },
+    [setIsDirectionAutoplay]
+  );
 
   const handleRandomizeColor = useCallback(() => {
     const random = `#${Math.floor(Math.random() * 0xffffff)
@@ -7021,16 +7092,32 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       .padStart(6, "0")
       .toUpperCase()}`;
     setInputMode("color");
+    setIsDirectionAutoplay(false);
     setSelectedColor(random);
-  }, []);
+  }, [setIsDirectionAutoplay]);
 
-  const handleSeedClick = useCallback((hex) => {
-    if (!hex) {
-      return;
-    }
-    setInputMode("color");
-    setSelectedColor(hex.toUpperCase());
-  }, []);
+  const handleSeedClick = useCallback(
+    (hex) => {
+      if (!hex) {
+        return;
+      }
+      setInputMode("color");
+      setIsDirectionAutoplay(false);
+      setSelectedColor(hex.toUpperCase());
+    },
+    [setIsDirectionAutoplay]
+  );
+
+  const handleSelectBreed = useCallback(
+    (breedId) => {
+      if (!Number.isFinite(breedId)) {
+        return;
+      }
+      setIsDirectionAutoplay(false);
+      setSelectedBreedId(breedId);
+    },
+    [setIsDirectionAutoplay, setSelectedBreedId]
+  );
 
   const showProgressBar = isProcessing || analysisProgress > 0;
   const clampedProgress = Math.max(0, Math.min(analysisProgress, 100));
@@ -7601,7 +7688,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                         key={breed.slug ?? `breed-${breed.id}`}
                         type="button"
                         className={`identity-card__chip${isActive ? " is-active" : ""}`}
-                        onClick={() => setSelectedBreedId(breed.id)}
+                        onClick={() => handleSelectBreed(breed.id)}
                         role="radio"
                         aria-checked={isActive}
                         aria-label={t("identity.class.choose", { name: breedLabel })}
@@ -7774,10 +7861,10 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                         ) : null}
                                         <div className="skin-card__glow" aria-hidden="true" />
                                         <div
-                                          className="skin-card__preview"
+                                          className={`skin-card__preview${isDirectionAutoplay ? " is-autoplay" : ""}`}
                                           role="group"
                                           aria-label={previewDirectionDescription}
-                                          title={t("identity.preview.direction.hint")}
+                                          title={directionPreviewTitle}
                                           tabIndex={0}
                                           onPointerDown={handleDirectionPointerDown}
                                           onPointerMove={handleDirectionPointerMove}
@@ -7785,57 +7872,9 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           onPointerCancel={handleDirectionPointerCancel}
                                           onKeyDown={handleDirectionKeyDown}
                                         >
-                                          <div className="skin-card__autoplay-toggle">
-                                            <button
-                                              type="button"
-                                              className={`skin-card__autoplay-button${
-                                                isDirectionAutoplay ? " is-active" : ""
-                                              }`}
-                                              onClick={(event) => {
-                                                event.stopPropagation();
-                                                handleDirectionAutoplayToggle();
-                                              }}
-                                              onPointerDown={(event) => event.stopPropagation()}
-                                              onPointerUp={(event) => event.stopPropagation()}
-                                              onPointerCancel={(event) => event.stopPropagation()}
-                                              onMouseDown={(event) => event.stopPropagation()}
-                                              onMouseUp={(event) => event.stopPropagation()}
-                                              onTouchStart={(event) => event.stopPropagation()}
-                                              onTouchEnd={(event) => event.stopPropagation()}
-                                              aria-pressed={isDirectionAutoplay}
-                                              aria-label={directionAutoplayLabel}
-                                              title={directionAutoplayLabel}
-                                            >
-                                              <span className="skin-card__autoplay-icon" aria-hidden="true">
-                                                {isDirectionAutoplay ? (
-                                                  <svg
-                                                    viewBox="0 0 24 24"
-                                                    fill="none"
-                                                    xmlns="http://www.w3.org/2000/svg"
-                                                    focusable="false"
-                                                  >
-                                                    <path
-                                                      d="M8.5 6.75a.75.75 0 0 1 .75-.75h5.5a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75.75h-5.5a.75.75 0 0 1-.75-.75V6.75Z"
-                                                      fill="currentColor"
-                                                    />
-                                                  </svg>
-                                                ) : (
-                                                  <svg
-                                                    viewBox="0 0 24 24"
-                                                    fill="none"
-                                                    xmlns="http://www.w3.org/2000/svg"
-                                                    focusable="false"
-                                                  >
-                                                    <path
-                                                      d="M8.25 5.68a.75.75 0 0 1 1.14-.64l8.04 5.32a.75.75 0 0 1 0 1.28l-8.04 5.32a.75.75 0 0 1-1.14-.64V5.68Z"
-                                                      fill="currentColor"
-                                                    />
-                                                  </svg>
-                                                )}
-                                              </span>
-                                              <span className="sr-only">{directionAutoplayLabel}</span>
-                                            </button>
-                                          </div>
+                                          <span className="sr-only" aria-live="polite">
+                                            {directionAutoplayHint}
+                                          </span>
                                           {showComparison ? (
                                             <SkinCardPreviewComparison
                                               withSrc={previewSrc}
