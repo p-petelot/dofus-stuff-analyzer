@@ -3893,6 +3893,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const isUnmountedRef = useRef(false);
   const [lookAnimation, setLookAnimation] = useState(DEFAULT_LOOK_ANIMATION);
   const [lookDirection, setLookDirection] = useState(DEFAULT_LOOK_DIRECTION);
+  const [isDirectionAutoplay, setIsDirectionAutoplay] = useState(false);
+  const directionAutoplayRef = useRef(null);
   const [downloadingPreviewId, setDownloadingPreviewId] = useState(null);
   const [copyingPreviewId, setCopyingPreviewId] = useState(null);
   const [supportsImageClipboard, setSupportsImageClipboard] = useState(false);
@@ -5486,6 +5488,15 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const previewDirectionDescription = `${t("aria.previewDirectionControl")}${
     activeDirectionLabel ? ` - ${activeDirectionLabel}` : ""
   }. ${t("identity.preview.direction.hint")}`;
+  const directionAutoplayLabelRaw = isDirectionAutoplay
+    ? t("identity.preview.direction.autoplayStop")
+    : t("identity.preview.direction.autoplayPlay");
+  const directionAutoplayLabel =
+    typeof directionAutoplayLabelRaw === "string" && directionAutoplayLabelRaw.trim().length
+      ? directionAutoplayLabelRaw.trim()
+      : isDirectionAutoplay
+      ? "Stop automatic rotation"
+      : "Start automatic rotation";
   const comparisonSliderLabelRaw = t("suggestions.render.comparisonAria");
   const comparisonSliderLabel =
     typeof comparisonSliderLabelRaw === "string" && comparisonSliderLabelRaw.trim().length
@@ -5528,6 +5539,59 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       outline: `2px solid rgba(${r}, ${g}, ${b}, 0.38)`,
     };
   }, [activeProposalPalette, colors]);
+
+  const toastPresentation = useMemo(() => {
+    if (!toast) {
+      return null;
+    }
+
+    const accentHex = toast.swatch ? normalizeColorToHex(toast.swatch) : null;
+    const classNames = ["toast"];
+    if (toast.tone) {
+      classNames.push(`toast--${toast.tone}`);
+    }
+
+    const style = {};
+
+    if (accentHex) {
+      style["--toast-accent-gradient"] = buildGradientFromHex(accentHex);
+      style["--toast-accent-solid"] = accentHex;
+
+      const accentRgb = hexToRgb(accentHex);
+      if (accentRgb) {
+        const luminance = 0.299 * accentRgb.r + 0.587 * accentRgb.g + 0.114 * accentRgb.b;
+        const isLight = luminance > 168;
+        style["--toast-foreground"] = isLight
+          ? "rgba(15, 23, 42, 0.92)"
+          : "#f8fafc";
+        style["--toast-foreground-muted"] = isLight
+          ? "rgba(15, 23, 42, 0.64)"
+          : "rgba(248, 250, 252, 0.82)";
+        style["--toast-icon-surface"] = isLight
+          ? "rgba(255, 255, 255, 0.32)"
+          : "rgba(15, 23, 42, 0.42)";
+        style["--toast-icon-shadow"] = isLight
+          ? "rgba(14, 165, 233, 0.28)"
+          : "rgba(15, 23, 42, 0.55)";
+      }
+    }
+
+    const icon =
+      toast.icon ??
+      (toast.tone === "info"
+        ? "ℹ"
+        : toast.tone === "warning"
+        ? "!"
+        : toast.tone === "custom"
+        ? "🎨"
+        : "✓");
+
+    return {
+      className: classNames.join(" "),
+      style,
+      icon,
+    };
+  }, [toast]);
 
   useEffect(() => {
     if (theme === THEME_KEYS.INTELLIGENT) {
@@ -6043,6 +6107,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           label: toastLabel,
           value: null,
           swatch: null,
+          tone: "success",
+          icon: "📋",
         });
       } catch (error) {
         console.error("Unable to copy preview:", error);
@@ -6055,7 +6121,13 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   );
 
   const handleCopy = useCallback(async (value, options = {}) => {
-    const { swatch = null, toastKey = "toast.colorCopied", hideValue = false } = options;
+    const {
+      swatch = null,
+      toastKey = "toast.colorCopied",
+      hideValue = false,
+      tone = swatch ? "custom" : "success",
+      icon = null,
+    } = options;
     const fallbackCopy = (text) => {
       const textarea = document.createElement("textarea");
       textarea.value = text;
@@ -6094,6 +6166,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         label: toastLabel,
         value: hideValue ? null : value,
         swatch,
+        tone,
+        icon,
       });
     } catch (err) {
       console.error(err);
@@ -6114,13 +6188,15 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           label: toastLabel,
           value: hideValue ? null : value,
           swatch,
+          tone,
+          icon,
         });
       } catch (fallbackErr) {
         console.error(fallbackErr);
         setError(t("errors.clipboard"));
       }
     }
-  }, [t]);
+  }, [t, setError, setToast, setCopiedCode]);
 
   const handleShareSkin = useCallback(
     (proposal) => {
@@ -6148,7 +6224,12 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       try {
         const shareUrl = new URL(window.location.href);
         shareUrl.searchParams.set("skin", encoded);
-        handleCopy(shareUrl.toString(), { toastKey: "toast.shareLinkCopied", hideValue: true });
+        handleCopy(shareUrl.toString(), {
+          toastKey: "toast.shareLinkCopied",
+          hideValue: true,
+          tone: "info",
+          icon: "🔗",
+        });
       } catch (err) {
         console.error(err);
         setError(t("errors.shareLink"));
@@ -6176,6 +6257,35 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     [lookAnimation]
   );
 
+  useEffect(() => {
+    if (!isDirectionAutoplay) {
+      if (directionAutoplayRef.current !== null && typeof window !== "undefined") {
+        window.clearInterval(directionAutoplayRef.current);
+        directionAutoplayRef.current = null;
+      }
+      return;
+    }
+
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const interval = window.setInterval(() => {
+      rotateLookDirection(1);
+    }, 900);
+
+    directionAutoplayRef.current = interval;
+
+    return () => {
+      window.clearInterval(interval);
+      directionAutoplayRef.current = null;
+    };
+  }, [isDirectionAutoplay, rotateLookDirection]);
+
+  const handleDirectionAutoplayToggle = useCallback(() => {
+    setIsDirectionAutoplay((previous) => !previous);
+  }, []);
+
   const resetDirectionDragState = useCallback(() => {
     directionDragStateRef.current = {
       active: false,
@@ -6185,35 +6295,40 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     };
   }, []);
 
-  const handleDirectionPointerDown = useCallback((event) => {
-    if (event.pointerType === "mouse" && event.button !== 0) {
-      return;
-    }
+  const handleDirectionPointerDown = useCallback(
+    (event) => {
+      setIsDirectionAutoplay(false);
 
-    const target = event.currentTarget;
-    if (typeof target.focus === "function") {
-      target.focus({ preventScroll: true });
-    }
-
-    if (typeof target.setPointerCapture === "function") {
-      try {
-        target.setPointerCapture(event.pointerId);
-      } catch (_error) {
-        // Ignore capture errors.
+      if (event.pointerType === "mouse" && event.button !== 0) {
+        return;
       }
-    }
 
-    directionDragStateRef.current = {
-      active: true,
-      pointerId: event.pointerId,
-      lastX: Number.isFinite(event.clientX) ? event.clientX : 0,
-      remainder: 0,
-    };
+      const target = event.currentTarget;
+      if (typeof target.focus === "function") {
+        target.focus({ preventScroll: true });
+      }
 
-    if (event.pointerType === "touch") {
-      event.preventDefault();
-    }
-  }, []);
+      if (typeof target.setPointerCapture === "function") {
+        try {
+          target.setPointerCapture(event.pointerId);
+        } catch (_error) {
+          // Ignore capture errors.
+        }
+      }
+
+      directionDragStateRef.current = {
+        active: true,
+        pointerId: event.pointerId,
+        lastX: Number.isFinite(event.clientX) ? event.clientX : 0,
+        remainder: 0,
+      };
+
+      if (event.pointerType === "touch") {
+        event.preventDefault();
+      }
+    },
+    [setIsDirectionAutoplay]
+  );
 
   const handleDirectionPointerMove = useCallback(
     (event) => {
@@ -6255,7 +6370,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         event.preventDefault();
       }
     },
-    [rotateLookDirection]
+    [rotateLookDirection, setIsDirectionAutoplay]
   );
 
   const handleDirectionPointerUp = useCallback(
@@ -6306,6 +6421,15 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
 
   const handleDirectionKeyDown = useCallback(
     (event) => {
+      if (
+        event.key === "ArrowLeft" ||
+        event.key === "ArrowUp" ||
+        event.key === "ArrowRight" ||
+        event.key === "ArrowDown"
+      ) {
+        setIsDirectionAutoplay(false);
+      }
+
       if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
         event.preventDefault();
         rotateLookDirection(-1);
@@ -6949,24 +7073,16 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           </div>
         ) : null}
         <div className={`toast-tray${toast ? " toast-tray--visible" : ""}`} aria-live="polite">
-          {toast ? (
-            <div className="toast">
-              <span className="toast__glow" aria-hidden="true" />
+          {toastPresentation ? (
+            <div className={toastPresentation.className} style={toastPresentation.style}>
               <div className="toast__content">
-                <span className="toast__icon" aria-hidden="true">✓</span>
+                <span className="toast__icon" aria-hidden="true">
+                  {toastPresentation.icon}
+                </span>
                 <div className="toast__body">
                   <span className="toast__title">{toast.label}</span>
-                  {toast.value ? (
-                    <span className="toast__value">{toast.value}</span>
-                  ) : null}
+                  {toast.value ? <span className="toast__value">{toast.value}</span> : null}
                 </div>
-                {toast.swatch ? (
-                  <span
-                    className="toast__swatch"
-                    style={{ backgroundImage: buildGradientFromHex(toast.swatch) }}
-                    aria-hidden="true"
-                  />
-                ) : null}
               </div>
             </div>
           ) : null}
@@ -7669,6 +7785,57 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           onPointerCancel={handleDirectionPointerCancel}
                                           onKeyDown={handleDirectionKeyDown}
                                         >
+                                          <div className="skin-card__autoplay-toggle">
+                                            <button
+                                              type="button"
+                                              className={`skin-card__autoplay-button${
+                                                isDirectionAutoplay ? " is-active" : ""
+                                              }`}
+                                              onClick={(event) => {
+                                                event.stopPropagation();
+                                                handleDirectionAutoplayToggle();
+                                              }}
+                                              onPointerDown={(event) => event.stopPropagation()}
+                                              onPointerUp={(event) => event.stopPropagation()}
+                                              onPointerCancel={(event) => event.stopPropagation()}
+                                              onMouseDown={(event) => event.stopPropagation()}
+                                              onMouseUp={(event) => event.stopPropagation()}
+                                              onTouchStart={(event) => event.stopPropagation()}
+                                              onTouchEnd={(event) => event.stopPropagation()}
+                                              aria-pressed={isDirectionAutoplay}
+                                              aria-label={directionAutoplayLabel}
+                                              title={directionAutoplayLabel}
+                                            >
+                                              <span className="skin-card__autoplay-icon" aria-hidden="true">
+                                                {isDirectionAutoplay ? (
+                                                  <svg
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    focusable="false"
+                                                  >
+                                                    <path
+                                                      d="M8.5 6.75a.75.75 0 0 1 .75-.75h5.5a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75.75h-5.5a.75.75 0 0 1-.75-.75V6.75Z"
+                                                      fill="currentColor"
+                                                    />
+                                                  </svg>
+                                                ) : (
+                                                  <svg
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    focusable="false"
+                                                  >
+                                                    <path
+                                                      d="M8.25 5.68a.75.75 0 0 1 1.14-.64l8.04 5.32a.75.75 0 0 1 0 1.28l-8.04 5.32a.75.75 0 0 1-1.14-.64V5.68Z"
+                                                      fill="currentColor"
+                                                    />
+                                                  </svg>
+                                                )}
+                                              </span>
+                                              <span className="sr-only">{directionAutoplayLabel}</span>
+                                            </button>
+                                          </div>
                                           {showComparison ? (
                                             <SkinCardPreviewComparison
                                               withSrc={previewSrc}
