@@ -1,4 +1,4 @@
-import sharp from "next/dist/compiled/sharp";
+import { decodeImage } from "./image";
 
 const MAX_PIXELS = 80_000;
 const MAX_ITERATIONS = 20;
@@ -44,39 +44,23 @@ function initialiseCentroids(pixels: Pixel[], k: number): Pixel[] {
 }
 
 export async function extractColors(buffer: Buffer): Promise<number[]> {
-  const baseImage = sharp(buffer, { failOnError: false }).ensureAlpha();
-  const metadata = await baseImage.metadata();
+  const image = decodeImage(buffer);
 
-  if (!metadata.width || !metadata.height) {
-    throw new Error("Unable to read image metadata");
-  }
-
-  let pipeline = baseImage;
-  const totalPixels = metadata.width * metadata.height;
-  if (totalPixels > MAX_PIXELS) {
-    const scale = Math.sqrt(MAX_PIXELS / totalPixels);
-    const width = Math.max(1, Math.round(metadata.width * scale));
-    const height = Math.max(1, Math.round(metadata.height * scale));
-    pipeline = pipeline.resize(width, height, {
-      fit: "inside",
-      withoutEnlargement: true,
-    });
-  }
-
-  const { data, info } = await pipeline.raw().toBuffer({ resolveWithObject: true });
+  const totalPixels = image.width * image.height;
+  const sampleRate = Math.max(1, Math.floor(totalPixels / MAX_PIXELS));
   const pixels: Pixel[] = [];
 
-  for (let i = 0; i < data.length; i += info.channels) {
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
-    const alpha = info.channels > 3 ? data[i + 3] : 255;
-
+  for (let index = 0; index < totalPixels; index += sampleRate) {
+    const offset = index * 4;
+    const alpha = image.data[offset + 3];
     if (alpha === 0) {
       continue;
     }
-
-    pixels.push({ r, g, b });
+    pixels.push({
+      r: image.data[offset],
+      g: image.data[offset + 1],
+      b: image.data[offset + 2],
+    });
   }
 
   if (!pixels.length) {

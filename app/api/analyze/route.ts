@@ -1,8 +1,8 @@
-import sharp from "next/dist/compiled/sharp";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { extractColors } from "../../../lib/colors";
 import { postImage } from "../../../lib/http";
+import { probeImageDimensions } from "../../../lib/image";
 import type { AnalyzeResult } from "../../../types";
 
 export const runtime = "nodejs";
@@ -66,13 +66,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    const [colors, metadata] = await Promise.all([
+    const [{ width, height }, colors] = await Promise.all([
+      Promise.resolve(probeImageDimensions(buffer)),
       extractColors(buffer),
-      sharp(buffer, { failOnError: false }).metadata(),
     ]);
-
-    const width = metadata.width ?? 0;
-    const height = metadata.height ?? 0;
 
     const fileName = file.name || "upload";
     const classPromise = classApiUrl

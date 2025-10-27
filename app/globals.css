@@ -262,10 +262,6 @@ button {
   height: 100%;
 }
 
-.aspect-[3/4] {
-  aspect-ratio: 3 / 4;
-}
-
 .object-contain {
   object-fit: contain;
 }
@@ -345,10 +341,6 @@ button {
 
 .bg-primary {
   background: var(--primary);
-}
-
-.hover\:bg-primary\/90:hover {
-  background: color-mix(in srgb, var(--primary) 90%, transparent);
 }
 
 .hover\:border-primary:hover {
