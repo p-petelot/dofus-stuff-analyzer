@@ -8,6 +8,9 @@ import {
   translate,
   useLanguage,
 } from "../lib/i18n";
+import { BRAND_NAME } from "../lib/constants";
+import AppHeader from "../components/AppHeader";
+import { useTheme } from "../lib/themeContext";
 
 const ITEM_TYPES = ["coiffe", "cape", "bouclier", "familier", "epauliere", "costume", "ailes"];
 const DOFUS_API_HOST = "https://api.dofusdb.fr";
@@ -1396,7 +1399,6 @@ function normalizeDofusItem(rawItem, type, options = {}) {
   };
 }
 
-const BRAND_NAME = "KrosPalette";
 const MAX_COLORS = 6;
 const MAX_DIMENSION = 280;
 const BUCKET_SIZE = 24;
@@ -3723,7 +3725,8 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
 export default function Home({ initialBreeds = [], previewBackgrounds: initialPreviewBackgrounds = [] }) {
   const router = useRouter();
   const routerLang = router?.query?.lang;
-  const { language, languages: languageOptions, setLanguage, t } = useLanguage();
+  const { language, setLanguage, t } = useLanguage();
+  const { theme, setTheme } = useTheme();
   const languageRef = useRef(language);
   const skipRouterLanguageEffectRef = useRef(false);
   const languagePriority = useMemo(() => getLanguagePriority(language), [language]);
@@ -3791,45 +3794,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       });
   }, [language, router, routerLang]);
 
-  const [theme, setTheme] = useState(DEFAULT_THEME_KEY);
-  const themeHydratedRef = useRef(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (storedTheme && isValidThemeKey(storedTheme)) {
-      setTheme(storedTheme);
-    }
-    themeHydratedRef.current = true;
-  }, []);
-
-  useEffect(() => {
-    if (!themeHydratedRef.current || typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-  }, [theme]);
-
-  useEffect(() => {
-    if (theme !== THEME_KEYS.INTELLIGENT) {
-      applyThemeToDocument(theme);
-    }
-  }, [theme]);
-
-  const themeOptions = useMemo(
-    () =>
-      THEME_OPTIONS.map((option) => {
-        const label = t(option.labelKey);
-        const normalizedLabel = typeof label === "string" ? label : "";
-        return { ...option, label: normalizedLabel, accessibleLabel: normalizedLabel };
-      }),
-    [t]
-  );
-
-  const themeSelectorLabel = t("theme.selectorAria");
-  const themeSelectorAria = typeof themeSelectorLabel === "string" ? themeSelectorLabel : "";
 
   const handleThemeSelect = useCallback(
     (nextTheme) => {
@@ -6938,6 +6902,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         <title>{pageTitle}</title>
         <meta name="description" content={t("meta.description")} />
       </Head>
+      <AppHeader onSelectLanguage={handleLanguageSelect} onSelectTheme={handleThemeSelect} />
       <main className="page">
         {showProgressBar ? (
           <div className="page-progress" role="status" aria-live="polite">
@@ -6974,51 +6939,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         <header className="hero">
           <h1>{BRAND_NAME}</h1>
         </header>
-        <div className="preference-switchers">
-          <div className="theme-switcher" role="radiogroup" aria-label={themeSelectorAria}>
-            {themeOptions.map((option) => {
-              const isActiveTheme = option.key === theme;
-              return (
-                <button
-                  key={option.key}
-                  type="button"
-                  className={`theme-switcher__option${isActiveTheme ? " is-active" : ""}`}
-                  onClick={() => handleThemeSelect(option.key)}
-                  role="radio"
-                  aria-checked={isActiveTheme}
-                  aria-label={option.accessibleLabel}
-                  title={option.accessibleLabel}
-                >
-                  <span className="theme-switcher__icon" aria-hidden="true">{option.icon}</span>
-                  <span className="theme-switcher__label" aria-hidden="true">{option.label}</span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="language-switcher" role="group" aria-label={t("language.selectorAria")}>
-            {languageOptions.map((option) => {
-              const isActive = option.code === language;
-              return (
-                <button
-                  key={option.code}
-                  type="button"
-                  className={`language-switcher__option${isActive ? " is-active" : ""}`}
-                  onClick={() => handleLanguageSelect(option.code)}
-                  aria-pressed={isActive}
-                  aria-label={option.accessibleLabel}
-                  title={option.accessibleLabel}
-                >
-                  <span className="language-switcher__flag" aria-hidden="true">
-                    <img src={option.flag} alt="" loading="lazy" />
-                  </span>
-                  <span className="language-switcher__code" aria-hidden="true">
-                    {option.shortLabel ?? option.code.toUpperCase()}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
         <div className="workspace-layout">
           <section className="workspace">
