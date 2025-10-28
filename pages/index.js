@@ -8894,12 +8894,9 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
               </div>
             </div>
           </section>
-
-
-        </div>
-      </main>
-    </>
-  );
+        </main>
+      </>
+    );
 }
 
 async function loadPreviewBackgroundsFromDisk() {
