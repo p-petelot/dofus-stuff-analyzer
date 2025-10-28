@@ -1,5 +1,5 @@
 import { BONUS, SLOTS, SUGGESTION_COUNT } from "../config/suggestions";
-import { deltaE2000 } from "../colors/palette";
+import { deltaE2000 } from "../color/palette";
 import type { Candidate, DofusPalette, SlotKey } from "../types";
 
 function hexToLab(hex: string) {

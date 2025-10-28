@@ -1,5 +1,5 @@
 import { FLAGS, K, SUGGESTION_COUNT, WEIGHTS_COLOR } from "../config/suggestions";
-import { deltaE2000 } from "../colors/palette";
+import { deltaE2000 } from "../color/palette";
 import { clipEmbedding, edgeSSIM } from "../vision/features";
 import { queryIndex } from "./indexStore";
 import { renderCandidateTemplate } from "./templateImage";
