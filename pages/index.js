@@ -8569,6 +8569,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
               )}
             </>
           )}
+          </section>
           </div>
           <section className={filtersPanelClassName}>
             <div
