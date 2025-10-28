@@ -7764,7 +7764,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         ) : !hasCatalogData && itemsLoading ? (
           <div className="suggestions__status suggestions__status--loading">
             <PaletteLoader label={t("suggestions.loading.items")} />
-          </section>
+          </div>
           ) : !hasCatalogData && itemsError ? (
             <div className="suggestions__status suggestions__status--error">{itemsError}</div>
           ) : !hasCatalogData ? (
