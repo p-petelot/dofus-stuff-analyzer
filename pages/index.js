@@ -3725,7 +3725,33 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const routerLang = router?.query?.lang;
   const { language, languages: languageOptions, setLanguage, t } = useLanguage();
   const languageRef = useRef(language);
+  const languageMenuRef = useRef(null);
+  const themeMenuRef = useRef(null);
+  const [isLanguageMenuOpen, setLanguageMenuOpen] = useState(false);
+  const [isThemeMenuOpen, setThemeMenuOpen] = useState(false);
   const skipRouterLanguageEffectRef = useRef(false);
+  const closePreferenceMenus = useCallback(() => {
+    setThemeMenuOpen(false);
+    setLanguageMenuOpen(false);
+  }, []);
+  const handleThemeTriggerClick = useCallback(() => {
+    setThemeMenuOpen((previous) => {
+      const next = !previous;
+      if (!previous) {
+        setLanguageMenuOpen(false);
+      }
+      return next;
+    });
+  }, []);
+  const handleLanguageTriggerClick = useCallback(() => {
+    setLanguageMenuOpen((previous) => {
+      const next = !previous;
+      if (!previous) {
+        setThemeMenuOpen(false);
+      }
+      return next;
+    });
+  }, []);
   const languagePriority = useMemo(() => getLanguagePriority(language), [language]);
   useEffect(() => {
     setActiveLocalizationPriority(language);
@@ -3830,15 +3856,27 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
 
   const themeSelectorLabel = t("theme.selectorAria");
   const themeSelectorAria = typeof themeSelectorLabel === "string" ? themeSelectorLabel : "";
+  const languageSelectorLabel = t("language.selectorAria");
+  const languageSelectorAria = typeof languageSelectorLabel === "string" ? languageSelectorLabel : "";
+  const activeThemeOption = useMemo(
+    () => themeOptions.find((option) => option.key === theme) ?? null,
+    [themeOptions, theme]
+  );
+  const activeLanguageOption = useMemo(
+    () => languageOptions.find((option) => option.code === language) ?? null,
+    [languageOptions, language]
+  );
 
   const handleThemeSelect = useCallback(
     (nextTheme) => {
       if (!isValidThemeKey(nextTheme) || nextTheme === theme) {
+        closePreferenceMenus();
         return;
       }
       setTheme(nextTheme);
+      closePreferenceMenus();
     },
-    [theme]
+    [closePreferenceMenus, theme]
   );
 
   const [imageSrc, setImageSrc] = useState(null);
@@ -4100,13 +4138,51 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const handleLanguageSelect = useCallback(
     (nextLanguage) => {
       if (!nextLanguage || nextLanguage === languageRef.current) {
+        closePreferenceMenus();
         return;
       }
       skipRouterLanguageEffectRef.current = true;
       setLanguage(nextLanguage);
+      closePreferenceMenus();
     },
-    [setLanguage]
+    [closePreferenceMenus, setLanguage]
   );
+
+  useEffect(() => {
+    if (typeof document === "undefined" || (!isThemeMenuOpen && !isLanguageMenuOpen)) {
+      return;
+    }
+    const handlePointerDown = (event) => {
+      const target = event?.target;
+      if (
+        (themeMenuRef.current && themeMenuRef.current.contains(target)) ||
+        (languageMenuRef.current && languageMenuRef.current.contains(target))
+      ) {
+        return;
+      }
+      closePreferenceMenus();
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [closePreferenceMenus, isLanguageMenuOpen, isThemeMenuOpen]);
+  useEffect(() => {
+    if (typeof document === "undefined" || (!isThemeMenuOpen && !isLanguageMenuOpen)) {
+      return;
+    }
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        closePreferenceMenus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [closePreferenceMenus, isLanguageMenuOpen, isThemeMenuOpen]);
 
   const isImageMode = inputMode === "image";
   const isColorMode = inputMode === "color";
@@ -6975,51 +7051,105 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           <h1>{BRAND_NAME}</h1>
         </header>
         <div className="preference-switchers">
-          <div className="theme-switcher" role="radiogroup" aria-label={themeSelectorAria}>
-            {themeOptions.map((option) => {
-              const isActiveTheme = option.key === theme;
-              return (
-                <button
-                  key={option.key}
-                  type="button"
-                  className={`theme-switcher__option${isActiveTheme ? " is-active" : ""}`}
-                  onClick={() => handleThemeSelect(option.key)}
-                  role="radio"
-                  aria-checked={isActiveTheme}
-                  aria-label={option.accessibleLabel}
-                  title={option.accessibleLabel}
-                >
-                  <span className="theme-switcher__icon" aria-hidden="true">{option.icon}</span>
-                  <span className="theme-switcher__label" aria-hidden="true">{option.label}</span>
-                </button>
-              );
-            })}
+          <div
+            className={`theme-switcher preference-switcher${isThemeMenuOpen ? " is-open" : ""}`}
+            ref={themeMenuRef}
+          >
+            <button
+              type="button"
+              className="preference-trigger preference-trigger--theme"
+              onClick={handleThemeTriggerClick}
+              aria-haspopup="menu"
+              aria-expanded={isThemeMenuOpen}
+              title={activeThemeOption?.accessibleLabel ?? themeSelectorAria}
+            >
+              <span className="preference-trigger__icon" aria-hidden="true">
+                {activeThemeOption?.icon ?? "🎨"}
+              </span>
+              <span className="sr-only">
+                {themeSelectorAria}
+                {activeThemeOption?.label ? ` : ${activeThemeOption.label}` : ""}
+              </span>
+            </button>
+            <div
+              className={`preference-popover${isThemeMenuOpen ? " is-open" : ""}`}
+              role="menu"
+              aria-label={themeSelectorAria}
+              aria-hidden={!isThemeMenuOpen}
+            >
+              {themeOptions.map((option) => {
+                const isActiveTheme = option.key === theme;
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    className={`theme-switcher__option${isActiveTheme ? " is-active" : ""}`}
+                    onClick={() => handleThemeSelect(option.key)}
+                    role="menuitemradio"
+                    aria-checked={isActiveTheme}
+                    aria-label={option.accessibleLabel}
+                    title={option.accessibleLabel}
+                  >
+                    <span className="theme-switcher__icon" aria-hidden="true">{option.icon}</span>
+                    <span className="theme-switcher__label" aria-hidden="true">{option.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div className="language-switcher" role="group" aria-label={t("language.selectorAria")}>
-            {languageOptions.map((option) => {
-              const isActive = option.code === language;
-              return (
-                <button
-                  key={option.code}
-                  type="button"
-                  className={`language-switcher__option${isActive ? " is-active" : ""}`}
-                  onClick={() => handleLanguageSelect(option.code)}
-                  aria-pressed={isActive}
-                  aria-label={option.accessibleLabel}
-                  title={option.accessibleLabel}
-                >
-                  <span className="language-switcher__flag" aria-hidden="true">
-                    <img src={option.flag} alt="" loading="lazy" />
-                  </span>
-                  <span className="language-switcher__code" aria-hidden="true">
-                    {option.shortLabel ?? option.code.toUpperCase()}
-                  </span>
-                </button>
-              );
-            })}
+          <div
+            className={`language-switcher preference-switcher${isLanguageMenuOpen ? " is-open" : ""}`}
+            ref={languageMenuRef}
+          >
+            <button
+              type="button"
+              className="preference-trigger preference-trigger--language"
+              onClick={handleLanguageTriggerClick}
+              aria-haspopup="menu"
+              aria-expanded={isLanguageMenuOpen}
+              title={activeLanguageOption?.accessibleLabel ?? languageSelectorAria}
+            >
+              {activeLanguageOption ? (
+                <span className="preference-trigger__flag" aria-hidden="true">
+                  <img src={activeLanguageOption.flag} alt="" loading="lazy" />
+                </span>
+              ) : (
+                <span className="preference-trigger__icon" aria-hidden="true">🌐</span>
+              )}
+              <span className="sr-only">
+                {languageSelectorAria}
+                {activeLanguageOption?.label ? ` : ${activeLanguageOption.label}` : ""}
+              </span>
+            </button>
+            <div
+              className={`preference-popover${isLanguageMenuOpen ? " is-open" : ""}`}
+              role="menu"
+              aria-label={languageSelectorAria}
+              aria-hidden={!isLanguageMenuOpen}
+            >
+              {languageOptions.map((option) => {
+                const isActive = option.code === language;
+                return (
+                  <button
+                    key={option.code}
+                    type="button"
+                    className={`language-switcher__option${isActive ? " is-active" : ""}`}
+                    onClick={() => handleLanguageSelect(option.code)}
+                    role="menuitemradio"
+                    aria-checked={isActive}
+                    aria-label={option.accessibleLabel}
+                    title={option.accessibleLabel}
+                  >
+                    <span className="language-switcher__flag" aria-hidden="true">
+                      <img src={option.flag} alt="" loading="lazy" />
+                    </span>
+                    <span className="language-switcher__label" aria-hidden="true">{option.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
-
         <div className="workspace-layout">
           <section className="workspace">
           <div className={referenceClassName}>
