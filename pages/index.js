@@ -7546,7 +7546,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                 )}
               </div>
             )}
-          </div>
+            </div>
+          </section>
 
           <section id="palette" className="palette">
             <div className="palette__header">
