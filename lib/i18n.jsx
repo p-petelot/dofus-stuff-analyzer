@@ -60,7 +60,9 @@ const LANGUAGE_VARIANT_KEYS = {
 
 const TRANSLATIONS = {
   fr: {
-    "brand.tagline": "",
+    "brand.tagline": "La haute couture rencontre les ateliers d’Astrub.",
+    "brand.badge": "Atelier Astrub Couture",
+    "brand.description": "Ici, les aventuriers ne forment pas des panoplies, mais des collections signature.",
     "meta.description":
       "KrosPalette extrait les couleurs dominantes de tes images pour composer des skins Dofus harmonieux.",
     "theme.selectorAria": "Sélection du thème",
@@ -264,7 +266,9 @@ const TRANSLATIONS = {
     "aria.closeItemPanel": "Fermer la sélection d'objets",
   },
   en: {
-    "brand.tagline": "Dofus skin studio",
+    "brand.tagline": "Haute couture meets the workshops of Astrub.",
+    "brand.badge": "Astrub Couture Studio",
+    "brand.description": "Here, adventurers assemble not sets, but signature collections.",
     "meta.description":
       "KrosPalette extracts the dominant colors from your images to craft harmonious Dofus outfits.",
     "theme.selectorAria": "Theme selection",
@@ -466,7 +470,9 @@ const TRANSLATIONS = {
     "aria.closeItemPanel": "Close item selection",
   },
   es: {
-    "brand.tagline": "Estudio de skins de Dofus",
+    "brand.tagline": "La alta costura se encuentra con los talleres de Astrub.",
+    "brand.badge": "Estudio Astrub Couture",
+    "brand.description": "Aquí, los aventureros no montan panoplias, sino colecciones exclusivas.",
     "meta.description":
       "KrosPalette extrae los colores dominantes de tus imágenes para crear conjuntos de Dofus armoniosos.",
     "theme.selectorAria": "Selección de tema",
@@ -668,7 +674,9 @@ const TRANSLATIONS = {
     "aria.closeItemPanel": "Cerrar la selección de objetos",
   },
   de: {
-    "brand.tagline": "Dofus-Skin-Studio",
+    "brand.tagline": "Haute Couture trifft die Werkstätten von Astrub.",
+    "brand.badge": "Atelier Astrub Couture",
+    "brand.description": "Hier stellen Abenteurer keine Sets zusammen, sondern Signature-Kollektionen.",
     "meta.description":
       "KrosPalette extrahiert die dominanten Farben deiner Bilder und erstellt harmonische Dofus-Outfits.",
     "theme.selectorAria": "Theme-Auswahl",
@@ -871,7 +879,9 @@ const TRANSLATIONS = {
     "aria.closeItemPanel": "Gegenstandsauswahl schließen",
   },
   pt: {
-    "brand.tagline": "Estúdio de skins de Dofus",
+    "brand.tagline": "A alta-costura encontra os ateliês de Astrub.",
+    "brand.badge": "Ateliê Astrub Couture",
+    "brand.description": "Aqui, os aventureiros não montam conjuntos, e sim coleções autorais.",
     "meta.description":
       "KrosPalette extrai as cores dominantes das suas imagens para criar visuais harmoniosos de Dofus.",
     "theme.selectorAria": "Seleção de tema",
