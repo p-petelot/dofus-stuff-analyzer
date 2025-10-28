@@ -1397,6 +1397,12 @@ function normalizeDofusItem(rawItem, type, options = {}) {
 }
 
 const BRAND_NAME = "KrosPalette";
+const BRAND_MONOGRAM = "KP";
+const NAV_LINKS = Object.freeze([
+  { id: "workspace", labelKey: "navigation.workspace" },
+  { id: "palette", labelKey: "navigation.palette" },
+  { id: "suggestions", labelKey: "navigation.suggestions" },
+]);
 const MAX_COLORS = 6;
 const MAX_DIMENSION = 280;
 const BUCKET_SIZE = 24;
@@ -3831,14 +3837,163 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const themeSelectorLabel = t("theme.selectorAria");
   const themeSelectorAria = typeof themeSelectorLabel === "string" ? themeSelectorLabel : "";
 
-  const handleThemeSelect = useCallback(
-    (nextTheme) => {
-      if (!isValidThemeKey(nextTheme) || nextTheme === theme) {
+  const navigationLinks = useMemo(
+    () =>
+      NAV_LINKS.map((link) => {
+        const label = t(link.labelKey);
+        const normalizedLabel = typeof label === "string" ? label : "";
+        return { ...link, label: normalizedLabel };
+      }),
+    [t]
+  );
+  const navigationLabel = t("navigation.primary");
+  const navigationAriaLabel = typeof navigationLabel === "string" ? navigationLabel : "";
+  const themeMenuLabelRaw = t("header.themeMenuLabel");
+  const themeMenuLabel =
+    typeof themeMenuLabelRaw === "string" && themeMenuLabelRaw.trim().length > 0
+      ? themeMenuLabelRaw
+      : themeSelectorAria;
+  const languageMenuLabelRaw = t("header.languageMenuLabel");
+  const languageMenuLabel = typeof languageMenuLabelRaw === "string" ? languageMenuLabelRaw : "";
+  const themeMenuTitleRaw = t("header.themeMenuTitle");
+  const themeMenuTitle = typeof themeMenuTitleRaw === "string" ? themeMenuTitleRaw : "";
+  const languageMenuTitleRaw = t("header.languageMenuTitle");
+  const languageMenuTitle = typeof languageMenuTitleRaw === "string" ? languageMenuTitleRaw : "";
+  const themeMenuId = "site-theme-menu";
+  const languageMenuId = "site-language-menu";
+
+  const activeThemeOption = useMemo(
+    () => themeOptions.find((option) => option.key === theme),
+    [themeOptions, theme]
+  );
+  const activeLanguageOption = useMemo(
+    () => languageOptions.find((option) => option.code === language),
+    [languageOptions, language]
+  );
+
+  const [activeMenu, setActiveMenu] = useState(null);
+  const [activeSection, setActiveSection] = useState(NAV_LINKS[0]?.id ?? null);
+  const [isNavStuck, setIsNavStuck] = useState(false);
+  const themeMenuRef = useRef(null);
+  const languageMenuRef = useRef(null);
+
+  const closeMenus = useCallback(() => {
+    setActiveMenu(null);
+  }, []);
+
+  const handleMenuToggle = useCallback((menuKey) => {
+    setActiveMenu((current) => (current === menuKey ? null : menuKey));
+  }, []);
+
+  useEffect(() => {
+    if (!activeMenu) {
+      return;
+    }
+    const handlePointerDown = (event) => {
+      const themeNode = themeMenuRef.current;
+      const languageNode = languageMenuRef.current;
+      if (themeNode?.contains(event.target) || languageNode?.contains(event.target)) {
         return;
       }
-      setTheme(nextTheme);
+      setActiveMenu(null);
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setActiveMenu(null);
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [activeMenu]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof IntersectionObserver === "undefined") {
+      return;
+    }
+    const sections = NAV_LINKS.map((link) => document.getElementById(link.id)).filter(Boolean);
+    if (sections.length === 0) {
+      return undefined;
+    }
+    if (sections[0]?.id) {
+      setActiveSection(sections[0].id);
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const intersecting = entries.filter((entry) => entry.isIntersecting);
+        if (intersecting.length === 0) {
+          return;
+        }
+        const mostVisible = intersecting.reduce((winner, entry) => {
+          if (!winner || entry.intersectionRatio > winner.intersectionRatio) {
+            return entry;
+          }
+          return winner;
+        }, null);
+        if (mostVisible?.target?.id) {
+          setActiveSection(mostVisible.target.id);
+        }
+      },
+      { rootMargin: "-45% 0px -45% 0px", threshold: [0.1, 0.25, 0.5, 0.75] }
+    );
+    sections.forEach((section) => observer.observe(section));
+    return () => {
+      sections.forEach((section) => observer.unobserve(section));
+      observer.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const handleScroll = () => {
+      setIsNavStuck(window.scrollY > 72);
+    };
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
+
+  const handleThemeSelect = useCallback(
+    (nextTheme) => {
+      if (!isValidThemeKey(nextTheme)) {
+        closeMenus();
+        return;
+      }
+      setTheme((current) => {
+        if (current === nextTheme) {
+          return current;
+        }
+        return nextTheme;
+      });
+      closeMenus();
     },
-    [theme]
+    [closeMenus]
+  );
+
+  const handleNavigationClick = useCallback(
+    (event, targetId) => {
+      event.preventDefault();
+      closeMenus();
+      if (typeof window === "undefined") {
+        return;
+      }
+      const section = document.getElementById(targetId);
+      if (section) {
+        const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+        section.scrollIntoView({
+          behavior: prefersReducedMotion ? "auto" : "smooth",
+          block: "start",
+        });
+      }
+    },
+    [closeMenus]
   );
 
   const [imageSrc, setImageSrc] = useState(null);
@@ -4100,12 +4255,14 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const handleLanguageSelect = useCallback(
     (nextLanguage) => {
       if (!nextLanguage || nextLanguage === languageRef.current) {
+        closeMenus();
         return;
       }
       skipRouterLanguageEffectRef.current = true;
       setLanguage(nextLanguage);
+      closeMenus();
     },
-    [setLanguage]
+    [closeMenus, setLanguage]
   );
 
   const isImageMode = inputMode === "image";
@@ -6971,57 +7128,128 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
             </div>
           ) : null}
         </div>
-        <header className="hero">
-          <h1>{BRAND_NAME}</h1>
+        <header className="site-header">
+          <div className="site-header__primary">
+            <div className="site-header__branding">
+              <span className="site-header__badge" aria-hidden="true">
+                {BRAND_MONOGRAM}
+              </span>
+              <div className="site-header__titles">
+                <h1 className="site-header__title">{BRAND_NAME}</h1>
+                {tagline ? <p className="site-header__tagline">{tagline}</p> : null}
+              </div>
+            </div>
+            <div className="site-header__actions">
+              <div className="header-action" ref={themeMenuRef}>
+                <button
+                  type="button"
+                  className={`header-action__button${activeMenu === "theme" ? " is-active" : ""}`}
+                  onClick={() => handleMenuToggle("theme")}
+                  aria-haspopup="menu"
+                  aria-expanded={activeMenu === "theme"}
+                  aria-controls={themeMenuId}
+                  title={themeMenuLabel}
+                >
+                  <span className="sr-only">{themeMenuLabel}</span>
+                  <span className="header-action__icon" aria-hidden="true">
+                    <span className="header-action__emoji">{activeThemeOption?.icon ?? "🎨"}</span>
+                  </span>
+                  <span className="header-action__text" aria-hidden="true">
+                    <span className="header-action__label">{themeMenuTitle}</span>
+                    <span className="header-action__value">{activeThemeOption?.label ?? "—"}</span>
+                  </span>
+                </button>
+                {activeMenu === "theme" ? (
+                  <div className="header-popover" role="menu" id={themeMenuId} aria-label={themeSelectorAria}>
+                    {themeOptions.map((option) => {
+                      const isActiveTheme = option.key === theme;
+                      return (
+                        <button
+                          key={option.key}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={isActiveTheme}
+                          className={`header-popover__option${isActiveTheme ? " is-active" : ""}`}
+                          onClick={() => handleThemeSelect(option.key)}
+                        >
+                          <span className="header-popover__icon" aria-hidden="true">{option.icon}</span>
+                          <span className="header-popover__label">{option.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+              <div className="header-action" ref={languageMenuRef}>
+                <button
+                  type="button"
+                  className={`header-action__button${activeMenu === "language" ? " is-active" : ""}`}
+                  onClick={() => handleMenuToggle("language")}
+                  aria-haspopup="menu"
+                  aria-expanded={activeMenu === "language"}
+                  aria-controls={languageMenuId}
+                  title={languageMenuLabel}
+                >
+                  <span className="sr-only">{languageMenuLabel}</span>
+                  <span className="header-action__icon header-action__icon--flag" aria-hidden="true">
+                    {activeLanguageOption?.flag ? (
+                      <img src={activeLanguageOption.flag} alt="" loading="lazy" />
+                    ) : null}
+                  </span>
+                  <span className="header-action__text" aria-hidden="true">
+                    <span className="header-action__label">{languageMenuTitle}</span>
+                    <span className="header-action__value">
+                      {activeLanguageOption?.shortLabel ?? activeLanguageOption?.code?.toUpperCase() ?? ""}
+                    </span>
+                  </span>
+                </button>
+                {activeMenu === "language" ? (
+                  <div className="header-popover" role="menu" id={languageMenuId} aria-label={t("language.selectorAria")}>
+                    {languageOptions.map((option) => {
+                      const isActive = option.code === language;
+                      return (
+                        <button
+                          key={option.code}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={isActive}
+                          className={`header-popover__option${isActive ? " is-active" : ""}`}
+                          onClick={() => handleLanguageSelect(option.code)}
+                        >
+                          <span className="header-popover__icon header-popover__icon--flag" aria-hidden="true">
+                            <img src={option.flag} alt="" loading="lazy" />
+                          </span>
+                          <span className="header-popover__label">{option.label}</span>
+                          <span className="header-popover__meta" aria-hidden="true">
+                            {option.shortLabel ?? option.code.toUpperCase()}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+          <nav className={`site-navigation${isNavStuck ? " is-stuck" : ""}`} aria-label={navigationAriaLabel || undefined}>
+            <ul className="site-navigation__list">
+              {navigationLinks.map((link) => (
+                <li key={link.id} className="site-navigation__item">
+                  <a
+                    href={`#${link.id}`}
+                    className={`site-navigation__link${activeSection === link.id ? " is-active" : ""}`}
+                    onClick={(event) => handleNavigationClick(event, link.id)}
+                  >
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
         </header>
-        <div className="preference-switchers">
-          <div className="theme-switcher" role="radiogroup" aria-label={themeSelectorAria}>
-            {themeOptions.map((option) => {
-              const isActiveTheme = option.key === theme;
-              return (
-                <button
-                  key={option.key}
-                  type="button"
-                  className={`theme-switcher__option${isActiveTheme ? " is-active" : ""}`}
-                  onClick={() => handleThemeSelect(option.key)}
-                  role="radio"
-                  aria-checked={isActiveTheme}
-                  aria-label={option.accessibleLabel}
-                  title={option.accessibleLabel}
-                >
-                  <span className="theme-switcher__icon" aria-hidden="true">{option.icon}</span>
-                  <span className="theme-switcher__label" aria-hidden="true">{option.label}</span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="language-switcher" role="group" aria-label={t("language.selectorAria")}>
-            {languageOptions.map((option) => {
-              const isActive = option.code === language;
-              return (
-                <button
-                  key={option.code}
-                  type="button"
-                  className={`language-switcher__option${isActive ? " is-active" : ""}`}
-                  onClick={() => handleLanguageSelect(option.code)}
-                  aria-pressed={isActive}
-                  aria-label={option.accessibleLabel}
-                  title={option.accessibleLabel}
-                >
-                  <span className="language-switcher__flag" aria-hidden="true">
-                    <img src={option.flag} alt="" loading="lazy" />
-                  </span>
-                  <span className="language-switcher__code" aria-hidden="true">
-                    {option.shortLabel ?? option.code.toUpperCase()}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
         <div className="workspace-layout">
-          <section className="workspace">
+          <section id="workspace" className="workspace">
           <div className={referenceClassName}>
             <div className="reference__header">
               <div className="reference__title">
@@ -7318,9 +7546,10 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                 )}
               </div>
             )}
-          </div>
+            </div>
+          </section>
 
-          <div className="palette">
+          <section id="palette" className="palette">
             <div className="palette__header">
               <div className="palette__title">
                 <h2>{t("palette.title")}</h2>
@@ -7382,9 +7611,9 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                 <p>{t("palette.empty")}</p>
               </div>
             )}
-          </div>
-          
-          <div className="suggestions" style={suggestionsAccentStyle}>
+          </section>
+
+          <section id="suggestions" className="suggestions" style={suggestionsAccentStyle}>
             <div
               className="identity-card suggestions__identity-card"
               role="group"
@@ -8340,6 +8569,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
               )}
             </>
           )}
+          </section>
           </div>
           <section className={filtersPanelClassName}>
             <div
@@ -8664,13 +8894,9 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
               </div>
             </div>
           </section>
-        </section>
-
-          
-        </div>
-      </main>
-    </>
-  );
+        </main>
+      </>
+    );
 }
 
 async function loadPreviewBackgroundsFromDisk() {
