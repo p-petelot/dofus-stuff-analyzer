@@ -8894,9 +8894,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
               </div>
             </div>
           </section>
-        </section>
 
-          
+
         </div>
       </main>
     </>
