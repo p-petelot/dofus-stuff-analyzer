@@ -16,6 +16,15 @@ import {
 } from "../lib/gallery/static-data";
 
 const ITEM_TYPES = ["coiffe", "cape", "bouclier", "familier", "epauliere", "costume", "ailes"];
+const ITEM_TYPE_LABEL_KEYS = {
+  coiffe: "itemTypes.coiffe",
+  cape: "itemTypes.cape",
+  familier: "itemTypes.familier",
+  bouclier: "itemTypes.bouclier",
+  epauliere: "itemTypes.epauliere",
+  costume: "itemTypes.costume",
+  ailes: "itemTypes.ailes",
+};
 const DOFUS_API_HOST = "https://api.dofusdb.fr";
 const DOFUS_API_BASE_URL = `${DOFUS_API_HOST}/items`;
 const DEFAULT_LIMIT = 200;
@@ -131,6 +140,15 @@ function ensureAbsoluteUrl(path) {
     return `${DOFUS_API_HOST}${trimmed}`;
   }
   return `${DOFUS_API_HOST}/${trimmed}`;
+}
+
+function buildDofusDbUrl(language, ankamaId) {
+  if (!Number.isFinite(ankamaId)) {
+    return null;
+  }
+  const normalizedLanguage = normalizeLanguage(language ?? DEFAULT_LANGUAGE);
+  const normalizedId = Math.trunc(ankamaId);
+  return `https://dofusdb.fr/${normalizedLanguage}/database/object/${normalizedId}`;
 }
 
 function normalizeColorToHex(color) {
@@ -475,25 +493,40 @@ function compressToEncodedURIComponent(input) {
   return encoded;
 }
 
-function buildBarbofusLink(items, paletteHexes, { classId, gender, faceId } = {}) {
+function buildBarbofusLink(items, lookColors, { classId, gender, faceId } = {}) {
   if (!Array.isArray(items) || !items.length || !Number.isFinite(classId)) {
     return null;
   }
-  const payload = {
-    1: Number.isFinite(classId) ? Math.trunc(classId) : 7,
-    2: Number.isFinite(faceId) ? Math.trunc(faceId) : null,
-    3: BARBOFUS_GENDER_VALUES[gender === "f" ? "female" : "male"],
-    4: items
-      .map((item) => ({ slot: BARBOFUS_SLOT_BY_TYPE[item.slotType] ?? null, id: item.ankamaId }))
-      .filter((entry) => entry.slot && Number.isFinite(entry.id))
-      .map((entry) => ({ s: entry.slot, i: Math.trunc(entry.id) })),
-    5: paletteHexes
-      .map((hex) => hexToNumeric(hex))
-      .filter((value) => Number.isFinite(value))
-      .map((value) => Math.trunc(value)),
-  };
-  if (!payload[4].length || !payload[5].length) {
+  const resolvedColors = Array.isArray(lookColors)
+    ? lookColors.filter((value) => Number.isFinite(value)).map((value) => Math.trunc(value))
+    : [];
+  if (!resolvedColors.length) {
     return null;
+  }
+  const equipment = {};
+  let hasEquipment = false;
+  items.forEach((item) => {
+    if (!item) {
+      return;
+    }
+    const slot = BARBOFUS_SLOT_BY_TYPE[item.slotType];
+    if (!slot || !Number.isFinite(item.ankamaId)) {
+      return;
+    }
+    equipment[slot] = Math.trunc(item.ankamaId);
+    hasEquipment = true;
+  });
+  if (!hasEquipment) {
+    return null;
+  }
+  const payload = {
+    1: BARBOFUS_GENDER_VALUES[gender === "f" ? "female" : "male"],
+    2: Math.trunc(classId),
+    4: resolvedColors,
+    5: equipment,
+  };
+  if (Number.isFinite(faceId)) {
+    payload[3] = Math.trunc(faceId);
   }
   const encoded = compressToEncodedURIComponent(JSON.stringify(payload));
   if (!encoded) {
@@ -598,7 +631,7 @@ async function fetchItemsForType(type, language, languagePriority) {
   const normalizedLanguage = normalizeLanguage(language);
   const fallbackItems = (STATIC_GALLERY_ITEMS[type] ?? []).map((entry) => ({
     ...entry,
-    url: entry.url ?? resolveStaticItemUrl(normalizedLanguage, type, entry.slug),
+    url: entry.url ?? resolveStaticItemUrl(normalizedLanguage, entry.ankamaId),
   }));
   if (!fallbackItems.length) {
     console.warn(`Aucun objet disponible pour le type ${type}`);
@@ -670,7 +703,7 @@ function normalizeDofusItem(rawItem, type, language, languagePriority) {
   }
   const imageUrl = ensureAbsoluteUrl(rawItem?.img) || ensureAbsoluteUrl(rawItem?.image);
   const slug = slugify(name) || `${type}-${ankamaId}`;
-  const url = `https://www.dofus.com/${normalizeLanguage(language)}/mmorpg/encyclopedie/${type}/${slug}`;
+  const url = buildDofusDbUrl(language, ankamaId);
   return {
     id: `${type}-${ankamaId}`,
     name,
@@ -763,15 +796,28 @@ async function loadCatalog(language, languagePriority) {
   return Object.fromEntries(entries);
 }
 
-function pickRandom(array) {
+function getRandomInt(max) {
+  if (!Number.isFinite(max) || max <= 0) {
+    return 0;
+  }
+  const cryptoApi = typeof globalThis !== "undefined" ? globalThis.crypto ?? null : null;
+  if (cryptoApi && typeof cryptoApi.getRandomValues === "function") {
+    const array = new Uint32Array(1);
+    cryptoApi.getRandomValues(array);
+    return array[0] % max;
+  }
+  return Math.floor(Math.random() * max);
+}
+
+function pickRandom(array, offset = 0) {
   if (!Array.isArray(array) || !array.length) {
     return null;
   }
-  const index = Math.floor(Math.random() * array.length);
+  const index = (offset + getRandomInt(array.length)) % array.length;
   return array[index];
 }
 
-function selectItemForSlot(slot, basePalette, catalog, forbiddenIds = new Set()) {
+function selectItemForSlot(slot, basePalette, catalog, forbiddenIds = new Set(), offset = 0) {
   const pool = Array.isArray(catalog?.[slot]) ? catalog[slot] : [];
   if (!pool.length) {
     return null;
@@ -779,13 +825,14 @@ function selectItemForSlot(slot, basePalette, catalog, forbiddenIds = new Set())
   const scored = pool
     .filter((item) => Array.isArray(item.palette) && item.palette.length && !forbiddenIds.has(item.ankamaId))
     .map((item) => ({ item, score: scorePaletteMatch(basePalette, item.palette) }))
-    .sort((a, b) => a.score - b.score)
-    .slice(0, 12);
+    .sort((a, b) => a.score - b.score);
   if (!scored.length) {
     return null;
   }
-  const choice = pickRandom(scored.slice(0, Math.min(5, scored.length))) ?? scored[0];
-  return choice.item;
+  const limit = Math.min(8, scored.length);
+  const top = scored.slice(0, limit);
+  const index = (offset + getRandomInt(top.length)) % top.length;
+  return top[index]?.item ?? null;
 }
 
 function buildGalleryEntry({
@@ -795,7 +842,7 @@ function buildGalleryEntry({
   language,
   t,
 }) {
-  const breed = pickRandom(breeds);
+  const breed = pickRandom(breeds, index);
   if (!breed) {
     return null;
   }
@@ -809,7 +856,8 @@ function buildGalleryEntry({
     : Array.isArray(catalog.coiffe)
     ? catalog.coiffe
     : [];
-  const baseItem = pickRandom(basePool.filter((item) => item.palette.length >= 2));
+  const baseCandidates = basePool.filter((item) => Array.isArray(item.palette) && item.palette.length >= 2);
+  const baseItem = pickRandom(baseCandidates, index);
   if (!baseItem) {
     return null;
   }
@@ -819,11 +867,11 @@ function buildGalleryEntry({
   selectedItems.push({ ...baseItem, slotType: "costume" });
   seenIds.add(baseItem.ankamaId);
 
-  ITEM_TYPES.forEach((slot) => {
+  ITEM_TYPES.forEach((slot, slotIndex) => {
     if (slot === "costume") {
       return;
     }
-    const candidate = selectItemForSlot(slot, basePalette, catalog, seenIds);
+    const candidate = selectItemForSlot(slot, basePalette, catalog, seenIds, index + slotIndex + selectedItems.length);
     if (candidate) {
       selectedItems.push({ ...candidate, slotType: slot });
       seenIds.add(candidate.ankamaId);
@@ -856,7 +904,7 @@ function buildGalleryEntry({
   const genderLabel = gender === "f" ? t("gallery.gender.female") : t("gallery.gender.male");
   const subtitle = `${classLabel} · ${genderLabel}`;
   const title = t("gallery.entryTitle", { index: index + 1, className: classLabel });
-  const barbofusLink = buildBarbofusLink(selectedItems, palette, {
+  const barbofusLink = buildBarbofusLink(selectedItems, lookColors, {
     classId: breed.id,
     gender,
     faceId,
@@ -1014,6 +1062,11 @@ function GalleryDetail({ entry, onClose, language, t }) {
 
   const activePreview = previews[activeDirection] ?? null;
   const lookLoaded = Boolean(activePreview);
+  const canCopy =
+    typeof navigator !== "undefined" &&
+    typeof navigator.clipboard?.write === "function" &&
+    typeof ClipboardItem !== "undefined";
+  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
 
   const handleDownload = useCallback(() => {
     if (!activePreview) {
@@ -1028,11 +1081,7 @@ function GalleryDetail({ entry, onClose, language, t }) {
   }, [activePreview, entry.id, entry.lookBaseKey]);
 
   const handleCopy = useCallback(async () => {
-    if (
-      !activePreview ||
-      typeof navigator?.clipboard?.write === "undefined" ||
-      typeof ClipboardItem === "undefined"
-    ) {
+    if (!activePreview || !canCopy) {
       return;
     }
     try {
@@ -1043,10 +1092,10 @@ function GalleryDetail({ entry, onClose, language, t }) {
     } catch (error) {
       console.error(error);
     }
-  }, [activePreview]);
+  }, [activePreview, canCopy]);
 
   const handleShare = useCallback(async () => {
-    if (!navigator?.share || !activePreview) {
+    if (!canShare || !activePreview) {
       return;
     }
     try {
@@ -1058,7 +1107,7 @@ function GalleryDetail({ entry, onClose, language, t }) {
     } catch (error) {
       console.error(error);
     }
-  }, [activePreview, entry.barbofusLink, entry.souffLink, entry.subtitle, entry.title]);
+  }, [activePreview, canShare, entry.barbofusLink, entry.souffLink, entry.subtitle, entry.title]);
 
   return (
     <div className="gallery-detail" role="dialog" aria-modal="true">
@@ -1066,100 +1115,140 @@ function GalleryDetail({ entry, onClose, language, t }) {
         <button type="button" className="gallery-detail__close" onClick={onClose}>
           {t("gallery.close")}
         </button>
-        <div className="gallery-detail__preview">
-          {lookLoaded ? (
-            <img src={activePreview} alt={entry.title} />
-          ) : (
-            <div className="gallery-detail__preview--placeholder" aria-hidden="true" />
-          )}
-        </div>
-        <DirectionSelector
-          directions={DEFAULT_LOOK_DIRECTIONS}
-          activeDirection={activeDirection}
-          onSelect={handleDirection}
-          t={t}
-        />
-        {errorDirections[activeDirection] ? (
-          <p className="gallery-detail__error">{t("errors.previewUnavailable")}</p>
-        ) : null}
-        <div className="gallery-detail__meta">
-          <h2>{entry.title}</h2>
-          {entry.subtitle ? <p>{entry.subtitle}</p> : null}
-          <div className="skin-card__palette">
-            <ul className="skin-card__swatches">
-              {entry.palette.map((hex) => (
-                <li key={`${entry.id}-${hex}`} className="skin-card__swatch">
-                  <span style={{ backgroundColor: hex }} aria-label={hex} />
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="skin-card__equipment">
-            <h3>{t("gallery.itemsTitle")}</h3>
-            <ul className="skin-card__equipment-list">
-              {entry.items.map((item) => (
-                <li key={`${entry.id}-${item.id}`} className="skin-card__equipment-slot">
-                  <a href={item.url} target="_blank" rel="noreferrer" className="skin-card__equipment-link">
-                    {item.imageUrl ? <img src={item.imageUrl} alt="" loading="lazy" /> : null}
-                    <span>
-                      <strong>{item.name}</strong>
-                    </span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="skin-card__actions">
-            <button type="button" className="skin-card__cta" onClick={handleDownload} disabled={!lookLoaded}>
-              <span className="skin-card__cta-icon" aria-hidden="true">
-                <img src="/icons/download.svg" alt="" />
-              </span>
-              <span className="sr-only">{t("gallery.actions.download")}</span>
-            </button>
-            {entry.barbofusLink ? (
-              <a
-                href={entry.barbofusLink}
-                target="_blank"
-                rel="noreferrer"
+        <div className="gallery-detail__layout">
+          <div className="gallery-detail__visual">
+            <div className="gallery-detail__preview">
+              {lookLoaded ? (
+                <img src={activePreview} alt={entry.title} />
+              ) : (
+                <div className="gallery-detail__preview--placeholder" aria-hidden="true" />
+              )}
+            </div>
+            <DirectionSelector
+              directions={DEFAULT_LOOK_DIRECTIONS}
+              activeDirection={activeDirection}
+              onSelect={handleDirection}
+              t={t}
+            />
+            {errorDirections[activeDirection] ? (
+              <p className="gallery-detail__error">{t("errors.previewUnavailable")}</p>
+            ) : null}
+            <div className="skin-card__actions gallery-detail__actions">
+              <button type="button" className="skin-card__cta" onClick={handleDownload} disabled={!lookLoaded}>
+                <span className="skin-card__cta-icon" aria-hidden="true">
+                  <img src="/icons/download.svg" alt="" />
+                </span>
+                <span className="sr-only">{t("gallery.actions.download")}</span>
+              </button>
+              {entry.barbofusLink ? (
+                <a
+                  href={entry.barbofusLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="skin-card__cta"
+                  title={t("gallery.actions.barbofus")}
+                >
+                  <span className="skin-card__cta-icon" aria-hidden="true">
+                    <img src="/icons/barbofus.svg" alt="" />
+                  </span>
+                  <span className="sr-only">{t("gallery.actions.barbofus")}</span>
+                </a>
+              ) : (
+                <span className="skin-card__cta skin-card__cta--disabled">{t("gallery.actions.unavailable")}</span>
+              )}
+              {entry.souffLink ? (
+                <a
+                  href={entry.souffLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="skin-card__cta"
+                  title={t("gallery.actions.souff")}
+                >
+                  <span className="skin-card__cta-icon" aria-hidden="true">
+                    <img src="/icons/souff.svg" alt="" />
+                  </span>
+                  <span className="sr-only">{t("gallery.actions.souff")}</span>
+                </a>
+              ) : (
+                <span className="skin-card__cta skin-card__cta--disabled">{t("gallery.actions.unavailable")}</span>
+              )}
+              <button
+                type="button"
                 className="skin-card__cta"
-                title={t("gallery.actions.barbofus")}
+                onClick={handleCopy}
+                disabled={!lookLoaded || !canCopy}
               >
                 <span className="skin-card__cta-icon" aria-hidden="true">
-                  <img src="/icons/barbofus.svg" alt="" />
+                  <img src="/icons/copy.svg" alt="" />
                 </span>
-                <span className="sr-only">{t("gallery.actions.barbofus")}</span>
-              </a>
-            ) : (
-              <span className="skin-card__cta skin-card__cta--disabled">{t("gallery.actions.unavailable")}</span>
-            )}
-            {entry.souffLink ? (
-              <a
-                href={entry.souffLink}
-                target="_blank"
-                rel="noreferrer"
+                <span className="sr-only">{t("gallery.actions.copy")}</span>
+              </button>
+              <button
+                type="button"
                 className="skin-card__cta"
-                title={t("gallery.actions.souff")}
+                onClick={handleShare}
+                disabled={!lookLoaded || !canShare}
               >
                 <span className="skin-card__cta-icon" aria-hidden="true">
-                  <img src="/icons/souff.svg" alt="" />
+                  <img src="/icons/share.svg" alt="" />
                 </span>
-                <span className="sr-only">{t("gallery.actions.souff")}</span>
-              </a>
-            ) : (
-              <span className="skin-card__cta skin-card__cta--disabled">{t("gallery.actions.unavailable")}</span>
-            )}
-            <button type="button" className="skin-card__cta" onClick={handleCopy} disabled={!lookLoaded}>
-              <span className="skin-card__cta-icon" aria-hidden="true">
-                <img src="/icons/copy.svg" alt="" />
-              </span>
-              <span className="sr-only">{t("gallery.actions.copy")}</span>
-            </button>
-            <button type="button" className="skin-card__cta" onClick={handleShare}>
-              <span className="skin-card__cta-icon" aria-hidden="true">
-                <img src="/icons/share.svg" alt="" />
-              </span>
-              <span className="sr-only">{t("gallery.actions.share")}</span>
-            </button>
+                <span className="sr-only">{t("gallery.actions.share")}</span>
+              </button>
+            </div>
+          </div>
+          <div className="gallery-detail__info">
+            <div className="gallery-detail__meta">
+              <h2>{entry.title}</h2>
+              {entry.subtitle ? <p>{entry.subtitle}</p> : null}
+              <div className="skin-card__palette">
+                <ul className="skin-card__swatches" role="list">
+                  {entry.palette.map((hex) => (
+                    <li key={`${entry.id}-${hex}`} className="skin-card__swatch">
+                      <span style={{ backgroundColor: hex }} aria-label={hex} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <div className="gallery-detail__equipment">
+              <h3>{t("gallery.itemsTitle")}</h3>
+              <ul className="skin-card__list" role="list">
+                {entry.items.map((item) => {
+                  const slotLabelKey = ITEM_TYPE_LABEL_KEYS[item.slotType];
+                  const slotLabel = slotLabelKey ? t(slotLabelKey) : item.slotType;
+                  const itemName = item.name ?? slotLabel;
+                  const content = (
+                    <>
+                      {item.imageUrl ? (
+                        <span className="skin-card__list-thumb" aria-hidden="true">
+                          <img src={item.imageUrl} alt="" loading="lazy" />
+                        </span>
+                      ) : null}
+                      <span className="skin-card__list-text">{itemName}</span>
+                    </>
+                  );
+                  return (
+                    <li key={`${entry.id}-${item.id}`} className="skin-card__list-item">
+                      <span className="skin-card__list-type">{slotLabel}</span>
+                      <div className="skin-card__list-actions">
+                        {item.url ? (
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="skin-card__list-link"
+                          >
+                            {content}
+                          </a>
+                        ) : (
+                          <span className="skin-card__list-link skin-card__list-link--static">{content}</span>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           </div>
         </div>
       </div>
