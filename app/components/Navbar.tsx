@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import Router from "next/router";
 import {
   Fragment,
   useCallback,
@@ -41,8 +41,9 @@ export function Navbar({
   enableThemeToggle = false,
   className,
 }: NavbarProps) {
-  const pathname = usePathname();
-  const router = useRouter();
+  const [activePath, setActivePath] = useState<string>(() =>
+    typeof window === "undefined" ? "/" : window.location.pathname
+  );
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -59,6 +60,61 @@ export function Navbar({
   const themeTriggerRef = useRef<HTMLButtonElement>(null);
 
   useLockBody(mobileOpen || searchOpen);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const parsePath = (url: string) => {
+      try {
+        const parsed = new URL(url, window.location.origin);
+        return parsed.pathname;
+      } catch {
+        return url.startsWith("/") ? url : `/${url}`;
+      }
+    };
+
+    const updatePath = (url?: string) => {
+      const nextPath = url ? parsePath(url) : window.location.pathname;
+      setActivePath(nextPath);
+    };
+
+    const handleRouteChange = (url: string) => {
+      updatePath(url);
+    };
+
+    const handlePopState = () => updatePath();
+
+    updatePath();
+
+    Router.events?.on("routeChangeComplete", handleRouteChange);
+    Router.events?.on("hashChangeComplete", handleRouteChange);
+    window.addEventListener("popstate", handlePopState);
+
+    const originalPushState = window.history.pushState;
+    const originalReplaceState = window.history.replaceState;
+
+    const wrapHistory = (
+      original: typeof window.history.pushState
+    ): typeof window.history.pushState =>
+      function patched(this: History, ...args) {
+        const result = original.apply(this, args);
+        updatePath();
+        return result;
+      };
+
+    window.history.pushState = wrapHistory(originalPushState);
+    window.history.replaceState = wrapHistory(originalReplaceState);
+
+    return () => {
+      Router.events?.off("routeChangeComplete", handleRouteChange);
+      Router.events?.off("hashChangeComplete", handleRouteChange);
+      window.removeEventListener("popstate", handlePopState);
+      window.history.pushState = originalPushState;
+      window.history.replaceState = originalReplaceState;
+    };
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -206,17 +262,17 @@ export function Navbar({
 
   const isActive = useCallback(
     (href: string) => {
-      if (!pathname) return false;
+      if (!activePath) return false;
       if (href === "/") {
-        return pathname === "/";
+        return activePath === "/";
       }
-      return pathname.startsWith(href);
+      return activePath.startsWith(href);
     },
-    [pathname]
+    [activePath]
   );
 
   const navigateAndClose = (href: string) => {
-    router.push(href);
+    Router.push(href);
     setMobileOpen(false);
   };
 

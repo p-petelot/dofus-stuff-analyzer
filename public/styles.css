@@ -91,7 +91,7 @@ a {
 
 .page {
   min-height: 100vh;
-  padding: 5px 14px 24px;
+  padding: 120px 14px 32px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -4342,7 +4342,7 @@ a {
 
 @media (max-width: 680px) {
   .page {
-    padding-top: 32px;
+    padding-top: 104px;
   }
 
     .skin-card__body {

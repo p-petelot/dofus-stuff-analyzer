@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import Router from "next/router";
 import {
   useCallback,
   useEffect,
@@ -43,7 +43,6 @@ function flattenLinks(links: NavLink[]): SearchItem[] {
 }
 
 export function SearchCommand({ links, open, onClose }: SearchCommandProps) {
-  const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
@@ -107,9 +106,9 @@ export function SearchCommand({ links, open, onClose }: SearchCommandProps) {
   const handleNavigate = useCallback(
     (href: string) => {
       onClose();
-      router.push(href);
+      Router.push(href);
     },
-    [onClose, router]
+    [onClose]
   );
 
   if (!open) {
