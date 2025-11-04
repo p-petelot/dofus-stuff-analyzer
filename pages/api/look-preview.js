@@ -216,6 +216,55 @@ export function buildRendererUrl(tokenBase64, size = DEFAULT_RENDER_SIZE) {
   return `${DOFUS_RENDERER_BASE_URL}/${encodedHex}/full/1/${resolvedSize}_${resolvedSize}.png`;
 }
 
+function numericColorToHex(value) {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  const numeric = Math.max(0, Math.min(0xffffff, Math.trunc(value)));
+  return `#${numeric.toString(16).padStart(6, "0")}`.toUpperCase();
+}
+
+function buildPlaceholderPreviewPayload(requested, warnings = []) {
+  const size = Number.isFinite(requested?.size) ? Math.max(64, Math.min(1024, requested.size)) : DEFAULT_RENDER_SIZE;
+  const palette = Array.isArray(requested?.colors)
+    ? requested.colors.map(numericColorToHex).filter(Boolean)
+    : [];
+  const fallbackPalette = ["#1F2937", "#4B5563", "#9CA3AF", "#D1D5DB"];
+  const colors = palette.length ? palette.slice(0, 6) : fallbackPalette;
+  const stripeWidth = size / colors.length;
+  const stripes = colors
+    .map((hex, index) => {
+      const x = (index * stripeWidth).toFixed(2);
+      return `<rect x="${x}" y="0" width="${stripeWidth.toFixed(2)}" height="${size}" fill="${hex}" />`;
+    })
+    .join("\n  ");
+  const labelGender = requested?.gender === "f" ? "♀" : "♂";
+  const labelBreed = Number.isFinite(requested?.breedId) ? `#${requested.breedId}` : "?";
+  const label = `${labelGender} ${labelBreed}`;
+  const fontSize = Math.max(18, Math.round(size / 16));
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
+  <rect width="100%" height="100%" fill="#0F172A" />
+  ${stripes}
+  <rect x="0" y="${(size * 0.75).toFixed(2)}" width="${size}" height="${(size * 0.25).toFixed(2)}" fill="rgba(15,23,42,0.72)" />
+  <text x="50%" y="${(size * 0.9).toFixed(2)}" fill="#F8FAFC" font-family="'DM Sans', 'Helvetica Neue', Arial, sans-serif" font-weight="600" font-size="${fontSize}" text-anchor="middle">${label}</text>
+</svg>`;
+  const buffer = Buffer.from(svg, "utf8");
+  const base64 = buffer.toString("base64");
+  return {
+    requested,
+    renderer: "placeholder",
+    base64,
+    contentType: "image/svg+xml",
+    byteLength: buffer.byteLength,
+    dataUrl: `data:image/svg+xml;base64,${base64}`,
+    lookUrl: null,
+    rendererUrl: null,
+    token: null,
+    warnings,
+  };
+}
+
 async function fetchRendererImage(rendererUrl) {
   const response = await fetch(rendererUrl);
   if (!response.ok) {
@@ -330,6 +379,7 @@ async function fetchSouffRenderer(payload) {
 
 export default async function handler(req, res) {
   let warnings = [];
+  let requestedDescriptor = null;
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
     res.status(405).json({ error: "Méthode non autorisée" });
@@ -379,7 +429,6 @@ export default async function handler(req, res) {
       direction: directionValue,
     });
 
-    warnings = [];
     const requested = {
       breedId: numericBreedId,
       gender: normalizedGender,
@@ -391,6 +440,7 @@ export default async function handler(req, res) {
       animation: animationValue,
       direction: directionValue,
     };
+    requestedDescriptor = requested;
 
     try {
       const { base64, contentType, byteLength } = await fetchSouffRenderer(souffPayload);
@@ -460,7 +510,16 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const payload = warnings.length ? { error: message, warnings } : { error: message };
+    const finalWarnings = [...warnings];
+    if (message) {
+      finalWarnings.push(message);
+    }
+    if (requestedDescriptor) {
+      const placeholder = buildPlaceholderPreviewPayload(requestedDescriptor, finalWarnings);
+      res.status(200).json(placeholder);
+      return;
+    }
+    const payload = finalWarnings.length ? { error: message, warnings: finalWarnings } : { error: message };
     res.status(502).json(payload);
   }
 }
