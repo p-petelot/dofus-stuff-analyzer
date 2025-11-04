@@ -9,6 +9,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useId,
 } from "react";
 import { useLanguage } from "../../lib/i18n";
 import {
@@ -60,22 +61,101 @@ export function Navbar({
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeKey>(() => DEFAULT_THEME_KEY);
+  const [indicator, setIndicator] = useState({
+    width: 0,
+    left: 0,
+    opacity: 0,
+  });
 
   const scrollDirection = useScrollDirection({ threshold: 6 });
   const mobileDrawerRef = useRef<HTMLDivElement>(null);
+  const navListRef = useRef<HTMLUListElement>(null);
   const themeMenuRef = useRef<HTMLDivElement>(null);
   const themeTriggerRef = useRef<HTMLButtonElement>(null);
   const languageMenuRef = useRef<HTMLDivElement>(null);
   const languageTriggerRef = useRef<HTMLButtonElement>(null);
+  const dropdownIntentRef = useRef<number | null>(null);
+  const indicatorTargetRef = useRef<HTMLElement | null>(null);
 
   const { language, languages: languageOptions, setLanguage, t } = useLanguage();
+  const gradientId = useId();
+  const resolvedLinks = useMemo(() => links, [links]);
 
   const closePreferenceMenus = useCallback(() => {
     setThemeMenuOpen(false);
     setLanguageMenuOpen(false);
   }, []);
 
+  const clearDropdownIntent = useCallback(() => {
+    if (dropdownIntentRef.current !== null) {
+      window.clearTimeout(dropdownIntentRef.current);
+      dropdownIntentRef.current = null;
+    }
+  }, []);
+
+  const openDropdown = useCallback(
+    (href: string | null) => {
+      clearDropdownIntent();
+      setDropdownOpen(href);
+    },
+    [clearDropdownIntent]
+  );
+
+  const closeDropdown = useCallback(() => {
+    clearDropdownIntent();
+    setDropdownOpen(null);
+  }, [clearDropdownIntent]);
+
+  const scheduleDropdownClose = useCallback(() => {
+    clearDropdownIntent();
+    dropdownIntentRef.current = window.setTimeout(() => {
+      setDropdownOpen(null);
+      dropdownIntentRef.current = null;
+    }, 140);
+  }, [clearDropdownIntent]);
+
+  const updateIndicator = useCallback((element: HTMLElement | null) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (!navListRef.current) {
+      indicatorTargetRef.current = element;
+      return;
+    }
+
+    if (!element) {
+      indicatorTargetRef.current = null;
+      setIndicator((prev) => ({ ...prev, opacity: 0 }));
+      return;
+    }
+
+    indicatorTargetRef.current = element;
+    const listRect = navListRef.current.getBoundingClientRect();
+    const elementRect = element.getBoundingClientRect();
+
+    setIndicator({
+      width: elementRect.width,
+      left: elementRect.left - listRect.left,
+      opacity: 1,
+    });
+  }, []);
+
+  const resetIndicatorToActive = useCallback(() => {
+    if (!navListRef.current) {
+      return;
+    }
+    const activeElement = navListRef.current.querySelector<HTMLElement>(
+      '[data-active-link="true"]'
+    );
+    updateIndicator(activeElement ?? null);
+  }, [updateIndicator]);
+
   useLockBody(mobileOpen || searchOpen);
+
+  useEffect(() => {
+    return () => clearDropdownIntent();
+  }, [clearDropdownIntent]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -99,6 +179,10 @@ export function Navbar({
     const handleRouteChange = (url: string) => {
       updatePath(url);
       closePreferenceMenus();
+      setDropdownOpen(null);
+      setMobileOpen(false);
+      setMobileSection(null);
+      setSearchOpen(false);
     };
 
     const handlePopState = () => updatePath();
@@ -134,6 +218,23 @@ export function Navbar({
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleResize = () => {
+      if (indicatorTargetRef.current) {
+        updateIndicator(indicatorTargetRef.current);
+      } else {
+        resetIndicatorToActive();
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [resetIndicatorToActive, updateIndicator]);
+
+  useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 8);
     };
@@ -142,6 +243,13 @@ export function Navbar({
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    resetIndicatorToActive();
+  }, [activePath, resetIndicatorToActive, resolvedLinks]);
 
   useEffect(() => {
     if (!enableThemeToggle) {
@@ -251,10 +359,6 @@ export function Navbar({
     }
   }, [mobileOpen]);
 
-  const hideNav = scrollDirection === "down" && isScrolled;
-
-  const resolvedLinks = useMemo(() => links, [links]);
-
   const isActive = useCallback(
     (href: string) => {
       if (!activePath) return false;
@@ -271,11 +375,24 @@ export function Navbar({
     setMobileOpen(false);
   };
 
+  const brandGradientId = `${gradientId}-brand`;
+
   const resolvedBrandLogo = brand.logo ?? (
-    <svg aria-hidden="true" viewBox="0 0 32 32" className={styles.brandIcon}>
+    <svg aria-hidden="true" viewBox="0 0 40 40" className={styles.brandIcon}>
+      <defs>
+        <linearGradient id={brandGradientId} x1="10%" y1="5%" x2="90%" y2="95%">
+          <stop offset="0%" stopColor="var(--highlight)" />
+          <stop offset="50%" stopColor="var(--accent-color)" />
+          <stop offset="100%" stopColor="var(--highlight-strong)" />
+        </linearGradient>
+      </defs>
       <path
-        d="M16 3c3.866 0 7 3.134 7 7 0 2.31-1.092 4.368-2.79 5.69L27 26.5a1.5 1.5 0 0 1-2.598 1.5L16 18.118 7.598 28A1.5 1.5 0 0 1 5 26.5l6.79-10.81C10.092 14.368 9 12.31 9 10c0-3.866 3.134-7 7-7Z"
-        fill="currentColor"
+        fill={`url(#${brandGradientId})`}
+        d="M20.1 4.5c-8.48 0-15.35 6.87-15.35 15.35 0 6.27 3.78 11.42 9.2 13.77l-.94 2.68c-.32.9.46 1.81 1.39 1.61 4.1-.87 8.08-1.38 11.9-1.53 1.49-.06 2.39-1.76 1.57-3.06l-2.43-3.86c4.19-2.58 6.96-7.26 6.96-12.61 0-8.48-6.87-15.35-15.35-15.35Zm-.02 6.44c4.88 0 8.84 3.96 8.84 8.84 0 3.12-1.58 5.87-3.99 7.47l-7.25-11.36c-.76-1.19-2.62-.66-2.62.75 0 1.61.6 3.08 1.59 4.2l-4.18 6.21c-1.7-1.66-2.73-3.99-2.73-6.57 0-4.88 3.96-8.84 8.84-8.84Z"
+      />
+      <path
+        fill="rgba(var(--text-soft-rgb), 0.16)"
+        d="M22.44 26.12 26 31.72a.9.9 0 0 0 .74.39h.02c1 0 1.58-1.12.98-1.95l-2.6-3.68a.9.9 0 0 0-1.4-.12l-1.3 1.76Z"
       />
     </svg>
   );
@@ -360,9 +477,11 @@ export function Navbar({
       <nav
         className={classNames(
           styles.navbar,
-          hideNav && styles.navbarHidden,
+          isScrolled && styles.navbarPinned,
           className
         )}
+        data-scroll-direction={scrollDirection}
+        data-scrolled={isScrolled || undefined}
       >
         <div
           className={classNames(
@@ -382,109 +501,158 @@ export function Navbar({
           </div>
 
           <div className={styles.desktopNav}>
-            <ul className={styles.navList}>
-              {resolvedLinks.map((link) => {
-                const active = isActive(link.href);
-                if (link.children && link.children.length > 0) {
+            <div
+              className={styles.navListWrapper}
+              onMouseLeave={() => {
+                scheduleDropdownClose();
+                resetIndicatorToActive();
+              }}
+              onBlur={(event) => {
+                const next = event.relatedTarget as Node | null;
+                if (!event.currentTarget.contains(next)) {
+                  closeDropdown();
+                  resetIndicatorToActive();
+                }
+              }}
+            >
+              <ul className={styles.navList} ref={navListRef}>
+                {resolvedLinks.map((link) => {
+                  const active = isActive(link.href);
+                  if (link.children && link.children.length > 0) {
+                    const expanded = dropdownOpen === link.href;
+                    return (
+                      <li
+                        key={link.href}
+                        className={styles.navItem}
+                        onMouseEnter={() => openDropdown(link.href)}
+                        onMouseLeave={() => {
+                          scheduleDropdownClose();
+                          resetIndicatorToActive();
+                        }}
+                        onFocusCapture={() => openDropdown(link.href)}
+                        onBlur={(event) => {
+                          const next = event.relatedTarget as Node | null;
+                          if (!event.currentTarget.contains(next)) {
+                            closeDropdown();
+                            resetIndicatorToActive();
+                          }
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            const nextOpen = expanded ? null : link.href;
+                            if (nextOpen) {
+                              openDropdown(nextOpen);
+                              updateIndicator(event.currentTarget);
+                            } else {
+                              closeDropdown();
+                              resetIndicatorToActive();
+                            }
+                          }}
+                          onMouseEnter={(event) => {
+                            openDropdown(link.href);
+                            updateIndicator(event.currentTarget);
+                          }}
+                          onFocus={(event) => {
+                            openDropdown(link.href);
+                            updateIndicator(event.currentTarget);
+                          }}
+                          aria-haspopup="menu"
+                          aria-expanded={expanded}
+                          className={classNames(
+                            styles.navLink,
+                            active && styles.navLinkActive
+                          )}
+                          data-active-link={active ? "true" : undefined}
+                        >
+                          {link.label}
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 24 24"
+                            className={styles.navCaret}
+                          >
+                            <path
+                              d="M6.293 9.293a1 1 0 0 1 1.414 0L12 13.586l4.293-4.293a1 1 0 1 1 1.414 1.414l-5 5a1 1 0 0 1-1.414 0l-5-5a1 1 0 0 1 0-1.414Z"
+                              fill="currentColor"
+                            />
+                          </svg>
+                        </button>
+                        {expanded && (
+                          <div
+                            className={styles.dropdown}
+                            tabIndex={-1}
+                            onMouseEnter={() => openDropdown(link.href)}
+                            onMouseLeave={() => {
+                              scheduleDropdownClose();
+                              resetIndicatorToActive();
+                            }}
+                          >
+                            <p className={styles.dropdownLabel}>{link.label}</p>
+                            <ul className={styles.dropdownList}>
+                              {link.children.map((child) => {
+                                const childActive = isActive(child.href);
+                                return (
+                                  <li key={child.href}>
+                                    <Link
+                                      href={child.href}
+                                      aria-current={
+                                        childActive ? "page" : undefined
+                                      }
+                                      className={classNames(
+                                        styles.dropdownLink,
+                                        childActive && styles.dropdownLinkActive
+                                      )}
+                                      onClick={() => closeDropdown()}
+                                    >
+                                      <span>{child.label}</span>
+                                      <span className={styles.dropdownDesc}>
+                                        {child.desc}
+                                      </span>
+                                    </Link>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  }
+
                   return (
-                    <li
-                      key={link.href}
-                      className={styles.navItem}
-                      onMouseEnter={() => setDropdownOpen(link.href)}
-                      onMouseLeave={() => setDropdownOpen(null)}
-                      onFocusCapture={() => setDropdownOpen(link.href)}
-                      onBlur={(event) => {
-                        const next = event.relatedTarget as Node | null;
-                        if (!event.currentTarget.contains(next)) {
-                          setDropdownOpen(null);
-                        }
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDropdownOpen((prev) =>
-                            prev === link.href ? null : link.href
-                          )
-                        }
-                        aria-haspopup="menu"
-                        aria-expanded={dropdownOpen === link.href}
+                    <li key={link.href} className={styles.navItem}>
+                      <Link
+                        href={link.href}
                         className={classNames(
                           styles.navLink,
                           active && styles.navLinkActive
                         )}
+                        aria-current={active ? "page" : undefined}
+                        data-active-link={active ? "true" : undefined}
+                        onMouseEnter={(event) =>
+                          updateIndicator(event.currentTarget)
+                        }
+                        onFocus={(event) =>
+                          updateIndicator(event.currentTarget)
+                        }
                       >
                         {link.label}
-                        <svg
-                          aria-hidden="true"
-                          viewBox="0 0 24 24"
-                          className={styles.navCaret}
-                        >
-                          <path
-                            d="M6.293 9.293a1 1 0 0 1 1.414 0L12 13.586l4.293-4.293a1 1 0 1 1 1.414 1.414l-5 5a1 1 0 0 1-1.414 0l-5-5a1 1 0 0 1 0-1.414Z"
-                            fill="currentColor"
-                          />
-                        </svg>
-                      </button>
-                      <span
-                        className={styles.navUnderline}
-                        data-active={active || undefined}
-                        aria-hidden
-                      />
-                      {dropdownOpen === link.href && (
-                        <div className={styles.dropdown} tabIndex={-1}>
-                          <p className={styles.dropdownLabel}>{link.label}</p>
-                          <ul className={styles.dropdownList}>
-                            {link.children.map((child) => {
-                              const childActive = isActive(child.href);
-                              return (
-                                <li key={child.href}>
-                                  <Link
-                                    href={child.href}
-                                    aria-current={
-                                      childActive ? "page" : undefined
-                                    }
-                                    className={classNames(
-                                      styles.dropdownLink,
-                                      childActive && styles.dropdownLinkActive
-                                    )}
-                                  >
-                                    <span>{child.label}</span>
-                                    <span className={styles.dropdownDesc}>
-                                      {child.desc}
-                                    </span>
-                                  </Link>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </div>
-                      )}
+                      </Link>
                     </li>
                   );
-                }
-
-                return (
-                  <li key={link.href} className={styles.navItem}>
-                    <Link
-                      href={link.href}
-                      className={classNames(
-                        styles.navLink,
-                        active && styles.navLinkActive
-                      )}
-                      aria-current={active ? "page" : undefined}
-                    >
-                      {link.label}
-                    </Link>
-                    <span
-                      className={styles.navUnderline}
-                      data-active={active || undefined}
-                      aria-hidden
-                    />
-                  </li>
-                );
-              })}
-            </ul>
+                })}
+              </ul>
+              <span
+                className={styles.navIndicator}
+                style={{
+                  width: indicator.width,
+                  transform: `translateX(${indicator.left}px)`,
+                  opacity: indicator.opacity,
+                }}
+                aria-hidden
+              />
+            </div>
 
             <div className={styles.actions}>
               {enableSearch && (
