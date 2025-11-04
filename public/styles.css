@@ -1,14 +1,14 @@
 :root {
   --accent-color: #c9a227;
-  --navbar-surface: rgba(255, 255, 255, 0.82);
-  --navbar-border: rgba(15, 23, 42, 0.08);
-  --navbar-shadow: 0 30px 70px -40px rgba(15, 23, 42, 0.45);
-  --navbar-text: #0f172a;
-  --navbar-muted: rgba(15, 23, 42, 0.56);
-  --navbar-icon: rgba(15, 23, 42, 0.65);
+  --navbar-surface: var(--card);
+  --navbar-border: var(--card-border);
+  --navbar-shadow: var(--shadow);
+  --navbar-text: var(--text);
+  --navbar-muted: var(--text-muted);
+  --navbar-icon: rgba(var(--text-soft-rgb), 0.72);
   --navbar-overlay: rgba(8, 11, 19, 0.7);
-  --mobile-panel: rgba(248, 250, 252, 0.9);
-  --mobile-panel-strong: rgba(255, 255, 255, 0.55);
+  --mobile-panel: rgba(var(--surface-9-rgb), 0.92);
+  --mobile-panel-strong: rgba(var(--surface-10-rgb), 0.88);
   --bg: #050816;
   --bg-accent: radial-gradient(circle at top right, rgba(var(--accent-glow-rgb), 0.18), transparent 55%),
     radial-gradient(circle at bottom left, rgba(var(--accent-sky-rgb), 0.16), transparent 50%),
@@ -75,8 +75,8 @@ html.dark,
   --navbar-muted: rgba(226, 232, 240, 0.7);
   --navbar-icon: rgba(226, 232, 240, 0.7);
   --navbar-overlay: rgba(4, 6, 14, 0.75);
-  --mobile-panel: rgba(15, 23, 42, 0.92);
-  --mobile-panel-strong: rgba(15, 23, 42, 0.75);
+  --mobile-panel: rgba(var(--surface-8-rgb), 0.94);
+  --mobile-panel-strong: rgba(var(--surface-9-rgb), 0.82);
 }
 
 * {
@@ -114,7 +114,7 @@ a {
 
 .page {
   min-height: 100vh;
-  padding: 120px 14px 32px;
+  padding: 96px 14px 32px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -128,19 +128,17 @@ a {
 
 
 
+
 .preference-switchers {
-  position: absolute;
-  top: 18px;
-  left: 18px;
-  right: 18px;
+  position: relative;
+  margin: 16px auto 0;
+  width: min(1120px, 100%);
+  padding: 0 1rem;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 12px;
   z-index: 10;
-}
-
-.preference-switchers .language-switcher {
-  margin-left: auto;
 }
 
 .preference-switcher {

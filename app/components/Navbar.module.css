@@ -2,9 +2,10 @@
   position: sticky;
   top: 0;
   z-index: 50;
-  padding: 0.75rem 1rem;
+  width: 100%;
+  padding: 0.5rem 1rem 0.75rem;
   transition: transform 180ms ease, opacity 180ms ease;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(6px);
 }
 
 .navbarHidden {
@@ -13,7 +14,7 @@
 
 .inner {
   margin: 0 auto;
-  max-width: min(1120px, 100%);
+  width: min(1120px, 100%);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 1.25rem;

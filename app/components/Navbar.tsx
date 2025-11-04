@@ -128,6 +128,9 @@ export function Navbar({
   }, []);
 
   useEffect(() => {
+    if (!enableThemeToggle) {
+      return;
+    }
     setHasMounted(true);
     if (typeof window === "undefined") {
       return;
@@ -139,10 +142,10 @@ export function Navbar({
     if (stored) {
       setTheme(stored);
     }
-  }, []);
+  }, [enableThemeToggle]);
 
   useEffect(() => {
-    if (!hasMounted || typeof window === "undefined") {
+    if (!enableThemeToggle || !hasMounted || typeof window === "undefined") {
       return;
     }
 
@@ -167,10 +170,10 @@ export function Navbar({
     }
 
     return undefined;
-  }, [hasMounted, theme]);
+  }, [enableThemeToggle, hasMounted, theme]);
 
   useEffect(() => {
-    if (!themeMenuOpen) {
+    if (!enableThemeToggle || !themeMenuOpen) {
       return;
     }
 
@@ -196,7 +199,7 @@ export function Navbar({
       document.removeEventListener("mousedown", handleClick);
       document.removeEventListener("keydown", handleKey);
     };
-  }, [themeMenuOpen]);
+  }, [enableThemeToggle, themeMenuOpen]);
 
   useEffect(() => {
     if (!mobileOpen) {
