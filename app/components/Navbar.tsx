@@ -373,56 +373,106 @@ export function Navbar({
     setMobileOpen(false);
   };
 
-  const brandMarkGradientId = `${gradientId}-mark`;
-  const brandHighlightGradientId = `${brandMarkGradientId}-highlight`;
-  const brandSheenId = `${brandMarkGradientId}-sheen`;
+  const brandShellGradientId = `${gradientId}-shell`;
+  const brandAuraGradientId = `${brandShellGradientId}-aura`;
+  const brandHighlightGradientId = `${brandShellGradientId}-highlight`;
+  const brandSwirlGradientId = `${brandShellGradientId}-swirl`;
 
   const resolvedBrandLogo = brand.logo ?? (
-    <svg aria-hidden="true" viewBox="0 0 120 120" className={styles.brandIcon}>
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 160 160"
+      focusable="false"
+      className={styles.brandIcon}
+    >
       <defs>
-        <linearGradient id={brandMarkGradientId} x1="18%" y1="12%" x2="82%" y2="92%">
-          <stop offset="0%" stopColor="var(--logo-primary)" />
-          <stop offset="52%" stopColor="var(--logo-secondary)" />
-          <stop offset="100%" stopColor="var(--logo-depth)" />
-        </linearGradient>
-        <linearGradient
-          id={brandHighlightGradientId}
-          x1="32%"
-          y1="18%"
-          x2="100%"
-          y2="100%"
-        >
-          <stop offset="0%" stopColor="var(--logo-highlight)" />
-          <stop offset="100%" stopColor="var(--logo-highlight-strong)" />
-        </linearGradient>
-        <radialGradient id={brandSheenId} cx="48%" cy="32%" r="62%">
-          <stop offset="0%" stopColor="rgba(255, 255, 255, 0.35)" />
-          <stop offset="62%" stopColor="rgba(255, 255, 255, 0.08)" />
-          <stop offset="100%" stopColor="rgba(255, 255, 255, 0)" />
+        <radialGradient id={brandShellGradientId} cx="52%" cy="28%" r="72%">
+          <stop offset="0%" stopColor="var(--logo-highlight)" stopOpacity="0.18" />
+          <stop offset="38%" stopColor="var(--logo-secondary)" stopOpacity="0.92" />
+          <stop offset="100%" stopColor="var(--logo-primary)" />
         </radialGradient>
+        <radialGradient id={brandAuraGradientId} cx="44%" cy="68%" r="46%">
+          <stop offset="0%" stopColor="rgba(255, 255, 255, 0.36)" />
+          <stop offset="75%" stopColor="rgba(255, 255, 255, 0.0)" />
+        </radialGradient>
+        <linearGradient id={brandHighlightGradientId} x1="12%" y1="12%" x2="88%" y2="88%">
+          <stop offset="0%" stopColor="rgba(255, 255, 255, 0.75)" />
+          <stop offset="42%" stopColor="rgba(255, 255, 255, 0.22)" />
+          <stop offset="100%" stopColor="rgba(255, 255, 255, 0)" />
+        </linearGradient>
+        <linearGradient id={brandSwirlGradientId} x1="0%" y1="50%" x2="100%" y2="50%">
+          <stop offset="0%" stopColor="var(--logo-highlight)" />
+          <stop offset="58%" stopColor="var(--logo-highlight-strong)" />
+          <stop offset="100%" stopColor="var(--logo-secondary)" />
+        </linearGradient>
       </defs>
+      <g transform="translate(16 8)">
+        <path
+          d="M64 0C41.5 0 22 30.4 22 68s19.5 68 42 68 42-30.4 42-68S86.5 0 64 0Z"
+          fill={`url(#${brandShellGradientId})`}
+        />
+        <path
+          d="M64 4c-19 0-36 28-36 64 0 30.7 14.8 55.6 32.8 59.4a4 4 0 0 0 1.6-.02c18-3.6 32.6-28.7 32.6-59.38C95 32 83 4 64 4Z"
+          fill="rgba(12, 20, 26, 0.16)"
+          opacity="0.4"
+        />
+        <path
+          d="M78.6 37.2c-2.6-6.2-8.4-10.2-15.2-10.2-6.3 0-12 3.2-14.9 8.6L41 51.6a8 8 0 0 1-7 4.2h-7.8c-1.7 0-3 1.5-2.7 3.2l2.1 12.3c.2 1.1 1 2 2 2.4l5.4 2c2.8 1 5 3 6.4 5.6l4.8 9.3c.5 1 1.5 1.7 2.6 1.7h10.4c1.9 0 3.5 1.4 3.7 3.3l1.4 11.8c.2 1.5 1.5 2.6 3 2.6h12.4c1.4 0 2.7-1 3-2.4l4.5-19.6c.3-1.1.9-2.1 1.8-2.8l8.3-6.5c.8-.6 1.2-1.6 1.1-2.6l-1.4-15.6c-.1-1.2-.7-2.2-1.7-2.9l-5.5-3.8c-1.1-.7-1.9-1.8-2.2-3.1l-2.8-11.2Z"
+          fill="rgba(5, 11, 16, 0.35)"
+          opacity="0.65"
+        />
+        <path
+          d="M81.8 47.6c-3.5 0-6.6 2-8.2 5.1l-2.8 5.3c-.5 1-1.5 1.7-2.6 1.7h-7.8c-6.3 0-11.4 5.1-11.4 11.4v3.8c0 2.8 1 5.6 2.9 7.7l8.6 9.5c1 1.1 2.4 1.7 3.8 1.7h12.8c9.8 0 17.8-8 17.8-17.8V62.4c0-5.6-4.6-10.2-10.2-10.2H81.8Z"
+          fill="rgba(12, 28, 40, 0.35)"
+          opacity="0.5"
+        />
+        <path
+          d="M73.5 40.4c-2.1-4.3-6.6-7-11.5-7-4.8 0-9.1 2.6-11.2 6.8L44 54.8a6 6 0 0 1-5.3 3.3h-5.6c-1.2 0-2.1 1.1-1.8 2.3l1.5 8.8c.1.8.7 1.5 1.5 1.8l3.9 1.5c2 0.8 3.6 2.3 4.6 4.2l3.4 6.6a2.8 2.8 0 0 0 2.5 1.6h7.3c1.3 0 2.4 1 2.5 2.3l1 8.4c.2 1.1 1.1 2 2.2 2h8.7c1 0 1.9-.7 2.2-1.7l3.2-14c.2-.8.7-1.5 1.3-2l6.1-4.6c.6-.4.9-1.1.8-1.8l-1-11.2c-.1-.8-.5-1.5-1.2-1.9l-4-2.7c-.8-.5-1.4-1.3-1.6-2.2l-2-8Z"
+          fill="var(--logo-depth)"
+        />
+        <path
+          d="M63.6 53.5c-1.8 3.5-5.4 5.7-9.3 5.7h-4.8c-1.4 0-2.4 1.4-1.9 2.7 4.6 12.4 16.3 20.7 29.6 20.7h7.2c.9 0 1.7-.7 1.8-1.6l1.1-8.8c.1-.8-.4-1.5-1.1-1.8l-6.4-2.4c-.8-.3-1.3-1-1.4-1.8l-.6-6.3c-.1-1.1-.9-2-2-2.2l-6.1-1.2a2.2 2.2 0 0 1-1.7-3.1l2.5-5.3c.4-.8-.3-1.7-1.2-1.7-2.8.2-5.5 1.9-6.7 4.3Z"
+          fill="rgba(255, 255, 255, 0.08)"
+        />
+        <path
+          d="M64 16c-10 0-20.8 9.4-26.5 23.3 5.8-7 13.6-11 21.5-11 16.6 0 30 16.3 30 36.4 0 8.1-2.2 15.5-6 21.3 9-7.8 15-20.9 15-35 0-19.3-14.8-35-33-35Z"
+          fill={`url(#${brandAuraGradientId})`}
+        />
+        <path
+          d="M100.6 48.8c4.2-1.2 8.5 1.9 8.7 6.3.5 8.2-3.6 16.2-10.6 21l-24.2 16.6c-1.1.8-2.6 1-3.9.5l-7.1-2.9c-1.1-.5-2.3.4-2.1 1.6l1.8 11.6c.2 1.6 1.6 2.7 3.2 2.5 23.5-3.5 41.1-24 41.1-48.9 0-2.8-2.7-5-5.6-4.3l-1.3.3c-1.4.4-2.7-.9-2.4-2.3l.6-1.9c.2-.6.7-1.1 1.3-1.3Z"
+          fill={`url(#${brandHighlightGradientId})`}
+          opacity="0.75"
+        />
+        <path
+          d="M38 92c4.6 8.8 14 14.8 24.2 14.8 6.8 0 13.5-2.5 18.8-7l1-.8c.8-.6 1.9-.4 2.4.4l1.6 2.8c.3.6.2 1.3-.3 1.8C78.8 111 70.5 115 61 115 48.5 115 37 108.3 30.8 97.4c-.5-.9-.1-2 .8-2.4l3.8-1.9c.9-.5 2.1-.1 2.6.9Z"
+          fill={`url(#${brandSwirlGradientId})`}
+        />
+        <path
+          d="M94.8 28.2c1-.6 2.3-.2 2.7.8l2.4 5.7c.3.7 0 1.5-.7 1.9C81 47.5 71 68.7 71 90.8v2c0 1.3-1.3 2.1-2.5 1.6l-6.2-2.6c-.8-.4-1.2-1.2-1-2.1 4.5-21.4 17.5-40 33.5-52.5Z"
+          fill="rgba(255, 255, 255, 0.16)"
+        />
+        <path
+          d="M41.8 32c-1-.5-2.2 0-2.6 1l-3.2 7.5c-.3.8.1 1.7.9 2 11.2 4.5 21 13.4 26.8 24.5.5 1 1.7 1.4 2.6.8l5.3-3.2c.7-.5 1-1.4.6-2.2-6.4-13.4-17.7-24-30.4-30.4Z"
+          fill="rgba(255, 255, 255, 0.12)"
+        />
+      </g>
       <path
-        d="M34.22 21.05 31.23 5.52C30.08.43 24.73-2.38 20 0L10.3 4.53l2.88 18.33c.52 3.3 3.37 5.76 6.7 5.76h9.76c1.79 0 3.15-1.61 2.91-3.57Z"
-        fill="var(--logo-secondary)"
+        d="M32 96c-2 6.6 1.4 13.6 7.8 16.3l12.7 5.4c1 .4 2-.4 1.9-1.5l-.5-5.6c-.1-1 1-1.7 1.8-1.2l6.8 4.1c.8.5 1.9.2 2.3-.7l2.6-5.6c.4-.9 1.6-1.1 2.3-.4l4.7 4.7c.6.6 1.6.6 2.2 0l6.6-6.6c.7-.7 1.8-.6 2.4.2l5.4 7.2c.6.8 1.8.8 2.5.1l9.4-9.4c.7-.7.6-1.8-.2-2.4L82 90.5"
+        fill="none"
+        stroke={`url(#${brandSwirlGradientId})`}
+        strokeWidth="4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
         opacity="0.9"
       />
       <path
-        d="M95.27 5.77c3.79-1.6 8 .44 9.16 4.36l4.05 13.38c.56 1.85-.74 3.69-2.65 3.69H93.02c-1.44 0-2.72-.87-3.27-2.21l-4.98-11.98c-1.21-2.92.18-6.3 3.12-7.6Z"
-        fill="var(--logo-secondary)"
-        opacity="0.94"
-      />
-      <path
-        d="M78.58 14.17c-7 0-13.21 4.26-15.83 10.84l-1.84 4.72c-.72 1.85-2.49 3.06-4.45 3.06H49c-20.55 0-37.22 16.68-37.22 37.22v8.86c0 11.29 4.48 22.12 12.46 30.11l13.16 13.16c4.07 4.07 9.6 6.37 15.36 6.37h25.36c19.46 0 35.24-15.78 35.24-35.24V50.55c0-13.98-11.33-25.31-25.31-25.31h-5.98c-1.79 0-3.38-1.12-3.95-2.79l-1.84-5.28c-1.87-5.38-6.97-8.99-12.49-8.99Z"
-        fill={`url(#${brandMarkGradientId})`}
-      />
-      <path
-        d="M50.86 73.33c15.34 5.53 27.24 18.5 31.44 34.48H61.76c-5.36 0-10.51-2.13-14.32-5.94L36.07 91.49c3.52-7.74 9.6-13.86 16.99-18.16Z"
-        fill={`url(#${brandHighlightGradientId})`}
-      />
-      <path
-        d="M84.64 32.78c-12.19 0-23 6.95-28.41 17.59-1.94 3.82-5.84 6.22-10.1 6.22H38.4c-3 0-5.85 1.63-7.38 4.27-3.71 6.31-3.44 14.19.67 20.17l1.62 2.36C47.9 63.32 73.45 55.77 96.5 63.01c3.94 1.24 8.11-.79 9.78-4.53l2.18-5.04c3.88-8.97-2.73-18.99-12.36-18.99h-10.8c-.63 0-1.19-.4-1.4-.99l-.95-2.61c-.72-1.98-2.58-3.3-4.63-3.3Z"
-        fill={`url(#${brandSheenId})`}
-        opacity="0.9"
+        d="M124 64c2.2-5.4-.7-11.7-6.4-13.6l-12.6-4.2c-.9-.3-1.8.4-1.7 1.4l.3 4.8c.1 1-1 1.7-1.8 1.2l-6.9-3.9c-.8-.5-1.9-.1-2.2.8l-2.1 6c-.3.9-1.5 1.2-2.2.5l-4.8-4.7c-.7-.6-1.7-.6-2.3 0l-7.6 7.6"
+        fill="none"
+        stroke={`url(#${brandSwirlGradientId})`}
+        strokeWidth="3.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity="0.65"
       />
     </svg>
   );

@@ -1,14 +1,14 @@
 :root {
   --accent-color: rgb(var(--accent-primary-rgb));
-  --navbar-surface: var(--card);
-  --navbar-border: var(--card-border);
-  --navbar-shadow: var(--shadow);
+  --navbar-surface: rgba(var(--surface-8-rgb), 0.88);
+  --navbar-border: rgba(var(--text-muted-rgb), 0.2);
+  --navbar-shadow: 0 30px 74px -40px rgba(3, 7, 18, 0.78);
   --navbar-text: var(--text);
-  --navbar-muted: var(--text-muted);
-  --navbar-icon: rgba(var(--text-soft-rgb), 0.72);
+  --navbar-muted: rgba(var(--text-soft-rgb), 0.72);
+  --navbar-icon: rgba(var(--text-soft-rgb), 0.7);
   --navbar-overlay: rgba(8, 11, 19, 0.7);
   --mobile-panel: rgba(var(--surface-9-rgb), 0.92);
-  --mobile-panel-strong: rgba(var(--surface-10-rgb), 0.88);
+  --mobile-panel-strong: rgba(var(--surface-10-rgb), 0.86);
   --bg: #050816;
   --bg-accent: radial-gradient(circle at top right, rgba(var(--accent-glow-rgb), 0.18), transparent 55%),
     radial-gradient(circle at bottom left, rgba(var(--accent-sky-rgb), 0.16), transparent 50%),
@@ -76,20 +76,49 @@
 
 html.dark,
 [data-theme="dark"] {
-  --navbar-surface: rgba(15, 23, 42, 0.78);
-  --navbar-border: rgba(148, 163, 184, 0.16);
-  --navbar-shadow: 0 30px 80px -48px rgba(0, 0, 0, 0.7);
+  --navbar-surface: rgba(var(--surface-8-rgb), 0.88);
+  --navbar-border: rgba(var(--text-muted-rgb), 0.2);
+  --navbar-shadow: 0 30px 74px -40px rgba(3, 7, 18, 0.78);
   --navbar-text: #f8fafc;
-  --navbar-muted: rgba(226, 232, 240, 0.7);
-  --navbar-icon: rgba(226, 232, 240, 0.7);
-  --navbar-overlay: rgba(4, 6, 14, 0.75);
-  --mobile-panel: rgba(var(--surface-8-rgb), 0.94);
-  --mobile-panel-strong: rgba(var(--surface-9-rgb), 0.82);
+  --navbar-muted: rgba(var(--text-soft-rgb), 0.72);
+  --navbar-icon: rgba(var(--text-soft-rgb), 0.7);
+  --navbar-overlay: rgba(8, 11, 19, 0.7);
+  --mobile-panel: rgba(var(--surface-9-rgb), 0.92);
+  --mobile-panel-strong: rgba(var(--surface-10-rgb), 0.86);
   --brand-emerald: #44e9a6;
   --brand-emerald-rgb: 68, 233, 166;
 }
 
 [data-theme="light"] {
+  --bg: #e6edf6;
+  --bg-accent: radial-gradient(
+      circle at top right,
+      rgba(var(--accent-primary-rgb), 0.12),
+      transparent 55%
+    ),
+    radial-gradient(
+      circle at bottom left,
+      rgba(var(--accent-strong-rgb), 0.12),
+      transparent 52%
+    ),
+    #e6edf6;
+  --card: rgba(var(--surface-8-rgb), 0.92);
+  --card-border: rgba(var(--text-muted-rgb), 0.26);
+  --navbar-surface: rgba(var(--surface-9-rgb), 0.94);
+  --navbar-border: rgba(15, 23, 42, 0.12);
+  --navbar-shadow: 0 26px 56px -36px rgba(15, 23, 42, 0.22);
+  --navbar-text: #0f172a;
+  --navbar-muted: rgba(71, 85, 105, 0.78);
+  --navbar-icon: rgba(71, 85, 105, 0.76);
+  --navbar-overlay: rgba(15, 23, 42, 0.45);
+  --mobile-panel: rgba(var(--surface-9-rgb), 0.9);
+  --mobile-panel-strong: rgba(var(--surface-10-rgb), 0.86);
+  --text: #0f172a;
+  --text-muted: #334155;
+  --text-rgb: 15, 23, 42;
+  --text-muted-rgb: 51, 65, 85;
+  --text-soft-rgb: 94, 106, 132;
+  --neutral-strong-rgb: 74, 88, 110;
   --logo-primary: #0b3627;
   --logo-secondary: #0f6c4b;
   --logo-depth: #05261c;
@@ -99,6 +128,15 @@ html.dark,
 }
 
 [data-theme="dofus"] {
+  --navbar-surface: rgba(var(--surface-8-rgb), 0.88);
+  --navbar-border: rgba(34, 197, 94, 0.26);
+  --navbar-shadow: 0 24px 52px -32px rgba(4, 22, 15, 0.68);
+  --navbar-text: #f6fff4;
+  --navbar-muted: rgba(var(--text-soft-rgb), 0.8);
+  --navbar-icon: rgba(var(--text-soft-rgb), 0.78);
+  --navbar-overlay: rgba(2, 9, 6, 0.7);
+  --mobile-panel: rgba(var(--surface-9-rgb), 0.9);
+  --mobile-panel-strong: rgba(var(--surface-10-rgb), 0.86);
   --logo-primary: #0a583d;
   --logo-secondary: #0fb071;
   --logo-depth: #043425;
@@ -152,12 +190,12 @@ a {
 
 .page {
   min-height: 100vh;
-  padding: 8px 14px 24px;
+  padding: 4px 14px 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
   position: relative;
-  gap: 10px;
+  gap: 6px;
 }
 
 .layout-offset {
@@ -4629,7 +4667,7 @@ a {
 
 @media (max-width: 680px) {
   .page {
-    padding-top: 64px;
+    padding-top: 52px;
   }
 
     .skin-card__body {
