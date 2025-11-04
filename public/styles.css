@@ -40,6 +40,8 @@
   --accent-indigo-rgb: 99, 102, 241;
   --accent-sky-rgb: 14, 165, 233;
   --accent-cool-rgb: 129, 199, 255;
+  --brand-emerald: #44e9a6;
+  --brand-emerald-rgb: 68, 233, 166;
   --success-rgb: 34, 197, 94;
   --success-strong-rgb: 16, 185, 129;
   --success-soft-rgb: 45, 212, 191;
@@ -77,6 +79,8 @@ html.dark,
   --navbar-overlay: rgba(4, 6, 14, 0.75);
   --mobile-panel: rgba(var(--surface-8-rgb), 0.94);
   --mobile-panel-strong: rgba(var(--surface-9-rgb), 0.82);
+  --brand-emerald: #44e9a6;
+  --brand-emerald-rgb: 68, 233, 166;
 }
 
 * {
@@ -112,18 +116,19 @@ a {
   border: 0;
 }
 
+
 .page {
   min-height: 100vh;
-  padding: 24px 14px 32px;
+  padding: 12px 14px 28px;
   display: flex;
   flex-direction: column;
   align-items: center;
   position: relative;
-  gap: 16px;
+  gap: 12px;
 }
 
 .layout-offset {
-  padding-top: 32px;
+  padding-top: 18px;
 }
 
 .collections-page {
@@ -134,7 +139,7 @@ a {
   width: min(1120px, 100%);
   margin: 0 auto;
   display: grid;
-  gap: 32px;
+  gap: 24px;
   padding: 0 12px;
 }
 

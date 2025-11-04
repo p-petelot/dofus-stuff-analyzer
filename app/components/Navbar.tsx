@@ -21,7 +21,6 @@ import {
   persistTheme,
 } from "../../lib/theme-controller";
 import { useLockBody } from "./hooks/useLockBody";
-import { useScrollDirection } from "./hooks/useScrollDirection";
 import { SearchCommand } from "./SearchCommand";
 import type { NavBrand, NavLink } from "./types";
 import styles from "./Navbar.module.css";
@@ -67,7 +66,6 @@ export function Navbar({
     opacity: 0,
   });
 
-  const scrollDirection = useScrollDirection({ threshold: 6 });
   const mobileDrawerRef = useRef<HTMLDivElement>(null);
   const navListRef = useRef<HTMLUListElement>(null);
   const themeMenuRef = useRef<HTMLDivElement>(null);
@@ -111,7 +109,7 @@ export function Navbar({
     dropdownIntentRef.current = window.setTimeout(() => {
       setDropdownOpen(null);
       dropdownIntentRef.current = null;
-    }, 140);
+    }, 320);
   }, [clearDropdownIntent]);
 
   const updateIndicator = useCallback((element: HTMLElement | null) => {
@@ -376,23 +374,33 @@ export function Navbar({
   };
 
   const brandGradientId = `${gradientId}-brand`;
+  const brandGlowId = `${brandGradientId}-glow`;
 
   const resolvedBrandLogo = brand.logo ?? (
-    <svg aria-hidden="true" viewBox="0 0 40 40" className={styles.brandIcon}>
+    <svg aria-hidden="true" viewBox="0 0 48 48" className={styles.brandIcon}>
       <defs>
         <linearGradient id={brandGradientId} x1="10%" y1="5%" x2="90%" y2="95%">
-          <stop offset="0%" stopColor="var(--highlight)" />
-          <stop offset="50%" stopColor="var(--accent-color)" />
+          <stop offset="0%" stopColor="var(--brand-emerald)" />
+          <stop offset="52%" stopColor="var(--accent-color)" />
           <stop offset="100%" stopColor="var(--highlight-strong)" />
         </linearGradient>
+        <radialGradient id={brandGlowId} cx="52%" cy="38%" r="62%">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.85)" />
+          <stop offset="45%" stopColor="rgba(255,255,255,0.18)" />
+          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+        </radialGradient>
       </defs>
       <path
         fill={`url(#${brandGradientId})`}
-        d="M20.1 4.5c-8.48 0-15.35 6.87-15.35 15.35 0 6.27 3.78 11.42 9.2 13.77l-.94 2.68c-.32.9.46 1.81 1.39 1.61 4.1-.87 8.08-1.38 11.9-1.53 1.49-.06 2.39-1.76 1.57-3.06l-2.43-3.86c4.19-2.58 6.96-7.26 6.96-12.61 0-8.48-6.87-15.35-15.35-15.35Zm-.02 6.44c4.88 0 8.84 3.96 8.84 8.84 0 3.12-1.58 5.87-3.99 7.47l-7.25-11.36c-.76-1.19-2.62-.66-2.62.75 0 1.61.6 3.08 1.59 4.2l-4.18 6.21c-1.7-1.66-2.73-3.99-2.73-6.57 0-4.88 3.96-8.84 8.84-8.84Z"
+        d="M24 3.8c-9.48 0-17.2 7.72-17.2 17.2 0 7.13 4.33 12.76 10.35 15.4l-1.05 2.7c-.38.97.5 1.99 1.53 1.77 4.52-.96 8.92-1.52 13.17-1.7 1.63-.07 2.62-1.92 1.72-3.34l-2.73-4.26c4.62-2.83 7.68-8 7.68-13.87C36.47 11.52 28.75 3.8 24 3.8Zm-.03 6.88c5.44 0 9.86 4.42 9.86 9.86 0 3.54-1.85 6.67-4.46 8.33l-8.04-12.6c-.85-1.32-2.91-.73-2.91.84 0 1.78.66 3.4 1.76 4.64l-4.63 6.84c-1.88-1.83-3.01-4.35-3.01-7.2 0-5.44 4.42-9.86 9.86-9.86Z"
       />
       <path
-        fill="rgba(var(--text-soft-rgb), 0.16)"
-        d="M22.44 26.12 26 31.72a.9.9 0 0 0 .74.39h.02c1 0 1.58-1.12.98-1.95l-2.6-3.68a.9.9 0 0 0-1.4-.12l-1.3 1.76Z"
+        fill={`url(#${brandGlowId})`}
+        d="M24 8.2c-6.88 0-12.8 5.92-12.8 12.8 0 6.5 4.9 11.88 11.1 12.72.63.09 1.19-.34 1.46-.92l1.58-3.48c.26-.58.97-.78 1.49-.43l3.84 2.64c.84.58 1.93-.3 1.58-1.27l-1.64-4.6a1.1 1.1 0 0 1 .42-1.24c2.32-1.58 3.76-4.12 3.76-6.86C34.2 13.32 29.44 8.2 24 8.2Z"
+      />
+      <path
+        fill="rgba(var(--brand-emerald-rgb), 0.45)"
+        d="M23.2 14.7c-1.98 0-3.6 1.62-3.6 3.6s1.62 3.6 3.6 3.6 3.6-1.62 3.6-3.6-1.62-3.6-3.6-3.6Zm-6.25 8.3c-1.3 0-2.35 1.06-2.35 2.36 0 1.3 1.05 2.36 2.35 2.36s2.36-1.06 2.36-2.36c0-1.3-1.06-2.36-2.36-2.36Zm12.98-.04c-1.67 0-3.03 1.36-3.03 3.03s1.36 3.04 3.03 3.04 3.04-1.37 3.04-3.04-1.37-3.03-3.04-3.03Z"
       />
     </svg>
   );
@@ -480,7 +488,6 @@ export function Navbar({
           isScrolled && styles.navbarPinned,
           className
         )}
-        data-scroll-direction={scrollDirection}
         data-scrolled={isScrolled || undefined}
       >
         <div
@@ -503,7 +510,11 @@ export function Navbar({
           <div className={styles.desktopNav}>
             <div
               className={styles.navListWrapper}
-              onMouseLeave={() => {
+              onMouseLeave={(event) => {
+                const next = event.relatedTarget as Node | null;
+                if (next && event.currentTarget.contains(next)) {
+                  return;
+                }
                 scheduleDropdownClose();
                 resetIndicatorToActive();
               }}
@@ -525,7 +536,11 @@ export function Navbar({
                         key={link.href}
                         className={styles.navItem}
                         onMouseEnter={() => openDropdown(link.href)}
-                        onMouseLeave={() => {
+                        onMouseLeave={(event) => {
+                          const next = event.relatedTarget as Node | null;
+                          if (next && event.currentTarget.contains(next)) {
+                            return;
+                          }
                           scheduleDropdownClose();
                           resetIndicatorToActive();
                         }}
