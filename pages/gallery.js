@@ -231,57 +231,6 @@ function extractPaletteFromItemData(item) {
   return palette.slice(0, MAX_ITEM_PALETTE_COLORS);
 }
 
-function hexToRgb(hex) {
-  if (!hex) {
-    return null;
-  }
-  const value = hex.replace("#", "");
-  if (value.length !== 6) {
-    return null;
-  }
-  const bigint = parseInt(value, 16);
-  if (Number.isNaN(bigint)) {
-    return null;
-  }
-  const r = (bigint >> 16) & 255;
-  const g = (bigint >> 8) & 255;
-  const b = bigint & 255;
-  return { r, g, b };
-}
-
-function colorDistance(colorA, colorB) {
-  const dr = colorA.r - colorB.r;
-  const dg = colorA.g - colorB.g;
-  const db = colorA.b - colorB.b;
-  return Math.sqrt(dr * dr + dg * dg + db * db);
-}
-
-function scorePaletteMatch(basePalette, candidatePalette) {
-  if (!Array.isArray(basePalette) || !basePalette.length) {
-    return Number.POSITIVE_INFINITY;
-  }
-  if (!Array.isArray(candidatePalette) || !candidatePalette.length) {
-    return Number.POSITIVE_INFINITY;
-  }
-  const baseRgb = basePalette.map((hex) => hexToRgb(hex)).filter(Boolean);
-  const candidateRgb = candidatePalette.map((hex) => hexToRgb(hex)).filter(Boolean);
-  if (!baseRgb.length || !candidateRgb.length) {
-    return Number.POSITIVE_INFINITY;
-  }
-  let total = 0;
-  candidateRgb.forEach((color) => {
-    let best = Number.POSITIVE_INFINITY;
-    baseRgb.forEach((reference) => {
-      const distance = colorDistance(color, reference);
-      if (distance < best) {
-        best = distance;
-      }
-    });
-    total += best;
-  });
-  return total / candidateRgb.length;
-}
-
 function buildLookPalette(basePalette, variantIndex = 0) {
   if (!Array.isArray(basePalette) || basePalette.length === 0) {
     return [];
@@ -567,26 +516,26 @@ function buildDofusApiRequests(type, language = DEFAULT_LANGUAGE) {
   }
   const sources = config.requests?.length ? config.requests : [config];
   return sources.map((source) => {
-    const params = new URLSearchParams();
+    const baseParams = new URLSearchParams();
     Object.entries(getDefaultDofusQueryParams(language)).forEach(([key, value]) => {
-      params.set(key, value);
+      baseParams.set(key, value);
     });
     const limit = source.limit ?? config.limit ?? DEFAULT_LIMIT;
-    params.set("$limit", String(limit));
-    params.set("$skip", "0");
+    baseParams.set("$limit", String(limit));
     const typeIds = source.typeIds ?? config.typeIds;
     if (!typeIds || !typeIds.length) {
       throw new Error(`Configuration Dofus invalide pour le type ${type}`);
     }
     typeIds.forEach((id) => {
-      params.append("typeId[$in][]", String(id));
+      baseParams.append("typeId[$in][]", String(id));
     });
     const query = { ...(config.query ?? {}), ...(source.query ?? {}) };
     Object.entries(query).forEach(([key, value]) => {
-      params.set(key, value);
+      baseParams.set(key, value);
     });
     return {
-      url: `${DOFUS_API_BASE_URL}?${params.toString()}`,
+      limit,
+      params: baseParams,
     };
   });
 }
@@ -595,22 +544,38 @@ async function fetchItemsForType(type, language, languagePriority) {
   const requests = buildDofusApiRequests(type, language);
   const aggregated = [];
   for (const request of requests) {
-    try {
-      const response = await fetch(request.url, { headers: { Accept: "application/json" } });
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+    const pageSize = Number.isFinite(request.limit) && request.limit > 0 ? Math.trunc(request.limit) : DEFAULT_LIMIT;
+    let skip = 0;
+    let keepFetching = true;
+    while (keepFetching) {
+      const params = new URLSearchParams(request.params);
+      params.set("$limit", String(pageSize));
+      params.set("$skip", String(skip));
+      try {
+        const response = await fetch(`${DOFUS_API_BASE_URL}?${params.toString()}`, {
+          headers: { Accept: "application/json" },
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const payload = await response.json();
+        const rawItems = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.data)
+          ? payload.data
+          : Array.isArray(payload?.items)
+          ? payload.items
+          : [];
+        aggregated.push(...rawItems);
+        if (!rawItems.length || rawItems.length < pageSize) {
+          keepFetching = false;
+        } else {
+          skip += pageSize;
+        }
+      } catch (error) {
+        console.error(error);
+        keepFetching = false;
       }
-      const payload = await response.json();
-      const rawItems = Array.isArray(payload)
-        ? payload
-        : Array.isArray(payload?.data)
-        ? payload.data
-        : Array.isArray(payload?.items)
-        ? payload.items
-        : [];
-      aggregated.push(...rawItems);
-    } catch (error) {
-      console.error(error);
     }
   }
   const normalized = aggregated
@@ -822,17 +787,12 @@ function selectItemForSlot(slot, basePalette, catalog, forbiddenIds = new Set(),
   if (!pool.length) {
     return null;
   }
-  const scored = pool
-    .filter((item) => Array.isArray(item.palette) && item.palette.length && !forbiddenIds.has(item.ankamaId))
-    .map((item) => ({ item, score: scorePaletteMatch(basePalette, item.palette) }))
-    .sort((a, b) => a.score - b.score);
-  if (!scored.length) {
+  const eligible = pool.filter((item) => Array.isArray(item.palette) && item.palette.length && !forbiddenIds.has(item.ankamaId));
+  if (!eligible.length) {
     return null;
   }
-  const limit = Math.min(8, scored.length);
-  const top = scored.slice(0, limit);
-  const index = (offset + getRandomInt(top.length)) % top.length;
-  return top[index]?.item ?? null;
+  const index = (offset + getRandomInt(eligible.length)) % eligible.length;
+  return eligible[index] ?? null;
 }
 
 function buildGalleryEntry({
@@ -1003,17 +963,21 @@ function DirectionSelector({
 }) {
   return (
     <div className="skin-card__direction" role="group" aria-label={t("gallery.direction.label")}>
-      {directions.map((value) => (
-        <button
-          key={`direction-${value}`}
-          type="button"
-          className={`skin-card__direction-btn${value === activeDirection ? " is-active" : ""}`}
-          onClick={() => onSelect(value)}
-          aria-pressed={value === activeDirection}
-        >
-          {value}
-        </button>
-      ))}
+      {directions.map((value) => {
+        const label = t("gallery.direction.option", { index: value + 1 });
+        return (
+          <button
+            key={`direction-${value}`}
+            type="button"
+            className={`skin-card__direction-btn${value === activeDirection ? " is-active" : ""}`}
+            onClick={() => onSelect(value)}
+            aria-pressed={value === activeDirection}
+          >
+            <span className="skin-card__direction-icon" aria-hidden="true" />
+            <span className="sr-only">{label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -1211,7 +1175,6 @@ function GalleryDetail({ entry, onClose, language, t }) {
               </div>
             </div>
             <div className="gallery-detail__equipment">
-              <h3>{t("gallery.itemsTitle")}</h3>
               <ul className="skin-card__list" role="list">
                 {entry.items.map((item) => {
                   const slotLabelKey = ITEM_TYPE_LABEL_KEYS[item.slotType];

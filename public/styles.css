@@ -401,13 +401,6 @@ a {
   gap: 16px;
 }
 
-.gallery-detail__equipment h3 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
 .gallery-detail__actions {
   width: 100%;
   justify-content: center;
@@ -2939,13 +2932,16 @@ a {
 }
 
 .skin-card__direction-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid rgba(var(--surface-11-rgb), 0.28);
   background: rgba(var(--surface-6-rgb), 0.6);
   color: rgba(var(--text-soft-rgb), 0.92);
-  padding: 6px 10px;
+  padding: 6px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--radius-sm);
-  font-size: 0.82rem;
-  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -2962,6 +2958,26 @@ a {
   color: var(--text);
   border-color: rgba(var(--accent-primary-rgb), 0.6);
   box-shadow: 0 14px 28px -18px rgba(var(--accent-primary-rgb), 0.6);
+}
+
+.skin-card__direction-icon {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.82;
+  transition: transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease;
+}
+
+.skin-card__direction-btn:is(:hover, :focus-visible) .skin-card__direction-icon {
+  opacity: 1;
+}
+
+.skin-card__direction-btn.is-active .skin-card__direction-icon {
+  opacity: 1;
+  transform: scale(1.25);
+  background: var(--text);
 }
 
 .skin-card__glow {
