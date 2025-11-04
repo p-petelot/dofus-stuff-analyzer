@@ -10,6 +10,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 export const metadata: Metadata = {
   title: "PrismForge",
   description: "Générateur de skins Dofus premium",
+  icons: [{ rel: "icon", url: "/logo.svg" }],
 };
 
 const links: NavLink[] = [

@@ -373,34 +373,56 @@ export function Navbar({
     setMobileOpen(false);
   };
 
-  const brandGradientId = `${gradientId}-brand`;
-  const brandGlowId = `${brandGradientId}-glow`;
+  const brandMarkGradientId = `${gradientId}-mark`;
+  const brandHighlightGradientId = `${brandMarkGradientId}-highlight`;
+  const brandSheenId = `${brandMarkGradientId}-sheen`;
 
   const resolvedBrandLogo = brand.logo ?? (
-    <svg aria-hidden="true" viewBox="0 0 48 48" className={styles.brandIcon}>
+    <svg aria-hidden="true" viewBox="0 0 120 120" className={styles.brandIcon}>
       <defs>
-        <linearGradient id={brandGradientId} x1="10%" y1="5%" x2="90%" y2="95%">
-          <stop offset="0%" stopColor="var(--brand-emerald)" />
-          <stop offset="52%" stopColor="var(--accent-color)" />
-          <stop offset="100%" stopColor="var(--highlight-strong)" />
+        <linearGradient id={brandMarkGradientId} x1="18%" y1="12%" x2="82%" y2="92%">
+          <stop offset="0%" stopColor="var(--logo-primary)" />
+          <stop offset="52%" stopColor="var(--logo-secondary)" />
+          <stop offset="100%" stopColor="var(--logo-depth)" />
         </linearGradient>
-        <radialGradient id={brandGlowId} cx="52%" cy="38%" r="62%">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.85)" />
-          <stop offset="45%" stopColor="rgba(255,255,255,0.18)" />
-          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+        <linearGradient
+          id={brandHighlightGradientId}
+          x1="32%"
+          y1="18%"
+          x2="100%"
+          y2="100%"
+        >
+          <stop offset="0%" stopColor="var(--logo-highlight)" />
+          <stop offset="100%" stopColor="var(--logo-highlight-strong)" />
+        </linearGradient>
+        <radialGradient id={brandSheenId} cx="48%" cy="32%" r="62%">
+          <stop offset="0%" stopColor="rgba(255, 255, 255, 0.35)" />
+          <stop offset="62%" stopColor="rgba(255, 255, 255, 0.08)" />
+          <stop offset="100%" stopColor="rgba(255, 255, 255, 0)" />
         </radialGradient>
       </defs>
       <path
-        fill={`url(#${brandGradientId})`}
-        d="M24 3.8c-9.48 0-17.2 7.72-17.2 17.2 0 7.13 4.33 12.76 10.35 15.4l-1.05 2.7c-.38.97.5 1.99 1.53 1.77 4.52-.96 8.92-1.52 13.17-1.7 1.63-.07 2.62-1.92 1.72-3.34l-2.73-4.26c4.62-2.83 7.68-8 7.68-13.87C36.47 11.52 28.75 3.8 24 3.8Zm-.03 6.88c5.44 0 9.86 4.42 9.86 9.86 0 3.54-1.85 6.67-4.46 8.33l-8.04-12.6c-.85-1.32-2.91-.73-2.91.84 0 1.78.66 3.4 1.76 4.64l-4.63 6.84c-1.88-1.83-3.01-4.35-3.01-7.2 0-5.44 4.42-9.86 9.86-9.86Z"
+        d="M34.22 21.05 31.23 5.52C30.08.43 24.73-2.38 20 0L10.3 4.53l2.88 18.33c.52 3.3 3.37 5.76 6.7 5.76h9.76c1.79 0 3.15-1.61 2.91-3.57Z"
+        fill="var(--logo-secondary)"
+        opacity="0.9"
       />
       <path
-        fill={`url(#${brandGlowId})`}
-        d="M24 8.2c-6.88 0-12.8 5.92-12.8 12.8 0 6.5 4.9 11.88 11.1 12.72.63.09 1.19-.34 1.46-.92l1.58-3.48c.26-.58.97-.78 1.49-.43l3.84 2.64c.84.58 1.93-.3 1.58-1.27l-1.64-4.6a1.1 1.1 0 0 1 .42-1.24c2.32-1.58 3.76-4.12 3.76-6.86C34.2 13.32 29.44 8.2 24 8.2Z"
+        d="M95.27 5.77c3.79-1.6 8 .44 9.16 4.36l4.05 13.38c.56 1.85-.74 3.69-2.65 3.69H93.02c-1.44 0-2.72-.87-3.27-2.21l-4.98-11.98c-1.21-2.92.18-6.3 3.12-7.6Z"
+        fill="var(--logo-secondary)"
+        opacity="0.94"
       />
       <path
-        fill="rgba(var(--brand-emerald-rgb), 0.45)"
-        d="M23.2 14.7c-1.98 0-3.6 1.62-3.6 3.6s1.62 3.6 3.6 3.6 3.6-1.62 3.6-3.6-1.62-3.6-3.6-3.6Zm-6.25 8.3c-1.3 0-2.35 1.06-2.35 2.36 0 1.3 1.05 2.36 2.35 2.36s2.36-1.06 2.36-2.36c0-1.3-1.06-2.36-2.36-2.36Zm12.98-.04c-1.67 0-3.03 1.36-3.03 3.03s1.36 3.04 3.03 3.04 3.04-1.37 3.04-3.04-1.37-3.03-3.04-3.03Z"
+        d="M78.58 14.17c-7 0-13.21 4.26-15.83 10.84l-1.84 4.72c-.72 1.85-2.49 3.06-4.45 3.06H49c-20.55 0-37.22 16.68-37.22 37.22v8.86c0 11.29 4.48 22.12 12.46 30.11l13.16 13.16c4.07 4.07 9.6 6.37 15.36 6.37h25.36c19.46 0 35.24-15.78 35.24-35.24V50.55c0-13.98-11.33-25.31-25.31-25.31h-5.98c-1.79 0-3.38-1.12-3.95-2.79l-1.84-5.28c-1.87-5.38-6.97-8.99-12.49-8.99Z"
+        fill={`url(#${brandMarkGradientId})`}
+      />
+      <path
+        d="M50.86 73.33c15.34 5.53 27.24 18.5 31.44 34.48H61.76c-5.36 0-10.51-2.13-14.32-5.94L36.07 91.49c3.52-7.74 9.6-13.86 16.99-18.16Z"
+        fill={`url(#${brandHighlightGradientId})`}
+      />
+      <path
+        d="M84.64 32.78c-12.19 0-23 6.95-28.41 17.59-1.94 3.82-5.84 6.22-10.1 6.22H38.4c-3 0-5.85 1.63-7.38 4.27-3.71 6.31-3.44 14.19.67 20.17l1.62 2.36C47.9 63.32 73.45 55.77 96.5 63.01c3.94 1.24 8.11-.79 9.78-4.53l2.18-5.04c3.88-8.97-2.73-18.99-12.36-18.99h-10.8c-.63 0-1.19-.4-1.4-.99l-.95-2.61c-.72-1.98-2.58-3.3-4.63-3.3Z"
+        fill={`url(#${brandSheenId})`}
+        opacity="0.9"
       />
     </svg>
   );

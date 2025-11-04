@@ -5,7 +5,7 @@
   width: 100%;
   left: 0;
   right: 0;
-  padding: 0.2rem 0.9rem 0.4rem;
+  padding: 0.1rem 0.9rem 0.25rem;
   transition: background 220ms ease, box-shadow 220ms ease;
   backdrop-filter: blur(10px);
   background: linear-gradient(
@@ -39,7 +39,7 @@
     var(--navbar-border)
   );
   border-radius: 1.5rem;
-  padding: 0.6rem 1.35rem;
+  padding: 0.55rem 1.15rem;
   box-shadow: none;
   color: var(--navbar-text);
   position: relative;
@@ -95,32 +95,32 @@
   border-radius: 999px;
   transition: background 200ms ease, transform 180ms ease, box-shadow 200ms ease;
   background: linear-gradient(
-      135deg,
-      rgba(var(--brand-emerald-rgb), 0.22) 0%,
-      rgba(var(--accent-primary-rgb), 0.2) 45%,
-      rgba(var(--accent-contrast-rgb), 0.12) 100%
+      138deg,
+      color-mix(in srgb, var(--logo-primary) 64%, transparent) 0%,
+      color-mix(in srgb, var(--logo-secondary) 48%, transparent) 48%,
+      color-mix(in srgb, var(--logo-highlight) 36%, transparent) 100%
     ),
-    rgba(255, 255, 255, 0.02);
-  box-shadow: 0 15px 32px -20px rgba(var(--brand-emerald-rgb), 0.6);
+    rgba(255, 255, 255, 0.03);
+  box-shadow: 0 12px 28px -18px var(--logo-shadow);
 }
 
 .brandLink:hover,
 .brandLink:focus-visible {
   background: linear-gradient(
-      135deg,
-      rgba(var(--brand-emerald-rgb), 0.3) 0%,
-      rgba(var(--accent-primary-rgb), 0.28) 55%,
-      rgba(var(--accent-contrast-rgb), 0.22) 100%
+      138deg,
+      color-mix(in srgb, var(--logo-primary) 74%, transparent) 0%,
+      color-mix(in srgb, var(--logo-secondary) 58%, transparent) 55%,
+      color-mix(in srgb, var(--logo-highlight) 48%, transparent) 100%
     );
   transform: translateY(-1px);
   outline: none;
 }
 
 .brandIcon {
-  width: 44px;
-  height: 44px;
-  color: var(--accent-color);
-  filter: drop-shadow(0 12px 28px rgba(17, 24, 39, 0.35));
+  width: 48px;
+  height: 48px;
+  display: block;
+  filter: drop-shadow(0 14px 32px var(--logo-shadow));
 }
 
 .brandText {

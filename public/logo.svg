@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-labelledby="title desc">
+  <title id="title">KrosPalette emblem</title>
+  <desc id="desc">Stylised armored figure with horns inspired by Dofus skins and palette colours.</desc>
+  <defs>
+    <linearGradient id="mark" x1="18%" y1="12%" x2="82%" y2="92%">
+      <stop offset="0%" stop-color="#0d3a29" />
+      <stop offset="52%" stop-color="#108054" />
+      <stop offset="100%" stop-color="#05251b" />
+    </linearGradient>
+    <linearGradient id="highlight" x1="32%" y1="18%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f2c95b" />
+      <stop offset="100%" stop-color="#c9982e" />
+    </linearGradient>
+    <radialGradient id="sheen" cx="48%" cy="32%" r="62%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.35)" />
+      <stop offset="62%" stop-color="rgba(255,255,255,0.08)" />
+      <stop offset="100%" stop-color="rgba(255,255,255,0)" />
+    </radialGradient>
+  </defs>
+  <path d="M34.22 21.05 31.23 5.52C30.08.43 24.73-2.38 20 0L10.3 4.53l2.88 18.33c.52 3.3 3.37 5.76 6.7 5.76h9.76c1.79 0 3.15-1.61 2.91-3.57Z" fill="#108054" opacity="0.9" />
+  <path d="M95.27 5.77c3.79-1.6 8 .44 9.16 4.36l4.05 13.38c.56 1.85-.74 3.69-2.65 3.69H93.02c-1.44 0-2.72-.87-3.27-2.21l-4.98-11.98c-1.21-2.92.18-6.3 3.12-7.6Z" fill="#108054" opacity="0.94" />
+  <path d="M78.58 14.17c-7 0-13.21 4.26-15.83 10.84l-1.84 4.72c-.72 1.85-2.49 3.06-4.45 3.06H49c-20.55 0-37.22 16.68-37.22 37.22v8.86c0 11.29 4.48 22.12 12.46 30.11l13.16 13.16c4.07 4.07 9.6 6.37 15.36 6.37h25.36c19.46 0 35.24-15.78 35.24-35.24V50.55c0-13.98-11.33-25.31-25.31-25.31h-5.98c-1.79 0-3.38-1.12-3.95-2.79l-1.84-5.28c-1.87-5.38-6.97-8.99-12.49-8.99Z" fill="url(#mark)" />
+  <path d="M50.86 73.33c15.34 5.53 27.24 18.5 31.44 34.48H61.76c-5.36 0-10.51-2.13-14.32-5.94L36.07 91.49c3.52-7.74 9.6-13.86 16.99-18.16Z" fill="url(#highlight)" />
+  <path d="M84.64 32.78c-12.19 0-23 6.95-28.41 17.59-1.94 3.82-5.84 6.22-10.1 6.22H38.4c-3 0-5.85 1.63-7.38 4.27-3.71 6.31-3.44 14.19.67 20.17l1.62 2.36C47.9 63.32 73.45 55.77 96.5 63.01c3.94 1.24 8.11-.79 9.78-4.53l2.18-5.04c3.88-8.97-2.73-18.99-12.36-18.99h-10.8c-.63 0-1.19-.4-1.4-.99l-.95-2.61c-.72-1.98-2.58-3.3-4.63-3.3Z" fill="url(#sheen)" opacity="0.9" />
+</svg>

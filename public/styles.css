@@ -40,6 +40,12 @@
   --accent-indigo-rgb: 99, 102, 241;
   --accent-sky-rgb: 14, 165, 233;
   --accent-cool-rgb: 129, 199, 255;
+  --logo-primary: #0d3a29;
+  --logo-secondary: #108054;
+  --logo-depth: #05251b;
+  --logo-highlight: #f2c95b;
+  --logo-highlight-strong: #c9982e;
+  --logo-shadow: rgba(6, 13, 19, 0.52);
   --brand-emerald: #44e9a6;
   --brand-emerald-rgb: 68, 233, 166;
   --success-rgb: 34, 197, 94;
@@ -83,6 +89,33 @@ html.dark,
   --brand-emerald-rgb: 68, 233, 166;
 }
 
+[data-theme="light"] {
+  --logo-primary: #0b3627;
+  --logo-secondary: #0f6c4b;
+  --logo-depth: #05261c;
+  --logo-highlight: #d9a840;
+  --logo-highlight-strong: #b57a16;
+  --logo-shadow: rgba(20, 46, 38, 0.28);
+}
+
+[data-theme="dofus"] {
+  --logo-primary: #0a583d;
+  --logo-secondary: #0fb071;
+  --logo-depth: #043425;
+  --logo-highlight: #f6d676;
+  --logo-highlight-strong: #d2a542;
+  --logo-shadow: rgba(4, 26, 18, 0.6);
+}
+
+[data-theme="intelligent"] {
+  --logo-primary: #0d3a29;
+  --logo-secondary: #13845b;
+  --logo-depth: #05251b;
+  --logo-highlight: #f3cf6b;
+  --logo-highlight-strong: #c9982e;
+  --logo-shadow: rgba(6, 13, 19, 0.55);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -119,16 +152,16 @@ a {
 
 .page {
   min-height: 100vh;
-  padding: 12px 14px 28px;
+  padding: 8px 14px 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
   position: relative;
-  gap: 12px;
+  gap: 10px;
 }
 
 .layout-offset {
-  padding-top: 18px;
+  padding-top: 12px;
 }
 
 .collections-page {
@@ -4596,7 +4629,7 @@ a {
 
 @media (max-width: 680px) {
   .page {
-    padding-top: 104px;
+    padding-top: 64px;
   }
 
     .skin-card__body {
