@@ -533,16 +533,15 @@ export function Navbar({
                           type="button"
                           role="menuitemradio"
                           aria-checked={theme === option.key}
-                          className={classNames(
-                            styles.themeOption,
-                            theme === option.key && styles.themeOptionActive
-                          )}
-                          onClick={() => handleThemeSelect(option.key)}
-                        >
-                          <span className={styles.themeOptionIndicator} aria-hidden />
-                          <span className={styles.themeOptionIcon} aria-hidden>
-                            {option.icon}
-                          </span>
+                      className={classNames(
+                        styles.themeOption,
+                        theme === option.key && styles.themeOptionActive
+                      )}
+                      onClick={() => handleThemeSelect(option.key)}
+                    >
+                      <span className={styles.themeOptionIcon} aria-hidden>
+                        {option.icon}
+                      </span>
                           <span className={styles.themeOptionLabel}>{option.label}</span>
                         </button>
                       ))}

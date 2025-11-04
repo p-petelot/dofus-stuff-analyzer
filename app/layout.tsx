@@ -14,25 +14,22 @@ export const metadata: Metadata = {
 
 const links: NavLink[] = [
   { label: "Accueil", href: "/" },
-  { label: "Générateur", href: "/skinator" },
   {
     label: "Collections",
     href: "/collections",
     children: [
       {
         label: "Dernières",
-        href: "/collections?sort=recent",
+        href: "/collections/recent",
         desc: "Skins ajoutés récemment",
       },
       {
         label: "Populaires",
-        href: "/collections?sort=top",
+        href: "/collections/top",
         desc: "Tendances du moment",
       },
     ],
   },
-  { label: "Blog", href: "/blog" },
-  { label: "Contact", href: "/contact" },
 ];
 
 export default function RootLayout({
