@@ -9,6 +9,11 @@ import {
   translate,
   useLanguage,
 } from "../lib/i18n";
+import {
+  STATIC_GALLERY_BREEDS,
+  STATIC_GALLERY_ITEMS,
+  resolveStaticItemUrl,
+} from "../lib/gallery/static-data";
 
 const ITEM_TYPES = ["coiffe", "cape", "bouclier", "familier", "epauliere", "costume", "ailes"];
 const DOFUS_API_HOST = "https://api.dofusdb.fr";
@@ -586,7 +591,19 @@ async function fetchItemsForType(type, language, languagePriority) {
       return map;
     }, new Map()).values(),
   );
-  return deduplicated;
+  if (deduplicated.length > 0) {
+    return deduplicated;
+  }
+
+  const normalizedLanguage = normalizeLanguage(language);
+  const fallbackItems = (STATIC_GALLERY_ITEMS[type] ?? []).map((entry) => ({
+    ...entry,
+    url: entry.url ?? resolveStaticItemUrl(normalizedLanguage, type, entry.slug),
+  }));
+  if (!fallbackItems.length) {
+    console.warn(`Aucun objet disponible pour le type ${type}`);
+  }
+  return fallbackItems;
 }
 
 function normalizeDofusItem(rawItem, type, language, languagePriority) {
@@ -688,12 +705,17 @@ async function fetchBreeds(language, languagePriority) {
       : Array.isArray(payload?.items)
       ? payload.items
       : [];
-    return entries
+    const normalized = entries
       .map((entry) => normalizeBreedEntry(entry, language, languagePriority))
       .filter(Boolean);
+    if (normalized.length > 0) {
+      return normalized;
+    }
+    console.warn("Impossible de récupérer les classes via l'API, utilisation du jeu statique");
+    return STATIC_GALLERY_BREEDS.map((breed) => ({ ...breed }));
   } catch (error) {
     console.error(error);
-    return [];
+    return STATIC_GALLERY_BREEDS.map((breed) => ({ ...breed }));
   }
 }
 
