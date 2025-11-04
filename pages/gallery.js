@@ -108,8 +108,6 @@ const ITEM_TYPE_CONFIG = {
   },
 };
 
-const DEFAULT_LOOK_DIRECTIONS = [0, 1, 2, 3, 4, 5, 6, 7];
-
 function slugify(value) {
   if (!value) return "";
   return value
@@ -252,6 +250,63 @@ function hexToNumeric(hex) {
   }
   const numeric = parseInt(normalized.replace(/#/g, ""), 16);
   return Number.isFinite(numeric) ? numeric : null;
+}
+
+function hexToRgb(hex) {
+  const normalized = normalizeColorToHex(hex);
+  if (!normalized) {
+    return null;
+  }
+  const value = normalized.slice(1);
+  const bigint = Number.parseInt(value, 16);
+  if (!Number.isFinite(bigint)) {
+    return null;
+  }
+  return {
+    r: (bigint >> 16) & 255,
+    g: (bigint >> 8) & 255,
+    b: bigint & 255,
+  };
+}
+
+function colorDistance(a, b) {
+  if (!a || !b) {
+    return Number.POSITIVE_INFINITY;
+  }
+  const dr = (a.r ?? 0) - (b.r ?? 0);
+  const dg = (a.g ?? 0) - (b.g ?? 0);
+  const db = (a.b ?? 0) - (b.b ?? 0);
+  return Math.sqrt(dr * dr + dg * dg + db * db);
+}
+
+function scoreItemForPalette(item, palette) {
+  const normalizedPalette = Array.isArray(palette)
+    ? palette
+        .map((hex) => hexToRgb(hex))
+        .filter((value) => value !== null)
+    : [];
+  const itemPalette = Array.isArray(item?.palette)
+    ? item.palette.map((hex) => hexToRgb(hex)).filter((value) => value !== null)
+    : [];
+
+  if (!normalizedPalette.length) {
+    return itemPalette.length ? 0 : getRandomInt(1000);
+  }
+
+  if (!itemPalette.length) {
+    // Penalize items without a palette but still allow them to surface.
+    return normalizedPalette.length * 255 + getRandomInt(1000);
+  }
+
+  const total = itemPalette.reduce((accumulator, color) => {
+    const bestMatch = normalizedPalette.reduce((best, candidate) => {
+      const distance = colorDistance(color, candidate);
+      return Math.min(best, distance);
+    }, Number.POSITIVE_INFINITY);
+    return accumulator + bestMatch;
+  }, 0);
+
+  return total / itemPalette.length;
 }
 
 function getSouffSexCode(gender) {
@@ -596,6 +651,7 @@ async function fetchItemsForType(type, language, languagePriority) {
   const normalizedLanguage = normalizeLanguage(language);
   const fallbackItems = (STATIC_GALLERY_ITEMS[type] ?? []).map((entry) => ({
     ...entry,
+    slotType: entry.slotType ?? type,
     url: entry.url ?? resolveStaticItemUrl(normalizedLanguage, entry.ankamaId),
   }));
   if (!fallbackItems.length) {
@@ -663,9 +719,6 @@ function normalizeDofusItem(rawItem, type, language, languagePriority) {
     return null;
   }
   const palette = extractPaletteFromItemData(rawItem);
-  if (!palette.length) {
-    return null;
-  }
   const imageUrl = ensureAbsoluteUrl(rawItem?.img) || ensureAbsoluteUrl(rawItem?.image);
   const slug = slugify(name) || `${type}-${ankamaId}`;
   const url = buildDofusDbUrl(language, ankamaId);
@@ -673,6 +726,7 @@ function normalizeDofusItem(rawItem, type, language, languagePriority) {
     id: `${type}-${ankamaId}`,
     name,
     type,
+    slotType: type,
     palette,
     ankamaId,
     imageUrl,
@@ -782,17 +836,37 @@ function pickRandom(array, offset = 0) {
   return array[index];
 }
 
-function selectItemForSlot(slot, basePalette, catalog, forbiddenIds = new Set(), offset = 0) {
+function selectItemForSlot(slot, basePalette, catalog, forbiddenIds = new Set()) {
   const pool = Array.isArray(catalog?.[slot]) ? catalog[slot] : [];
   if (!pool.length) {
     return null;
   }
-  const eligible = pool.filter((item) => Array.isArray(item.palette) && item.palette.length && !forbiddenIds.has(item.ankamaId));
+
+  const eligible = pool.filter((item) => {
+    if (!item) {
+      return false;
+    }
+    if (forbiddenIds.has(item.ankamaId)) {
+      return false;
+    }
+    return true;
+  });
+
   if (!eligible.length) {
     return null;
   }
-  const index = (offset + getRandomInt(eligible.length)) % eligible.length;
-  return eligible[index] ?? null;
+
+  const scored = eligible
+    .map((item) => ({
+      item,
+      score: scoreItemForPalette(item, basePalette),
+    }))
+    .sort((a, b) => a.score - b.score);
+
+  const topSliceLength = Math.min(scored.length, 12);
+  const topSlice = scored.slice(0, topSliceLength);
+  const pick = topSlice[getRandomInt(topSlice.length)] ?? topSlice[0];
+  return pick ? pick.item : null;
 }
 
 function buildGalleryEntry({
@@ -802,40 +876,45 @@ function buildGalleryEntry({
   language,
   t,
 }) {
-  const breed = pickRandom(breeds, index);
+  const breed = pickRandom(breeds);
   if (!breed) {
     return null;
   }
-  const gender = Math.random() < 0.5 ? "m" : "f";
+  const gender = getRandomInt(2) === 0 ? "m" : "f";
   const genderKey = gender === "f" ? "female" : "male";
   const faceEntry = BARBOFUS_FACE_ID_BY_CLASS[breed.id] ?? BARBOFUS_DEFAULT_FACE;
   const faceId = faceEntry?.[genderKey] ?? BARBOFUS_DEFAULT_FACE[genderKey] ?? null;
 
-  const basePool = Array.isArray(catalog.costume) && catalog.costume.length
-    ? catalog.costume
-    : Array.isArray(catalog.coiffe)
-    ? catalog.coiffe
-    : [];
+  const basePool = [];
+  if (Array.isArray(catalog.costume) && catalog.costume.length) {
+    basePool.push(...catalog.costume);
+  }
+  if (Array.isArray(catalog.coiffe) && catalog.coiffe.length) {
+    basePool.push(...catalog.coiffe);
+  }
   const baseCandidates = basePool.filter((item) => Array.isArray(item.palette) && item.palette.length >= 2);
-  const baseItem = pickRandom(baseCandidates, index);
+  const baseItem = pickRandom(baseCandidates);
   if (!baseItem) {
     return null;
   }
   const selectedItems = [];
   const seenIds = new Set();
-  const basePalette = [...baseItem.palette];
-  selectedItems.push({ ...baseItem, slotType: "costume" });
+  const basePalette = Array.isArray(baseItem.palette) ? [...baseItem.palette] : [];
+  const baseSlot = baseItem.slotType ?? baseItem.type ?? "costume";
+  selectedItems.push({ ...baseItem, slotType: baseSlot });
   seenIds.add(baseItem.ankamaId);
 
-  ITEM_TYPES.forEach((slot, slotIndex) => {
-    if (slot === "costume") {
+  ITEM_TYPES.forEach((slot) => {
+    if (slot === baseSlot) {
       return;
     }
-    const candidate = selectItemForSlot(slot, basePalette, catalog, seenIds, index + slotIndex + selectedItems.length);
+    const candidate = selectItemForSlot(slot, basePalette, catalog, seenIds);
     if (candidate) {
-      selectedItems.push({ ...candidate, slotType: slot });
+      const slotType = candidate.slotType ?? candidate.type ?? slot;
+      selectedItems.push({ ...candidate, slotType });
       seenIds.add(candidate.ankamaId);
-      candidate.palette.forEach((hex) => {
+      const candidatePalette = Array.isArray(candidate.palette) ? candidate.palette : [];
+      candidatePalette.forEach((hex) => {
         if (!basePalette.includes(hex)) {
           basePalette.push(hex);
         }
@@ -843,7 +922,24 @@ function buildGalleryEntry({
     }
   });
 
-  const palette = buildLookPalette(basePalette, index % 4);
+  const orderedItems = selectedItems
+    .map((item) => ({
+      ...item,
+      slotType: item.slotType ?? item.type ?? baseSlot,
+    }))
+    .sort((a, b) => {
+      const aIndex = ITEM_TYPES.indexOf(a.slotType);
+      const bIndex = ITEM_TYPES.indexOf(b.slotType);
+      const safeA = aIndex === -1 ? Number.POSITIVE_INFINITY : aIndex;
+      const safeB = bIndex === -1 ? Number.POSITIVE_INFINITY : bIndex;
+      if (safeA === safeB) {
+        return (a.name ?? "").localeCompare(b.name ?? "");
+      }
+      return safeA - safeB;
+    });
+
+  const paletteVariant = getRandomInt(Math.max(4, basePalette.length + 2));
+  const palette = buildLookPalette(basePalette, paletteVariant);
   if (!palette.length) {
     return null;
   }
@@ -854,7 +950,9 @@ function buildGalleryEntry({
   if (!lookColors.length) {
     return null;
   }
-  const lookItemIds = Array.from(new Set(selectedItems.map((item) => item.ankamaId).filter(Number.isFinite))).sort(
+  const lookItemIds = Array.from(
+    new Set(orderedItems.map((item) => item.ankamaId).filter(Number.isFinite)),
+  ).sort(
     (a, b) => a - b,
   );
   if (!lookItemIds.length) {
@@ -864,7 +962,7 @@ function buildGalleryEntry({
   const genderLabel = gender === "f" ? t("gallery.gender.female") : t("gallery.gender.male");
   const subtitle = `${classLabel} · ${genderLabel}`;
   const title = t("gallery.entryTitle", { index: index + 1, className: classLabel });
-  const barbofusLink = buildBarbofusLink(selectedItems, lookColors, {
+  const barbofusLink = buildBarbofusLink(orderedItems, lookColors, {
     classId: breed.id,
     gender,
     faceId,
@@ -884,7 +982,7 @@ function buildGalleryEntry({
     title,
     subtitle,
     palette,
-    items: selectedItems,
+    items: orderedItems,
     classId: breed.id,
     className: classLabel,
     classIcon: breed.icon,
@@ -955,77 +1053,52 @@ function GalleryCard({ entry, onSelect }) {
   );
 }
 
-function DirectionSelector({
-  directions = DEFAULT_LOOK_DIRECTIONS,
-  activeDirection,
-  onSelect,
-  t,
-}) {
-  return (
-    <div className="skin-card__direction" role="group" aria-label={t("gallery.direction.label")}>
-      {directions.map((value) => {
-        const label = t("gallery.direction.option", { index: value + 1 });
-        return (
-          <button
-            key={`direction-${value}`}
-            type="button"
-            className={`skin-card__direction-btn${value === activeDirection ? " is-active" : ""}`}
-            onClick={() => onSelect(value)}
-            aria-pressed={value === activeDirection}
-          >
-            <span className="skin-card__direction-icon" aria-hidden="true" />
-            <span className="sr-only">{label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
 }
 
 function GalleryDetail({ entry, onClose, language, t }) {
-  const [activeDirection, setActiveDirection] = useState(entry.lookDirection ?? DEFAULT_LOOK_DIRECTION);
-  const [previews, setPreviews] = useState(() => ({ [activeDirection]: entry.preview ?? null }));
-  const [loadingDirections, setLoadingDirections] = useState(() => new Set());
-  const [errorDirections, setErrorDirections] = useState(() => (entry.preview ? {} : { [activeDirection]: true }));
+  const [preview, setPreview] = useState(entry.preview ?? null);
+  const [loadingPreview, setLoadingPreview] = useState(!entry.preview);
+  const [previewError, setPreviewError] = useState(!entry.preview);
 
   useEffect(() => {
-    setActiveDirection(entry.lookDirection ?? DEFAULT_LOOK_DIRECTION);
-    setPreviews({ [entry.lookDirection ?? DEFAULT_LOOK_DIRECTION]: entry.preview ?? null });
-    setLoadingDirections(new Set());
-    setErrorDirections(entry.preview ? {} : { [entry.lookDirection ?? DEFAULT_LOOK_DIRECTION]: true });
-  }, [entry]);
+    let cancelled = false;
+    const direction = entry.lookDirection ?? DEFAULT_LOOK_DIRECTION;
+    setPreview(entry.preview ?? null);
+    setPreviewError(!entry.preview);
+    setLoadingPreview(!entry.preview);
 
-  const handleDirection = useCallback(
-    async (direction) => {
-      const normalized = normalizeLookDirection(direction);
-      setActiveDirection(normalized);
-      setErrorDirections((previous) => ({ ...previous, [normalized]: false }));
-      setPreviews((previous) => {
-        if (previous[normalized]) {
-          return previous;
+    if (!entry.preview) {
+      (async () => {
+        try {
+          const fetched = await requestLookPreview(entry, direction, language);
+          if (!cancelled) {
+            setPreview(fetched ?? null);
+            setPreviewError(!fetched);
+          }
+        } catch (error) {
+          console.error(error);
+          if (!cancelled) {
+            setPreviewError(true);
+          }
+        } finally {
+          if (!cancelled) {
+            setLoadingPreview(false);
+          }
         }
-        return { ...previous };
-      });
-      setLoadingDirections((previous) => new Set(previous).add(normalized));
-      try {
-        const preview = await requestLookPreview(entry, normalized, language);
-        setPreviews((previous) => ({ ...previous, [normalized]: preview }));
-      } catch (error) {
-        console.error(error);
-        setErrorDirections((previous) => ({ ...previous, [normalized]: true }));
-      } finally {
-        setLoadingDirections((previous) => {
-          const next = new Set(previous);
-          next.delete(normalized);
-          return next;
-        });
-      }
-    },
-    [entry, language],
-  );
+      })();
+    } else {
+      setLoadingPreview(false);
+    }
 
-  const activePreview = previews[activeDirection] ?? null;
+    return () => {
+      cancelled = true;
+    };
+  }, [entry, language]);
+
+  const activePreview = preview;
   const lookLoaded = Boolean(activePreview);
+  const lookLoading = loadingPreview && !lookLoaded;
+  const lookError = previewError && !lookLoaded;
   const canCopy =
     typeof navigator !== "undefined" &&
     typeof navigator.clipboard?.write === "function" &&
@@ -1080,7 +1153,7 @@ function GalleryDetail({ entry, onClose, language, t }) {
           {t("gallery.close")}
         </button>
         <div className="gallery-detail__layout">
-          <div className="gallery-detail__visual">
+          <div className="gallery-detail__visual" aria-busy={lookLoading}>
             <div className="gallery-detail__preview">
               {lookLoaded ? (
                 <img src={activePreview} alt={entry.title} />
@@ -1088,13 +1161,7 @@ function GalleryDetail({ entry, onClose, language, t }) {
                 <div className="gallery-detail__preview--placeholder" aria-hidden="true" />
               )}
             </div>
-            <DirectionSelector
-              directions={DEFAULT_LOOK_DIRECTIONS}
-              activeDirection={activeDirection}
-              onSelect={handleDirection}
-              t={t}
-            />
-            {errorDirections[activeDirection] ? (
+            {lookError ? (
               <p className="gallery-detail__error">{t("errors.previewUnavailable")}</p>
             ) : null}
             <div className="skin-card__actions gallery-detail__actions">
