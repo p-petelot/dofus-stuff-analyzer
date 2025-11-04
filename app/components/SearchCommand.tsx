@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import type { NavLink } from "./types";
+import styles from "./SearchCommand.module.css";
 
 interface SearchCommandProps {
   links: NavLink[];
@@ -116,32 +117,24 @@ export function SearchCommand({ links, open, onClose }: SearchCommandProps) {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-start justify-center bg-slate-950/60 px-4 py-20 backdrop-blur-sm transition-opacity duration-150 motion-reduce:transition-none"
-      role="presentation"
-      onClick={onClose}
-    >
+    <div className={styles.overlay} role="presentation" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-xl overflow-hidden rounded-3xl border border-slate-500/20 bg-slate-900/80 shadow-2xl backdrop-blur-xl transition-transform duration-150 motion-reduce:transition-none"
+        className={styles.dialog}
         ref={containerRef}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center gap-3 border-b border-slate-500/15 bg-slate-900/60 px-5 py-4">
-          <div className="rounded-full border border-slate-500/30 bg-slate-900/70 px-3 py-1 text-xs font-medium uppercase tracking-[0.3em] text-slate-300/70">
+        <header className={styles.header}>
+          <div className={styles.badge} aria-hidden>
             Commande
           </div>
-          <p className="text-xs text-slate-300/70">
-            Tapez pour naviguer. Appuyez sur <kbd className="rounded border border-slate-400/30 px-1.5 py-0.5 text-[10px] uppercase tracking-widest">Esc</kbd> pour fermer.
+          <p className={styles.hint}>
+            Tapez pour naviguer. Appuyez sur <kbd>Esc</kbd> pour fermer.
           </p>
-        </div>
-        <div className="flex items-center gap-2 px-5 py-4">
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 24 24"
-            className="h-5 w-5 text-slate-300/60"
-          >
+        </header>
+        <div className={styles.inputRow}>
+          <svg aria-hidden="true" viewBox="0 0 24 24">
             <path
               d="M11 5a6 6 0 0 1 4.472 9.983l3.272 3.273a1 1 0 0 1-1.414 1.414l-3.273-3.272A6 6 0 1 1 11 5Zm0 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"
               fill="currentColor"
@@ -152,33 +145,25 @@ export function SearchCommand({ links, open, onClose }: SearchCommandProps) {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Rechercher une page..."
-            className="h-11 w-full bg-transparent text-base text-slate-100 placeholder:text-slate-400 focus:outline-none"
+            className={styles.input}
             aria-label="Rechercher"
           />
-          <kbd className="hidden rounded border border-slate-400/30 px-1.5 py-0.5 text-[10px] uppercase tracking-widest text-slate-300/70 sm:inline-flex">
-            ⌘K
-          </kbd>
+          <kbd className={styles.shortcut}>⌘K</kbd>
         </div>
-        <div className="max-h-80 overflow-y-auto px-2 pb-4">
+        <div className={styles.results}>
           {results.length === 0 ? (
-            <p className="px-3 py-6 text-sm text-slate-300/70">
-              Aucun résultat ne correspond à votre recherche.
-            </p>
+            <p className={styles.empty}>Aucun résultat ne correspond à votre recherche.</p>
           ) : (
-            <ul className="space-y-1">
+            <ul className={styles.list}>
               {results.map((item) => (
                 <li key={item.href}>
                   <button
                     type="button"
-                    className="group flex w-full flex-col rounded-2xl border border-transparent bg-slate-900/40 px-4 py-3 text-left transition duration-150 hover:border-accent/40 hover:bg-slate-900/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/70 motion-reduce:transition-none"
+                    className={styles.result}
                     onClick={() => handleNavigate(item.href)}
                   >
-                    <span className="text-sm font-medium text-slate-100 group-hover:text-accent group-focus-visible:text-accent">
-                      {item.label}
-                    </span>
-                    <span className="text-xs text-slate-400">
-                      {item.desc ?? item.href}
-                    </span>
+                    <span className={styles.resultLabel}>{item.label}</span>
+                    <span className={styles.resultDesc}>{item.desc ?? item.href}</span>
                   </button>
                 </li>
               ))}

@@ -50,7 +50,7 @@ export default function RootLayout({
           enableSearch
           enableThemeToggle
         />
-        <main className="pt-24">{children}</main>
+        <main className="layout-offset">{children}</main>
       </body>
     </html>
   );
