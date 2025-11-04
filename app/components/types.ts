@@ -17,8 +17,3 @@ export type NavBrand = {
   href: string;
   logo?: ReactNode;
 };
-
-export type NavCta = {
-  label: string;
-  href: string;
-};

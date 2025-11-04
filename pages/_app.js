@@ -32,8 +32,8 @@ export default function App({ Component, pageProps }) {
       <Navbar
         brand={{ label: "KrosPalette", href: "/" }}
         links={NAV_LINKS}
-        cta={{ label: "Commencer", href: "/skinator" }}
         enableSearch
+        enableThemeToggle
       />
       <Component {...pageProps} />
     </LanguageProvider>

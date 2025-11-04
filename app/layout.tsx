@@ -46,7 +46,6 @@ export default function RootLayout({
         <Navbar
           brand={{ label: "[[NomDuSite]]", href: "/" }}
           links={links}
-          cta={{ label: "Commencer", href: "/skinator" }}
           enableSearch
           enableThemeToggle
         />

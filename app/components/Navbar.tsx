@@ -10,22 +10,28 @@ import {
   useRef,
   useState,
 } from "react";
+import { useLanguage } from "../../lib/i18n";
+import {
+  DEFAULT_THEME_KEY,
+  THEME_OPTIONS,
+  THEME_KEYS,
+  applyThemeToDocument,
+  loadStoredTheme,
+  persistTheme,
+} from "../../lib/theme-controller";
 import { useLockBody } from "./hooks/useLockBody";
 import { useScrollDirection } from "./hooks/useScrollDirection";
 import { SearchCommand } from "./SearchCommand";
-import type { NavBrand, NavCta, NavLink } from "./types";
+import type { NavBrand, NavLink } from "./types";
 import styles from "./Navbar.module.css";
 
 interface NavbarProps {
   brand: NavBrand;
   links: NavLink[];
-  cta?: NavCta;
   enableSearch?: boolean;
   enableThemeToggle?: boolean;
   className?: string;
 }
-
-type ThemeMode = "system" | "light" | "dark";
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
@@ -34,10 +40,11 @@ function classNames(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
 }
 
+type ThemeKey = typeof THEME_KEYS[keyof typeof THEME_KEYS];
+
 export function Navbar({
   brand,
   links,
-  cta,
   enableSearch = false,
   enableThemeToggle = false,
   className,
@@ -51,14 +58,22 @@ export function Navbar({
   const [mobileSection, setMobileSection] = useState<string | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
-  const [theme, setTheme] = useState<ThemeMode>("system");
-  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("dark");
-  const [hasMounted, setHasMounted] = useState(false);
+  const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
+  const [theme, setTheme] = useState<ThemeKey>(() => DEFAULT_THEME_KEY);
 
   const scrollDirection = useScrollDirection({ threshold: 6 });
   const mobileDrawerRef = useRef<HTMLDivElement>(null);
   const themeMenuRef = useRef<HTMLDivElement>(null);
   const themeTriggerRef = useRef<HTMLButtonElement>(null);
+  const languageMenuRef = useRef<HTMLDivElement>(null);
+  const languageTriggerRef = useRef<HTMLButtonElement>(null);
+
+  const { language, languages: languageOptions, setLanguage, t } = useLanguage();
+
+  const closePreferenceMenus = useCallback(() => {
+    setThemeMenuOpen(false);
+    setLanguageMenuOpen(false);
+  }, []);
 
   useLockBody(mobileOpen || searchOpen);
 
@@ -83,6 +98,7 @@ export function Navbar({
 
     const handleRouteChange = (url: string) => {
       updatePath(url);
+      closePreferenceMenus();
     };
 
     const handlePopState = () => updatePath();
@@ -131,65 +147,40 @@ export function Navbar({
     if (!enableThemeToggle) {
       return;
     }
-    setHasMounted(true);
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const stored = window.localStorage.getItem("theme-preference") as
-      | ThemeMode
-      | null;
-    if (stored) {
-      setTheme(stored);
-    }
+    const stored = loadStoredTheme();
+    setTheme(stored);
   }, [enableThemeToggle]);
 
   useEffect(() => {
-    if (!enableThemeToggle || !hasMounted || typeof window === "undefined") {
+    if (!enableThemeToggle) {
       return;
     }
-
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-
-    const apply = (mode: ThemeMode) => {
-      const effective =
-        mode === "system" ? (media.matches ? "dark" : "light") : mode;
-      const root = window.document.documentElement;
-      root.classList.toggle("dark", effective === "dark");
-      root.setAttribute("data-theme", effective);
-      setResolvedTheme(effective);
-      window.localStorage.setItem("theme-preference", mode);
-    };
-
-    apply(theme);
-
-    if (theme === "system") {
-      const listener = () => apply("system");
-      media.addEventListener("change", listener);
-      return () => media.removeEventListener("change", listener);
-    }
-
-    return undefined;
-  }, [enableThemeToggle, hasMounted, theme]);
+    applyThemeToDocument(theme);
+    persistTheme(theme);
+  }, [enableThemeToggle, theme]);
 
   useEffect(() => {
-    if (!enableThemeToggle || !themeMenuOpen) {
+    if (!themeMenuOpen && !languageMenuOpen) {
       return;
     }
 
     const handleClick = (event: MouseEvent) => {
-      if (
-        themeMenuRef.current?.contains(event.target as Node) ||
-        themeTriggerRef.current?.contains(event.target as Node)
-      ) {
+      const target = event.target as Node;
+      const withinTheme =
+        themeMenuRef.current?.contains(target) ||
+        themeTriggerRef.current?.contains(target);
+      const withinLanguage =
+        languageMenuRef.current?.contains(target) ||
+        languageTriggerRef.current?.contains(target);
+      if (withinTheme || withinLanguage) {
         return;
       }
-      setThemeMenuOpen(false);
+      closePreferenceMenus();
     };
 
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setThemeMenuOpen(false);
+        closePreferenceMenus();
       }
     };
 
@@ -199,7 +190,7 @@ export function Navbar({
       document.removeEventListener("mousedown", handleClick);
       document.removeEventListener("keydown", handleKey);
     };
-  }, [enableThemeToggle, themeMenuOpen]);
+  }, [closePreferenceMenus, languageMenuOpen, themeMenuOpen]);
 
   useEffect(() => {
     if (!mobileOpen) {
@@ -289,7 +280,80 @@ export function Navbar({
     </svg>
   );
 
-  const themeOptions: ThemeMode[] = ["system", "light", "dark"];
+  const themeOptions = useMemo(
+    () =>
+      THEME_OPTIONS.map((option) => {
+        const label = t(option.labelKey);
+        const normalizedLabel = typeof label === "string" ? label : String(label ?? "");
+        return { ...option, label: normalizedLabel };
+      }),
+    [t]
+  );
+
+  const activeThemeOption = useMemo(
+    () => themeOptions.find((option) => option.key === theme) ?? themeOptions[0] ?? null,
+    [themeOptions, theme]
+  );
+
+  const themeSelectorLabel = t("theme.selectorAria");
+  const themeSelectorAria =
+    typeof themeSelectorLabel === "string" && themeSelectorLabel.trim().length > 0
+      ? themeSelectorLabel
+      : "Sélection du thème";
+
+  const languageSelectorLabel = t("language.selectorAria");
+  const languageSelectorAria =
+    typeof languageSelectorLabel === "string" && languageSelectorLabel.trim().length > 0
+      ? languageSelectorLabel
+      : "Langue";
+
+  const activeLanguageOption = useMemo(
+    () => languageOptions.find((option) => option.code === language) ?? null,
+    [languageOptions, language]
+  );
+
+  const handleThemeSelect = useCallback(
+    (nextTheme: ThemeKey) => {
+      if (nextTheme === theme) {
+        closePreferenceMenus();
+        return;
+      }
+      setTheme(nextTheme);
+      closePreferenceMenus();
+    },
+    [closePreferenceMenus, theme]
+  );
+
+  const handleLanguageSelect = useCallback(
+    (code: string) => {
+      if (!code || code === language) {
+        closePreferenceMenus();
+        return;
+      }
+      setLanguage(code);
+      closePreferenceMenus();
+
+      const nextQuery = { ...Router.query, lang: code };
+      const pathname = Router.pathname;
+      Router.replace({ pathname, query: nextQuery }, undefined, {
+        shallow: true,
+        scroll: false,
+      }).catch(() => {
+        if (typeof window === "undefined") {
+          return;
+        }
+        try {
+          const current = new URL(window.location.href);
+          current.searchParams.set("lang", code);
+          const href = `${current.pathname}${current.search}${current.hash}`;
+          Router.replace(href, href, { shallow: true, scroll: false }).catch(() => undefined);
+        } catch {
+          // noop
+        }
+      });
+    },
+    [closePreferenceMenus, language, setLanguage]
+  );
 
   return (
     <Fragment>
@@ -444,41 +508,42 @@ export function Navbar({
                   <button
                     type="button"
                     className={styles.themeTrigger}
-                    onClick={() => setThemeMenuOpen((prev) => !prev)}
+                    onClick={() => {
+                      setThemeMenuOpen((prev) => !prev);
+                      setLanguageMenuOpen(false);
+                    }}
                     aria-haspopup="menu"
                     aria-expanded={themeMenuOpen}
+                    aria-label={themeSelectorAria}
                     ref={themeTriggerRef}
                   >
                     <span className={styles.themeIcon} aria-hidden>
-                      {resolvedTheme === "dark" ? "🌙" : "☀️"}
+                      {activeThemeOption?.icon ?? "🌙"}
                     </span>
-                    <span className={styles.themeLabel}>Thème</span>
+                    <span className={styles.themeLabel} aria-hidden>
+                      {activeThemeOption?.label ?? "Thème"}
+                    </span>
+                    <span className="sr-only">{themeSelectorAria}</span>
                   </button>
                   {themeMenuOpen && (
-                    <div className={styles.themeMenu} role="menu">
+                    <div className={styles.themeMenu} role="menu" aria-label={themeSelectorAria}>
                       {themeOptions.map((option) => (
                         <button
-                          key={option}
+                          key={option.key}
                           type="button"
                           role="menuitemradio"
-                          aria-checked={theme === option}
+                          aria-checked={theme === option.key}
                           className={classNames(
                             styles.themeOption,
-                            theme === option && styles.themeOptionActive
+                            theme === option.key && styles.themeOptionActive
                           )}
-                          onClick={() => {
-                            setTheme(option);
-                            setThemeMenuOpen(false);
-                          }}
+                          onClick={() => handleThemeSelect(option.key)}
                         >
-                          <span className={styles.themeOptionIndicator} />
-                          <span className={styles.themeOptionLabel}>
-                            {option === "system"
-                              ? "Système"
-                              : option === "light"
-                              ? "Clair"
-                              : "Sombre"}
+                          <span className={styles.themeOptionIndicator} aria-hidden />
+                          <span className={styles.themeOptionIcon} aria-hidden>
+                            {option.icon}
                           </span>
+                          <span className={styles.themeOptionLabel}>{option.label}</span>
                         </button>
                       ))}
                     </div>
@@ -486,10 +551,61 @@ export function Navbar({
                 </div>
               )}
 
-              {cta && (
-                <Link href={cta.href} className={styles.ctaButton}>
-                  {cta.label}
-                </Link>
+              {languageOptions.length > 0 && (
+                <div className={styles.languageToggle} ref={languageMenuRef}>
+                  <button
+                    type="button"
+                    className={styles.languageTrigger}
+                    onClick={() => {
+                      setLanguageMenuOpen((prev) => !prev);
+                      setThemeMenuOpen(false);
+                    }}
+                    aria-haspopup="menu"
+                    aria-expanded={languageMenuOpen}
+                    aria-label={languageSelectorAria}
+                    ref={languageTriggerRef}
+                  >
+                    {activeLanguageOption ? (
+                      <span className={styles.languageFlag} aria-hidden>
+                        <img src={activeLanguageOption.flag} alt="" loading="lazy" />
+                      </span>
+                    ) : (
+                      <span className={styles.languageIcon} aria-hidden>
+                        🌐
+                      </span>
+                    )}
+                    <span className={styles.languageLabel} aria-hidden>
+                      {activeLanguageOption?.label ?? "Langue"}
+                    </span>
+                    <span className="sr-only">{languageSelectorAria}</span>
+                  </button>
+                  {languageMenuOpen && (
+                    <div
+                      className={styles.languageMenu}
+                      role="menu"
+                      aria-label={languageSelectorAria}
+                    >
+                      {languageOptions.map((option) => (
+                        <button
+                          key={option.code}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={language === option.code}
+                          className={classNames(
+                            styles.languageOption,
+                            language === option.code && styles.languageOptionActive
+                          )}
+                          onClick={() => handleLanguageSelect(option.code)}
+                        >
+                          <span className={styles.languageOptionFlag} aria-hidden>
+                            <img src={option.flag} alt="" loading="lazy" />
+                          </span>
+                          <span className={styles.languageOptionLabel}>{option.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -653,31 +769,44 @@ export function Navbar({
                 <div className={styles.mobileThemeGroup}>
                   {themeOptions.map((option) => (
                     <button
-                      key={option}
+                      key={option.key}
                       type="button"
                       className={classNames(
                         styles.mobileThemeButton,
-                        theme === option && styles.mobileThemeButtonActive
+                        theme === option.key && styles.mobileThemeButtonActive
                       )}
-                      onClick={() => setTheme(option)}
+                      onClick={() => handleThemeSelect(option.key)}
                     >
-                      {option === "system"
-                        ? "Système"
-                        : option === "light"
-                        ? "Clair"
-                        : "Sombre"}
+                      <span className={styles.mobileThemeIcon} aria-hidden>
+                        {option.icon}
+                      </span>
+                      <span>{option.label}</span>
                     </button>
                   ))}
                 </div>
               )}
-              {cta && (
-                <Link
-                  href={cta.href}
-                  className={classNames(styles.ctaButton, styles.mobileCta)}
-                  onClick={() => setMobileOpen(false)}
+              {languageOptions.length > 0 && (
+                <div
+                  className={styles.mobileLanguageGroup}
+                  aria-label={languageSelectorAria}
                 >
-                  {cta.label}
-                </Link>
+                  {languageOptions.map((option) => (
+                    <button
+                      key={option.code}
+                      type="button"
+                      className={classNames(
+                        styles.mobileLanguageButton,
+                        language === option.code && styles.mobileLanguageButtonActive
+                      )}
+                      onClick={() => handleLanguageSelect(option.code)}
+                    >
+                      <span className={styles.mobileLanguageFlag} aria-hidden>
+                        <img src={option.flag} alt="" loading="lazy" />
+                      </span>
+                      <span>{option.label}</span>
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
           </div>

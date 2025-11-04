@@ -1,5 +1,5 @@
 :root {
-  --accent-color: #c9a227;
+  --accent-color: rgb(var(--accent-primary-rgb));
   --navbar-surface: var(--card);
   --navbar-border: var(--card-border);
   --navbar-shadow: var(--shadow);
@@ -114,7 +114,7 @@ a {
 
 .page {
   min-height: 100vh;
-  padding: 96px 14px 32px;
+  padding: 72px 14px 32px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -123,7 +123,7 @@ a {
 }
 
 .layout-offset {
-  padding-top: 96px;
+  padding-top: 72px;
 }
 
 
