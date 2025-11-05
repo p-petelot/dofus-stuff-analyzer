@@ -20,6 +20,11 @@ const NAV_LINKS = [
         href: "/collections/top",
         desc: "Tendances du moment",
       },
+      {
+        label: "Galerie IA",
+        href: "/collections/galerie",
+        desc: "Skins générés automatiquement",
+      },
     ],
   },
 ];

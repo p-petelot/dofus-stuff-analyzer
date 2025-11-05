@@ -5,12 +5,19 @@ const COLLECTION_SECTIONS = [
   {
     href: "/collections/recent",
     title: "Dernières collections",
-    description: "Découvrez les compositions fraîchement partagées par la communauté et trouvez l'inspiration en un clin d'œil.",
+    description:
+      "Découvrez les compositions fraîchement partagées par la communauté et trouvez l'inspiration en un clin d'œil.",
   },
   {
     href: "/collections/top",
     title: "Collections populaires",
     description: "Parcourez les sélections plébiscitées et repérez les palettes qui font sensation en ce moment.",
+  },
+  {
+    href: "/collections/galerie",
+    title: "Galerie générée par l'IA",
+    description:
+      "Accédez aux skins concoctés automatiquement : classes aléatoires, palettes harmonisées et équipements assortis.",
   },
 ];
 
