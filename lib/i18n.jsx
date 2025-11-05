@@ -122,6 +122,8 @@ const TRANSLATIONS = {
     "identity.preview.direction.rotateRight": "Tourner vers la droite",
     "identity.preview.direction.hint":
       "Maintiens le clic ou le doigt et fais glisser pour tourner. Utilise les flèches du clavier pour pivoter.",
+    "identity.preview.direction.autoplayPlay": "Clique pour lancer la rotation automatique",
+    "identity.preview.direction.autoplayStop": "Clique pour arrêter la rotation automatique",
     "identity.preview.direction.announce": "Orientation actuelle : {direction}",
     "identity.previewBackground.sectionTitle": "Arrière-plan du rendu",
     "identity.previewBackground.toggleLabel": "Fond immersif",
@@ -326,6 +328,8 @@ const TRANSLATIONS = {
     "identity.preview.direction.rotateRight": "Rotate right",
     "identity.preview.direction.hint":
       "Click or press and drag to rotate. Use the arrow keys to change direction.",
+    "identity.preview.direction.autoplayPlay": "Click to start automatic rotation",
+    "identity.preview.direction.autoplayStop": "Click to stop automatic rotation",
     "identity.preview.direction.announce": "Current facing: {direction}",
     "identity.previewBackground.sectionTitle": "Preview background",
     "identity.previewBackground.toggleLabel": "Immersive background",
@@ -528,6 +532,8 @@ const TRANSLATIONS = {
     "identity.preview.direction.rotateRight": "Girar a la derecha",
     "identity.preview.direction.hint":
       "Mantén pulsado y arrastra para girar. Usa las flechas del teclado para cambiar la orientación.",
+    "identity.preview.direction.autoplayPlay": "Haz clic para iniciar la rotación automática",
+    "identity.preview.direction.autoplayStop": "Haz clic para detener la rotación automática",
     "identity.preview.direction.announce": "Orientación actual: {direction}",
     "identity.previewBackground.sectionTitle": "Fondo de la previsualización",
     "identity.previewBackground.toggleLabel": "Fondo inmersivo",
@@ -730,6 +736,8 @@ const TRANSLATIONS = {
     "identity.preview.direction.rotateRight": "Nach rechts drehen",
     "identity.preview.direction.hint":
       "Klicke bzw. tippe und ziehe zum Drehen. Nutze die Pfeiltasten, um die Richtung zu ändern.",
+    "identity.preview.direction.autoplayPlay": "Klicke, um die automatische Drehung zu starten",
+    "identity.preview.direction.autoplayStop": "Klicke, um die automatische Drehung zu stoppen",
     "identity.preview.direction.announce": "Aktuelle Ausrichtung: {direction}",
     "identity.previewBackground.sectionTitle": "Vorschau-Hintergrund",
     "identity.previewBackground.toggleLabel": "Stimmungsvoller Hintergrund",
@@ -933,6 +941,8 @@ const TRANSLATIONS = {
     "identity.preview.direction.rotateRight": "Girar para a direita",
     "identity.preview.direction.hint":
       "Clica ou toca e arrasta para girar. Usa as setas do teclado para mudar a direção.",
+    "identity.preview.direction.autoplayPlay": "Clique para iniciar a rotação automática",
+    "identity.preview.direction.autoplayStop": "Clique para parar a rotação automática",
     "identity.preview.direction.announce": "Orientação atual: {direction}",
     "identity.previewBackground.sectionTitle": "Fundo da pré-visualização",
     "identity.previewBackground.toggleLabel": "Fundo imersivo",

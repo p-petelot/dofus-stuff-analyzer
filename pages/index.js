@@ -118,7 +118,50 @@ const IMAGE_REFERENCE_KEYS = [
   "src",
 ];
 
-const PALETTE_LOADER_COLORS = ["#1bdd8d", "#22d3ee", "#facc15", "#fb923c", "#a855f7"];
+const PALETTE_LOADER_DOFUS = [
+  {
+    id: "emerald",
+    angle: -90,
+    fill:
+      "linear-gradient(140deg, #022c22 0%, #047857 44%, #22d3ee 76%, rgba(255, 255, 255, 0.85) 100%)",
+    glow: "rgba(16, 185, 129, 0.65)",
+  },
+  {
+    id: "turquoise",
+    angle: -30,
+    fill:
+      "linear-gradient(145deg, #082f49 0%, #0ea5e9 42%, #22d3ee 78%, rgba(255, 255, 255, 0.9) 100%)",
+    glow: "rgba(14, 165, 233, 0.7)",
+  },
+  {
+    id: "ivory",
+    angle: 30,
+    fill:
+      "linear-gradient(150deg, #f8fafc 0%, #f5f5f4 36%, #fde68a 68%, #facc15 100%)",
+    glow: "rgba(250, 204, 21, 0.65)",
+  },
+  {
+    id: "ochre",
+    angle: 90,
+    fill:
+      "linear-gradient(145deg, #4a1d03 0%, #b45309 38%, #f97316 72%, rgba(253, 230, 138, 0.95) 100%)",
+    glow: "rgba(249, 115, 22, 0.62)",
+  },
+  {
+    id: "ebony",
+    angle: 150,
+    fill:
+      "linear-gradient(150deg, #020617 0%, #0f172a 34%, #1e293b 68%, rgba(148, 163, 184, 0.75) 100%)",
+    glow: "rgba(30, 41, 59, 0.7)",
+  },
+  {
+    id: "pourpre",
+    angle: 210,
+    fill:
+      "linear-gradient(140deg, #3b0a2a 0%, #86198f 38%, #d946ef 70%, rgba(244, 114, 182, 0.9) 100%)",
+    glow: "rgba(217, 70, 239, 0.66)",
+  },
+];
 
 const PaletteLoader = ({ label }) => (
   <div className="palette-loader" role="status" aria-live="polite">
@@ -128,13 +171,15 @@ const PaletteLoader = ({ label }) => (
       <div className="palette-loader__spectrum">
         <span className="palette-loader__ring palette-loader__ring--outer" />
         <span className="palette-loader__ring palette-loader__ring--inner" />
-        {PALETTE_LOADER_COLORS.map((color, index) => (
+        {PALETTE_LOADER_DOFUS.map((dofus, index) => (
           <span
-            key={`${color}-${index}`}
-            className={`palette-loader__pulse palette-loader__pulse--${index}`}
+            key={dofus.id}
+            className={`palette-loader__dofus palette-loader__dofus--${dofus.id}`}
             style={{
-              "--palette-loader-color": color,
               "--palette-loader-index": String(index),
+              "--palette-loader-angle": `${dofus.angle}`,
+              "--palette-loader-fill": dofus.fill,
+              "--palette-loader-glow": dofus.glow,
             }}
           />
         ))}
@@ -3927,10 +3972,13 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     pointerId: null,
     lastX: 0,
     remainder: 0,
+    moved: false,
   });
   const isUnmountedRef = useRef(false);
   const [lookAnimation, setLookAnimation] = useState(DEFAULT_LOOK_ANIMATION);
   const [lookDirection, setLookDirection] = useState(DEFAULT_LOOK_DIRECTION);
+  const [isDirectionAutoplay, setIsDirectionAutoplay] = useState(false);
+  const directionAutoplayRef = useRef(null);
   const [downloadingPreviewId, setDownloadingPreviewId] = useState(null);
   const [copyingPreviewId, setCopyingPreviewId] = useState(null);
   const [supportsImageClipboard, setSupportsImageClipboard] = useState(false);
@@ -4597,6 +4645,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         pendingSharedItemsRef.current = null;
       }
 
+      setIsDirectionAutoplay(false);
       setActiveProposal(0);
     },
     [
@@ -4610,6 +4659,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       setLookDirection,
       setItemSlotFilters,
       setActiveProposal,
+      setIsDirectionAutoplay,
     ]
   );
 
@@ -5559,9 +5609,24 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const directionAnnouncement = activeDirectionLabel
     ? t("identity.preview.direction.announce", { direction: activeDirectionLabel })
     : "";
+  const directionInteractionHintRaw = t("identity.preview.direction.hint");
+  const directionInteractionHint =
+    typeof directionInteractionHintRaw === "string" && directionInteractionHintRaw.trim().length
+      ? directionInteractionHintRaw.trim()
+      : "Hold click or touch and drag to rotate. Use the keyboard arrows to pivot.";
+  const directionAutoplayHintRaw = isDirectionAutoplay
+    ? t("identity.preview.direction.autoplayStop")
+    : t("identity.preview.direction.autoplayPlay");
+  const directionAutoplayHint =
+    typeof directionAutoplayHintRaw === "string" && directionAutoplayHintRaw.trim().length
+      ? directionAutoplayHintRaw.trim()
+      : isDirectionAutoplay
+      ? "Click to stop automatic rotation"
+      : "Click to start automatic rotation";
   const previewDirectionDescription = `${t("aria.previewDirectionControl")}${
     activeDirectionLabel ? ` - ${activeDirectionLabel}` : ""
-  }. ${t("identity.preview.direction.hint")}`;
+  }. ${directionAutoplayHint} ${directionInteractionHint}`;
+  const directionPreviewTitle = `${directionAutoplayHint} ${directionInteractionHint}`.trim();
   const comparisonSliderLabelRaw = t("suggestions.render.comparisonAria");
   const comparisonSliderLabel =
     typeof comparisonSliderLabelRaw === "string" && comparisonSliderLabelRaw.trim().length
@@ -5605,6 +5670,59 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     };
   }, [activeProposalPalette, colors]);
 
+  const toastPresentation = useMemo(() => {
+    if (!toast) {
+      return null;
+    }
+
+    const accentHex = toast.swatch ? normalizeColorToHex(toast.swatch) : null;
+    const classNames = ["toast"];
+    if (toast.tone) {
+      classNames.push(`toast--${toast.tone}`);
+    }
+
+    const style = {};
+
+    if (accentHex) {
+      style["--toast-accent-gradient"] = buildGradientFromHex(accentHex);
+      style["--toast-accent-solid"] = accentHex;
+
+      const accentRgb = hexToRgb(accentHex);
+      if (accentRgb) {
+        const luminance = 0.299 * accentRgb.r + 0.587 * accentRgb.g + 0.114 * accentRgb.b;
+        const isLight = luminance > 168;
+        style["--toast-foreground"] = isLight
+          ? "rgba(15, 23, 42, 0.92)"
+          : "#f8fafc";
+        style["--toast-foreground-muted"] = isLight
+          ? "rgba(15, 23, 42, 0.64)"
+          : "rgba(248, 250, 252, 0.82)";
+        style["--toast-icon-surface"] = isLight
+          ? "rgba(255, 255, 255, 0.32)"
+          : "rgba(15, 23, 42, 0.42)";
+        style["--toast-icon-shadow"] = isLight
+          ? "rgba(14, 165, 233, 0.28)"
+          : "rgba(15, 23, 42, 0.55)";
+      }
+    }
+
+    const icon =
+      toast.icon ??
+      (toast.tone === "info"
+        ? "ℹ"
+        : toast.tone === "warning"
+        ? "!"
+        : toast.tone === "custom"
+        ? "🎨"
+        : "✓");
+
+    return {
+      className: classNames.join(" "),
+      style,
+      icon,
+    };
+  }, [toast]);
+
   useEffect(() => {
     if (theme === THEME_KEYS.INTELLIGENT) {
       applyThemeToDocument(theme, adaptiveThemePalette);
@@ -5614,15 +5732,17 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   useEffect(() => {
     if (!proposalCount) {
       if (activeProposal !== 0) {
+        setIsDirectionAutoplay(false);
         setActiveProposal(0);
       }
       return;
     }
 
     if (activeProposal >= proposalCount) {
+      setIsDirectionAutoplay(false);
       setActiveProposal(0);
     }
-  }, [activeProposal, proposalCount]);
+  }, [activeProposal, proposalCount, setIsDirectionAutoplay]);
 
   useEffect(() => {
     lookPreviewsRef.current = lookPreviews;
@@ -5928,24 +6048,27 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     if (!proposalCount) {
       return;
     }
+    setIsDirectionAutoplay(false);
     setActiveProposal((previous) => (previous + 1) % proposalCount);
-  }, [proposalCount]);
+  }, [proposalCount, setIsDirectionAutoplay]);
 
   const handlePrevProposal = useCallback(() => {
     if (!proposalCount) {
       return;
     }
+    setIsDirectionAutoplay(false);
     setActiveProposal((previous) => (previous - 1 + proposalCount) % proposalCount);
-  }, [proposalCount]);
+  }, [proposalCount, setIsDirectionAutoplay]);
 
   const handleSelectProposal = useCallback(
     (index) => {
       if (!proposalCount) {
         return;
       }
+      setIsDirectionAutoplay(false);
       setActiveProposal(index);
     },
-    [proposalCount]
+    [proposalCount, setIsDirectionAutoplay]
   );
 
   const handleLookPreviewError = useCallback(
@@ -6119,6 +6242,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           label: toastLabel,
           value: null,
           swatch: null,
+          tone: "success",
+          icon: "📋",
         });
       } catch (error) {
         console.error("Unable to copy preview:", error);
@@ -6131,7 +6256,13 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   );
 
   const handleCopy = useCallback(async (value, options = {}) => {
-    const { swatch = null, toastKey = "toast.colorCopied", hideValue = false } = options;
+    const {
+      swatch = null,
+      toastKey = "toast.colorCopied",
+      hideValue = false,
+      tone = swatch ? "custom" : "success",
+      icon = null,
+    } = options;
     const fallbackCopy = (text) => {
       const textarea = document.createElement("textarea");
       textarea.value = text;
@@ -6170,6 +6301,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         label: toastLabel,
         value: hideValue ? null : value,
         swatch,
+        tone,
+        icon,
       });
     } catch (err) {
       console.error(err);
@@ -6190,13 +6323,15 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           label: toastLabel,
           value: hideValue ? null : value,
           swatch,
+          tone,
+          icon,
         });
       } catch (fallbackErr) {
         console.error(fallbackErr);
         setError(t("errors.clipboard"));
       }
     }
-  }, [t]);
+  }, [t, setError, setToast, setCopiedCode]);
 
   const handleShareSkin = useCallback(
     (proposal) => {
@@ -6224,7 +6359,12 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       try {
         const shareUrl = new URL(window.location.href);
         shareUrl.searchParams.set("skin", encoded);
-        handleCopy(shareUrl.toString(), { toastKey: "toast.shareLinkCopied", hideValue: true });
+        handleCopy(shareUrl.toString(), {
+          toastKey: "toast.shareLinkCopied",
+          hideValue: true,
+          tone: "info",
+          icon: "🔗",
+        });
       } catch (err) {
         console.error(err);
         setError(t("errors.shareLink"));
@@ -6252,12 +6392,38 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     [lookAnimation]
   );
 
+  useEffect(() => {
+    if (!isDirectionAutoplay) {
+      if (directionAutoplayRef.current !== null && typeof window !== "undefined") {
+        window.clearInterval(directionAutoplayRef.current);
+        directionAutoplayRef.current = null;
+      }
+      return;
+    }
+
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const interval = window.setInterval(() => {
+      rotateLookDirection(1);
+    }, 900);
+
+    directionAutoplayRef.current = interval;
+
+    return () => {
+      window.clearInterval(interval);
+      directionAutoplayRef.current = null;
+    };
+  }, [isDirectionAutoplay, rotateLookDirection]);
+
   const resetDirectionDragState = useCallback(() => {
     directionDragStateRef.current = {
       active: false,
       pointerId: null,
       lastX: 0,
       remainder: 0,
+      moved: false,
     };
   }, []);
 
@@ -6284,6 +6450,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       pointerId: event.pointerId,
       lastX: Number.isFinite(event.clientX) ? event.clientX : 0,
       remainder: 0,
+      moved: false,
     };
 
     if (event.pointerType === "touch") {
@@ -6324,6 +6491,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       }
 
       if (steps !== 0) {
+        state.moved = true;
+        setIsDirectionAutoplay(false);
         rotateLookDirection(steps);
       }
 
@@ -6331,7 +6500,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         event.preventDefault();
       }
     },
-    [rotateLookDirection]
+    [rotateLookDirection, setIsDirectionAutoplay]
   );
 
   const handleDirectionPointerUp = useCallback(
@@ -6341,6 +6510,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         return;
       }
 
+      const wasMoved = Boolean(state.moved);
       const target = event.currentTarget;
       if (typeof target.releasePointerCapture === "function") {
         try {
@@ -6352,11 +6522,17 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
 
       resetDirectionDragState();
 
+      const isPrimaryPointer =
+        event.pointerType !== "mouse" || event.button === 0 || event.button === -1;
+      if (!wasMoved && isPrimaryPointer) {
+        setIsDirectionAutoplay((previous) => !previous);
+      }
+
       if (event.pointerType === "touch") {
         event.preventDefault();
       }
     },
-    [resetDirectionDragState]
+    [resetDirectionDragState, setIsDirectionAutoplay]
   );
 
   const handleDirectionPointerCancel = useCallback(
@@ -6382,6 +6558,21 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
 
   const handleDirectionKeyDown = useCallback(
     (event) => {
+      if (event.key === " " || event.key === "Spacebar" || event.key === "Enter") {
+        event.preventDefault();
+        setIsDirectionAutoplay((previous) => !previous);
+        return;
+      }
+
+      if (
+        event.key === "ArrowLeft" ||
+        event.key === "ArrowUp" ||
+        event.key === "ArrowRight" ||
+        event.key === "ArrowDown"
+      ) {
+        setIsDirectionAutoplay(false);
+      }
+
       if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
         event.preventDefault();
         rotateLookDirection(-1);
@@ -6393,7 +6584,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         rotateLookDirection(1);
       }
     },
-    [rotateLookDirection]
+    [rotateLookDirection, setIsDirectionAutoplay]
   );
 
   const toggleDetailedMatches = useCallback(() => {
@@ -6960,12 +7151,16 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     [handleFile, isImageMode]
   );
 
-  const handleColorInput = useCallback((event) => {
-    const value = event.target.value;
-    if (typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)) {
-      setSelectedColor(value.toUpperCase());
-    }
-  }, []);
+  const handleColorInput = useCallback(
+    (event) => {
+      const value = event.target.value;
+      if (typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)) {
+        setIsDirectionAutoplay(false);
+        setSelectedColor(value.toUpperCase());
+      }
+    },
+    [setIsDirectionAutoplay]
+  );
 
   const handleRandomizeColor = useCallback(() => {
     const random = `#${Math.floor(Math.random() * 0xffffff)
@@ -6973,16 +7168,32 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       .padStart(6, "0")
       .toUpperCase()}`;
     setInputMode("color");
+    setIsDirectionAutoplay(false);
     setSelectedColor(random);
-  }, []);
+  }, [setIsDirectionAutoplay]);
 
-  const handleSeedClick = useCallback((hex) => {
-    if (!hex) {
-      return;
-    }
-    setInputMode("color");
-    setSelectedColor(hex.toUpperCase());
-  }, []);
+  const handleSeedClick = useCallback(
+    (hex) => {
+      if (!hex) {
+        return;
+      }
+      setInputMode("color");
+      setIsDirectionAutoplay(false);
+      setSelectedColor(hex.toUpperCase());
+    },
+    [setIsDirectionAutoplay]
+  );
+
+  const handleSelectBreed = useCallback(
+    (breedId) => {
+      if (!Number.isFinite(breedId)) {
+        return;
+      }
+      setIsDirectionAutoplay(false);
+      setSelectedBreedId(breedId);
+    },
+    [setIsDirectionAutoplay, setSelectedBreedId]
+  );
 
   const showProgressBar = isProcessing || analysisProgress > 0;
   const clampedProgress = Math.max(0, Math.min(analysisProgress, 100));
@@ -7025,24 +7236,16 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           </div>
         ) : null}
         <div className={`toast-tray${toast ? " toast-tray--visible" : ""}`} aria-live="polite">
-          {toast ? (
-            <div className="toast">
-              <span className="toast__glow" aria-hidden="true" />
+          {toastPresentation ? (
+            <div className={toastPresentation.className} style={toastPresentation.style}>
               <div className="toast__content">
-                <span className="toast__icon" aria-hidden="true">✓</span>
+                <span className="toast__icon" aria-hidden="true">
+                  {toastPresentation.icon}
+                </span>
                 <div className="toast__body">
                   <span className="toast__title">{toast.label}</span>
-                  {toast.value ? (
-                    <span className="toast__value">{toast.value}</span>
-                  ) : null}
+                  {toast.value ? <span className="toast__value">{toast.value}</span> : null}
                 </div>
-                {toast.swatch ? (
-                  <span
-                    className="toast__swatch"
-                    style={{ backgroundImage: buildGradientFromHex(toast.swatch) }}
-                    aria-hidden="true"
-                  />
-                ) : null}
               </div>
             </div>
           ) : null}
@@ -7515,7 +7718,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                         key={breed.slug ?? `breed-${breed.id}`}
                         type="button"
                         className={`identity-card__chip${isActive ? " is-active" : ""}`}
-                        onClick={() => setSelectedBreedId(breed.id)}
+                        onClick={() => handleSelectBreed(breed.id)}
                         role="radio"
                         aria-checked={isActive}
                         aria-label={t("identity.class.choose", { name: breedLabel })}
@@ -7688,10 +7891,10 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                         ) : null}
                                         <div className="skin-card__glow" aria-hidden="true" />
                                         <div
-                                          className="skin-card__preview"
+                                          className={`skin-card__preview${isDirectionAutoplay ? " is-autoplay" : ""}`}
                                           role="group"
                                           aria-label={previewDirectionDescription}
-                                          title={t("identity.preview.direction.hint")}
+                                          title={directionPreviewTitle}
                                           tabIndex={0}
                                           onPointerDown={handleDirectionPointerDown}
                                           onPointerMove={handleDirectionPointerMove}
@@ -7699,6 +7902,9 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           onPointerCancel={handleDirectionPointerCancel}
                                           onKeyDown={handleDirectionKeyDown}
                                         >
+                                          <span className="sr-only" aria-live="polite">
+                                            {directionAutoplayHint}
+                                          </span>
                                           {showComparison ? (
                                             <SkinCardPreviewComparison
                                               withSrc={previewSrc}
