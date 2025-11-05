@@ -6,6 +6,17 @@ import { useLockBody } from "../../app/components/hooks/useLockBody";
 
 const DEFAULT_COUNT = 12;
 
+function GalleryLoader({ message }) {
+  return (
+    <div className="gallery-loader" role="status" aria-live="polite">
+      <span className="gallery-loader__icon" aria-hidden="true">
+        <img src="/logo.svg" alt="" />
+      </span>
+      <span>{message}</span>
+    </div>
+  );
+}
+
 function classNames(...parts) {
   return parts.filter(Boolean).join(" ");
 }
@@ -115,7 +126,7 @@ function GalleryCard({ skin, language, onSelect }) {
       type="button"
       className={classNames("gallery-card", status === "loading" && "gallery-card--loading")}
       onClick={handleClick}
-      aria-label={`Skin ${skin.number} - ${skin.className}`}
+      aria-label={`Skin ${(skin.displayNumber ?? skin.number)} - ${skin.className}`}
     >
       <div className="gallery-card__preview">
         {status === "loaded" && preview?.src ? (
@@ -127,7 +138,7 @@ function GalleryCard({ skin, language, onSelect }) {
         )}
       </div>
       <div className="gallery-card__meta">
-        <span className="gallery-card__number">#{skin.number.toString().padStart(2, "0")}</span>
+        <span className="gallery-card__number">#{(skin.displayNumber ?? skin.number).toString().padStart(2, "0")}</span>
         <div className="gallery-card__identity">
           {skin.classIcon ? (
             <img
@@ -183,6 +194,7 @@ function GalleryModal({ selection, onClose }) {
   }
 
   const { skin, preview } = selection;
+  const displayNumber = (skin.displayNumber ?? skin.number).toString().padStart(2, "0");
 
   return (
     <div className="gallery-modal" role="dialog" aria-modal="true" aria-labelledby="gallery-modal-title">
@@ -190,7 +202,7 @@ function GalleryModal({ selection, onClose }) {
       <div className="gallery-modal__content" role="document">
         <header className="gallery-modal__header">
           <div>
-            <p className="gallery-modal__eyebrow">Skin #{skin.number.toString().padStart(2, "0")}</p>
+            <p className="gallery-modal__eyebrow">Skin #{displayNumber}</p>
             <h2 id="gallery-modal-title">{skin.className}</h2>
           </div>
           <button type="button" className="gallery-modal__close" onClick={onClose} ref={closeButtonRef}>
@@ -200,51 +212,53 @@ function GalleryModal({ selection, onClose }) {
         </header>
 
         <div className="gallery-modal__body">
-          <div className="gallery-modal__preview">
-            {preview?.src ? (
-              <img src={preview.src} alt={`Aperçu détaillé skin ${skin.className}`} />
-            ) : (
-              <div className="gallery-modal__placeholder">Aperçu indisponible</div>
-            )}
+          <div className="gallery-modal__layout">
+            <section className="gallery-modal__section gallery-modal__section--palette" aria-label="Palette de couleurs">
+              <h3>Palette du skin</h3>
+              <ul className="gallery-modal__palette">
+                {skin.palette?.hex?.map((hex, index) => (
+                  <li key={`${hex}-${index}`}>
+                    <span className="gallery-modal__swatch" style={{ backgroundColor: hex }} aria-hidden="true" />
+                    <span>{hex}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <div className="gallery-modal__preview">
+              {preview?.src ? (
+                <img src={preview.src} alt={`Aperçu détaillé skin ${skin.className}`} />
+              ) : (
+                <div className="gallery-modal__placeholder">Aperçu indisponible</div>
+              )}
+            </div>
+
+            <section className="gallery-modal__section gallery-modal__section--items" aria-label="Équipement sélectionné">
+              <h3>Équipement harmonisé</h3>
+              <ul className="gallery-modal__items">
+                {skin.items?.map((item) => (
+                  <li key={`${item.slot}-${item.ankamaId}`}>
+                    {item.icon ? (
+                      <img src={item.icon} alt="" aria-hidden="true" loading="lazy" />
+                    ) : (
+                      <span className="gallery-modal__item-placeholder" aria-hidden="true">
+                        {item.slot.slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
+                    <div>
+                      <p className="gallery-modal__item-name">{item.name}</p>
+                      <p className="gallery-modal__item-slot">{item.slot}</p>
+                      {item.href ? (
+                        <a href={item.href} target="_blank" rel="noreferrer" className="gallery-modal__item-link">
+                          Voir sur DofusDB
+                        </a>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
           </div>
-
-          <section className="gallery-modal__section" aria-label="Palette de couleurs">
-            <h3>Palette du skin</h3>
-            <ul className="gallery-modal__palette">
-              {skin.palette?.hex?.map((hex, index) => (
-                <li key={`${hex}-${index}`}>
-                  <span className="gallery-modal__swatch" style={{ backgroundColor: hex }} aria-hidden="true" />
-                  <span>{hex}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="gallery-modal__section" aria-label="Équipement sélectionné">
-            <h3>Équipement harmonisé</h3>
-            <ul className="gallery-modal__items">
-              {skin.items?.map((item) => (
-                <li key={`${item.slot}-${item.ankamaId}`}>
-                  {item.icon ? (
-                    <img src={item.icon} alt="" aria-hidden="true" loading="lazy" />
-                  ) : (
-                    <span className="gallery-modal__item-placeholder" aria-hidden="true">
-                      {item.slot.slice(0, 1).toUpperCase()}
-                    </span>
-                  )}
-                  <div>
-                    <p className="gallery-modal__item-name">{item.name}</p>
-                    <p className="gallery-modal__item-slot">{item.slot}</p>
-                    {item.href ? (
-                      <a href={item.href} target="_blank" rel="noreferrer" className="gallery-modal__item-link">
-                        Voir sur DofusDB
-                      </a>
-                    ) : null}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
         </div>
       </div>
     </div>
@@ -255,33 +269,67 @@ export default function GalleryCollectionsPage() {
   const { language } = useLanguage();
   const [skins, setSkins] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const [selection, setSelection] = useState(null);
+  const loadMoreRef = useRef(null);
+  const totalCountRef = useRef(0);
+  const inFlightRef = useRef(false);
 
-  const fetchGallery = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      params.set("lang", language);
-      params.set("count", String(DEFAULT_COUNT));
-      const response = await fetch(`/api/gallery?${params.toString()}`);
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        throw new Error(payload?.error ?? `HTTP ${response.status}`);
+  const fetchGallery = useCallback(
+    async ({ append = false } = {}) => {
+      if (inFlightRef.current) {
+        return;
       }
-      const payload = await response.json();
-      const dataset = Array.isArray(payload?.skins) ? payload.skins : [];
-      setSkins(dataset);
-    } catch (err) {
-      console.error("gallery page error", err);
-      setError(err instanceof Error ? err.message : String(err));
-      setSkins([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [language]);
+      inFlightRef.current = true;
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+        totalCountRef.current = 0;
+      }
+      setError(null);
+      try {
+        const params = new URLSearchParams();
+        params.set("lang", language);
+        params.set("count", String(DEFAULT_COUNT));
+        const response = await fetch(`/api/gallery?${params.toString()}`);
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error ?? `HTTP ${response.status}`);
+        }
+        const payload = await response.json();
+        const dataset = Array.isArray(payload?.skins) ? payload.skins : [];
+        setSkins((prev) => {
+          const base = append ? prev : [];
+          const startIndex = append ? totalCountRef.current : 0;
+          const mapped = dataset.map((skin, index) => ({
+            ...skin,
+            displayNumber: startIndex + index + 1,
+          }));
+          totalCountRef.current = startIndex + mapped.length;
+          return append ? [...base, ...mapped] : mapped;
+        });
+      } catch (err) {
+        console.error("gallery page error", err);
+        if (append) {
+          setError((current) => current);
+        } else {
+          setError(err instanceof Error ? err.message : String(err));
+          setSkins([]);
+        }
+      } finally {
+        if (append) {
+          setLoadingMore(false);
+        } else {
+          setLoading(false);
+        }
+        inFlightRef.current = false;
+      }
+    },
+    [language],
+  );
 
   useEffect(() => {
     fetchGallery();
@@ -299,9 +347,34 @@ export default function GalleryCollectionsPage() {
     setSelection(null);
   }, []);
 
+  useEffect(() => {
+    const node = loadMoreRef.current;
+    if (!node) {
+      return () => {};
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            fetchGallery({ append: true });
+          }
+        });
+      },
+      {
+        root: null,
+        rootMargin: "600px 0px",
+        threshold: 0.1,
+      },
+    );
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+    };
+  }, [fetchGallery]);
+
   const content = useMemo(() => {
     if (loading) {
-      return <p className="gallery-status">Génération de nouvelles palettes...</p>;
+      return <GalleryLoader message="Génération de nouvelles palettes..." />;
     }
     if (error) {
       return (
@@ -325,13 +398,19 @@ export default function GalleryCollectionsPage() {
       );
     }
     return (
-      <div className="gallery-grid" aria-live="polite">
-        {skins.map((skin) => (
-          <GalleryCard key={skin.id} skin={skin} language={language} onSelect={handleSelect} />
-        ))}
-      </div>
+      <>
+        <div className="gallery-grid" aria-live="polite">
+          {skins.map((skin) => (
+            <GalleryCard key={`${skin.id}-${skin.displayNumber}`} skin={skin} language={language} onSelect={handleSelect} />
+          ))}
+        </div>
+        <div className="gallery-loadmore">
+          {loadingMore ? <GalleryLoader message="Inspiration en cours..." /> : null}
+          <div ref={loadMoreRef} className="gallery-loadmore__sentinel" aria-hidden="true" />
+        </div>
+      </>
     );
-  }, [loading, error, skins, handleRefresh, language, handleSelect]);
+  }, [loading, error, skins, handleRefresh, language, handleSelect, loadingMore]);
 
   return (
     <>
