@@ -213,50 +213,64 @@ function GalleryModal({ selection, onClose }) {
 
         <div className="gallery-modal__body">
           <div className="gallery-modal__layout">
-            <section className="gallery-modal__section gallery-modal__section--palette" aria-label="Palette de couleurs">
-              <h3>Palette du skin</h3>
-              <ul className="gallery-modal__palette">
-                {skin.palette?.hex?.map((hex, index) => (
-                  <li key={`${hex}-${index}`}>
-                    <span className="gallery-modal__swatch" style={{ backgroundColor: hex }} aria-hidden="true" />
-                    <span>{hex}</span>
-                  </li>
-                ))}
-              </ul>
+            <section className="gallery-modal__panel gallery-modal__panel--palette" aria-label="Palette de couleurs">
+              <h3 className="gallery-modal__section-title">Palette du skin</h3>
+              {skin.palette?.hex?.length ? (
+                <ul className="gallery-modal__palette">
+                  {skin.palette.hex.map((hex, index) => (
+                    <li key={`${hex}-${index}`}>
+                      <span className="gallery-modal__swatch" style={{ backgroundColor: hex }} aria-hidden="true" />
+                      <div className="gallery-modal__swatch-info">
+                        <span className="gallery-modal__swatch-index">#{String(index + 1).padStart(2, "0")}</span>
+                        <span className="gallery-modal__swatch-value">{hex}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="gallery-modal__empty">Aucune couleur disponible pour ce skin.</p>
+              )}
             </section>
 
-            <div className="gallery-modal__preview">
-              {preview?.src ? (
-                <img src={preview.src} alt={`Aperçu détaillé skin ${skin.className}`} />
-              ) : (
-                <div className="gallery-modal__placeholder">Aperçu indisponible</div>
-              )}
-            </div>
+            <section className="gallery-modal__panel gallery-modal__panel--preview" aria-label="Aperçu du skin">
+              <h3 className="sr-only">Aperçu du skin</h3>
+              <div className="gallery-modal__preview-frame">
+                {preview?.src ? (
+                  <img src={preview.src} alt={`Aperçu détaillé skin ${skin.className}`} />
+                ) : (
+                  <div className="gallery-modal__placeholder">Aperçu indisponible</div>
+                )}
+              </div>
+            </section>
 
-            <section className="gallery-modal__section gallery-modal__section--items" aria-label="Équipement sélectionné">
-              <h3>Équipement harmonisé</h3>
-              <ul className="gallery-modal__items">
-                {skin.items?.map((item) => (
-                  <li key={`${item.slot}-${item.ankamaId}`}>
-                    {item.icon ? (
-                      <img src={item.icon} alt="" aria-hidden="true" loading="lazy" />
-                    ) : (
-                      <span className="gallery-modal__item-placeholder" aria-hidden="true">
-                        {item.slot.slice(0, 1).toUpperCase()}
-                      </span>
-                    )}
-                    <div>
-                      <p className="gallery-modal__item-name">{item.name}</p>
-                      <p className="gallery-modal__item-slot">{item.slot}</p>
-                      {item.href ? (
-                        <a href={item.href} target="_blank" rel="noreferrer" className="gallery-modal__item-link">
-                          Voir sur DofusDB
-                        </a>
-                      ) : null}
-                    </div>
-                  </li>
-                ))}
-              </ul>
+            <section className="gallery-modal__panel gallery-modal__panel--items" aria-label="Équipement sélectionné">
+              <h3 className="gallery-modal__section-title">Équipement harmonisé</h3>
+              {skin.items?.length ? (
+                <ul className="gallery-modal__items">
+                  {skin.items.map((item) => (
+                    <li key={`${item.slot}-${item.ankamaId}`}>
+                      {item.icon ? (
+                        <img src={item.icon} alt="" aria-hidden="true" loading="lazy" />
+                      ) : (
+                        <span className="gallery-modal__item-placeholder" aria-hidden="true">
+                          {item.slot.slice(0, 1).toUpperCase()}
+                        </span>
+                      )}
+                      <div>
+                        <p className="gallery-modal__item-name">{item.name}</p>
+                        <p className="gallery-modal__item-slot">{item.slot}</p>
+                        {item.href ? (
+                          <a href={item.href} target="_blank" rel="noreferrer" className="gallery-modal__item-link">
+                            Voir sur DofusDB
+                          </a>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="gallery-modal__empty">Aucun équipement n'a pu être synchronisé.</p>
+              )}
             </section>
           </div>
         </div>
@@ -369,6 +383,40 @@ export default function GalleryCollectionsPage() {
     observer.observe(node);
     return () => {
       observer.disconnect();
+    };
+  }, [fetchGallery]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return () => {};
+    }
+    let ticking = false;
+    const handleScroll = () => {
+      if (ticking) {
+        return;
+      }
+      ticking = true;
+      window.requestAnimationFrame(() => {
+        ticking = false;
+        if (inFlightRef.current) {
+          return;
+        }
+        const root = document.documentElement || document.body;
+        if (!root) {
+          return;
+        }
+        const scrollTop = root.scrollTop || window.pageYOffset || 0;
+        const clientHeight = root.clientHeight || window.innerHeight || 0;
+        const scrollHeight = root.scrollHeight || document.body.scrollHeight || 0;
+        if (scrollHeight - (scrollTop + clientHeight) < 640) {
+          fetchGallery({ append: true });
+        }
+      });
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
     };
   }, [fetchGallery]);
 
