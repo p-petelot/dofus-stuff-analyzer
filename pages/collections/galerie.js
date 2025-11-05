@@ -445,8 +445,7 @@ function GalleryModal({ selection, onClose }) {
       <div className="gallery-modal__content" role="document">
         <header className="gallery-modal__header">
           <div>
-            <p className="gallery-modal__eyebrow">Skin #{displayNumber}</p>
-            <h2 id="gallery-modal-title">{skin.className}</h2>
+            <p className="gallery-modal__eyebrow">Skin #{displayNumber} - {skin.className}</p>
           </div>
           <button type="button" className="gallery-modal__close" onClick={onClose} ref={closeButtonRef}>
             <span aria-hidden="true">×</span>
@@ -458,18 +457,7 @@ function GalleryModal({ selection, onClose }) {
           <div className="gallery-modal__columns">
             <section className="gallery-modal__preview" aria-label="Aperçu du skin">
               <h3 className="sr-only">Aperçu du skin</h3>
-              <div className="gallery-modal__preview-frame">
-                {preview?.src ? (
-                  <img src={preview.src} alt={`Aperçu détaillé skin ${skin.className}`} />
-                ) : (
-                  <div className="gallery-modal__placeholder">Aperçu indisponible</div>
-                )}
-              </div>
-            </section>
-
-            <section className="gallery-modal__details" aria-label="Palette et équipement sélectionnés">
               <div className="gallery-modal__swatch-section">
-                <h3 className="gallery-modal__section-title">Palette harmonisée</h3>
                 {swatches.length ? (
                   <ul className="gallery-modal__swatches" role="list">
                     {swatches.map((hex, index) => {
@@ -499,9 +487,19 @@ function GalleryModal({ selection, onClose }) {
                   <p className="gallery-modal__empty">Aucune couleur disponible pour ce skin.</p>
                 )}
               </div>
+              <div className="gallery-modal__preview-frame">
+                {preview?.src ? (
+                  <img src={preview.src} alt={`Aperçu détaillé skin ${skin.className}`} />
+                ) : (
+                  <div className="gallery-modal__placeholder">Aperçu indisponible</div>
+                )}
+              </div>
+            </section>
+
+            <section className="gallery-modal__details" aria-label="Palette et équipement sélectionnés">
+              
 
               <div className="gallery-modal__items-section">
-                <h3 className="gallery-modal__section-title">Équipement harmonisé</h3>
                 {orderedItems.length ? (
                   <ul className="gallery-modal__items" role="list">
                     {orderedItems.map((item) => {
@@ -744,7 +742,7 @@ export default function GalleryCollectionsPage() {
             <Link href="/collections" className="gallery-breadcrumb">
               ← Collections
             </Link>
-            <h1>Galerie générée par l'IA</h1>
+            <h1>Galerie</h1>
             <p>
               Explorez des combinaisons de couleurs et d'équipements sélectionnés automatiquement pour correspondre à une
               palette harmonieuse. Cliquez sur un skin pour découvrir les détails de sa composition.

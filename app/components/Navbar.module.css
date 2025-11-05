@@ -193,11 +193,11 @@
 
 .navLinkActive {
   color: var(--navbar-text);
-  background: linear-gradient(
+  /* background: linear-gradient(
     135deg,
     rgba(var(--brand-emerald-rgb), 0.2) 0%,
     rgba(var(--accent-primary-rgb), 0.18) 100%
-  );
+  ); */
 }
 
 .navIndicator {
