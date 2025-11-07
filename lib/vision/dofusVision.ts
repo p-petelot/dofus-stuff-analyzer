@@ -142,11 +142,7 @@ async function loadTf(): Promise<TfModule> {
       const tf = await import("@tensorflow/tfjs");
       await import("@tensorflow/tfjs-backend-cpu");
       await import("@tensorflow/tfjs-backend-wasm");
-      try {
-        await import("@tensorflow/tfjs-node");
-        await tf.setBackend("tensorflow");
-      } catch (err) {
-        console.warn("tfjs-node unavailable, falling back to CPU backend", err);
+      if (tf.getBackend() !== "cpu") {
         await tf.setBackend("cpu");
       }
       await tf.ready();
