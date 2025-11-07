@@ -619,7 +619,7 @@ export async function predictImage({
   imagePath,
   imageBuffer,
   modelDir = path.resolve("./models/class_sex"),
-  imgSize = 64,
+  imgSize,
 }: PredictOptions): Promise<PredictResult> {
   if (!imagePath && !imageBuffer) {
     throw new Error("Provide either imagePath or imageBuffer");
@@ -635,7 +635,18 @@ export async function predictImage({
   }
 
   const model = await getModel(tf, modelDir);
-  const tensor = await loadImageAsTensor(tmpPath, imgSize, tf);
+  const inputShape = Array.isArray(model.inputs) && model.inputs.length > 0 ? model.inputs[0].shape ?? [] : [];
+  const inferredSize =
+    Array.isArray(inputShape) && typeof inputShape[1] === "number" && Number.isFinite(inputShape[1])
+      ? inputShape[1]
+      : null;
+  if (typeof imgSize === "number" && inferredSize && imgSize !== inferredSize) {
+    console.warn(
+      `predictImage: overriding provided imgSize ${imgSize} with model input size ${inferredSize} to avoid shape mismatch`,
+    );
+  }
+  const targetSize = inferredSize ?? imgSize ?? 64;
+  const tensor = await loadImageAsTensor(tmpPath, targetSize, tf);
   const logits = model.predict(tensor) as import("@tensorflow/tfjs").Tensor;
   const probs = await logits.data();
   tensor.dispose();
