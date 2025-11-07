@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
+import { ModelPredictionSection } from "../app/components/ModelPredictionSection";
+import { usePredictionLabels } from "../lib/vision/usePredictionLabels";
 import {
   DEFAULT_LANGUAGE,
   getLanguagePriority,
@@ -3858,6 +3860,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const themeSelectorAria = typeof themeSelectorLabel === "string" ? themeSelectorLabel : "";
   const languageSelectorLabel = t("language.selectorAria");
   const languageSelectorAria = typeof languageSelectorLabel === "string" ? languageSelectorLabel : "";
+  const predictionLabels = usePredictionLabels(t);
   const activeThemeOption = useMemo(
     () => themeOptions.find((option) => option.key === theme) ?? null,
     [themeOptions, theme]
@@ -3886,6 +3889,9 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const [imageTones, setImageTones] = useState(null);
   const [imageHash, setImageHash] = useState(null);
   const [imageEdges, setImageEdges] = useState(null);
+  const [modelResult, setModelResult] = useState(null);
+  const [modelError, setModelError] = useState(null);
+  const [isPredicting, setIsPredicting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
@@ -6781,6 +6787,43 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     setItemSearchQuery("");
   }, [activeItemSlot]);
 
+  const runModelPrediction = useCallback(
+    async (dataUrl) => {
+      if (!dataUrl) return;
+      setIsPredicting(true);
+      setModelError(null);
+      setModelResult(null);
+      try {
+        const response = await fetch("/api/vision/predict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: dataUrl }),
+        });
+        if (!response.ok) {
+          let message;
+          try {
+            const payload = await response.json();
+            message = payload?.error;
+          } catch (err) {
+            message = null;
+          }
+          const fallback = t("vision.prediction.error");
+          throw new Error(message || (typeof fallback === "string" ? fallback : "Prediction failed"));
+        }
+        const payload = await response.json();
+        setModelResult(payload);
+      } catch (err) {
+        console.error(err);
+        const fallback = t("vision.prediction.error");
+        const message = err?.message || (typeof fallback === "string" ? fallback : "Prediction failed");
+        setModelError(message);
+      } finally {
+        setIsPredicting(false);
+      }
+    },
+    [t],
+  );
+
   const handleDataUrl = useCallback((dataUrl) => {
     if (!dataUrl) return;
     setInputMode("image");
@@ -6793,6 +6836,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     setImageTones(null);
     setImageHash(null);
     setImageEdges(null);
+    runModelPrediction(dataUrl);
 
     const image = new Image();
     image.crossOrigin = "anonymous";
@@ -6837,7 +6881,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       setImageEdges(null);
     };
     image.src = dataUrl;
-  }, [t]);
+  }, [runModelPrediction, t]);
 
   const handleFile = useCallback(
     (file) => {
@@ -7413,7 +7457,15 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
               </div>
             )}
           </div>
-          
+
+          <ModelPredictionSection
+            result={modelResult}
+            isLoading={isPredicting}
+            error={modelError}
+            placeholder={predictionLabels.placeholder}
+            labels={predictionLabels}
+          />
+
           <div className="suggestions" style={suggestionsAccentStyle}>
             <div
               className="identity-card suggestions__identity-card"

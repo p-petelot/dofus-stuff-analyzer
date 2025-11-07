@@ -2389,6 +2389,316 @@ a {
   max-width: 100%;
 }
 
+.model-insights {
+  background: var(--card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--card-border);
+  padding: 16px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.model-insights__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.model-insights__header h2 {
+  margin: 0;
+  font-size: 1.08rem;
+}
+
+.model-insights__placeholder {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.model-insights__error {
+  margin: 0;
+  color: #fca5a5;
+  background: rgba(var(--danger-rgb), 0.12);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(var(--danger-rgb), 0.24);
+}
+
+.model-insights__content {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.model-insights__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.model-insights__summary-label {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.model-insights__summary-value {
+  font-size: 1.08rem;
+  font-weight: 600;
+}
+
+.model-insights__colors h3,
+.model-insights__top5 h3 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+}
+
+.model-insights__swatches {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+}
+
+.model-insights__swatches li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.model-insights__swatch {
+  display: block;
+  width: 100%;
+  height: 40px;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px rgba(var(--text-muted-rgb), 0.25);
+}
+
+.model-insights__swatch-label {
+  font-family: "Fira Code", "DM Mono", "JetBrains Mono", monospace;
+  font-size: 0.78rem;
+}
+
+.model-insights__top5 ol {
+  margin: 0;
+  padding: 0 0 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.model-insights__top5 li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.model-insights__top5-label {
+  font-weight: 500;
+}
+
+.model-insights__top5-score {
+  font-family: "Fira Code", "DM Mono", "JetBrains Mono", monospace;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.vision-lab {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 48px 24px 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.vision-lab__intro h1 {
+  margin: 0;
+  font-size: 2.1rem;
+}
+
+.vision-lab__intro p {
+  margin: 0;
+  color: var(--text-muted);
+  max-width: 720px;
+  line-height: 1.5;
+}
+
+.vision-lab__grid {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.vision-lab__card {
+  background: var(--card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--card-border);
+  padding: 24px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.vision-lab__card header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.vision-lab__card header p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+
+.vision-lab__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vision-lab__form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+.vision-lab__form input {
+  background: rgba(var(--surface-6-rgb), 0.92);
+  border: 1px solid rgba(var(--text-muted-rgb), 0.26);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: inherit;
+}
+
+.vision-lab__form input:focus-visible {
+  outline: 2px solid rgba(var(--accent-sky-rgb), 0.8);
+  outline-offset: 2px;
+}
+
+.vision-lab__form--grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.vision-lab__status {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.vision-lab__status--success {
+  color: #34d399;
+}
+
+.vision-lab__status--error {
+  color: #fca5a5;
+}
+
+.vision-lab__status--running {
+  color: #fbbf24;
+}
+
+.vision-lab__upload {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.vision-lab__upload-label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  border: 1px dashed rgba(var(--text-muted-rgb), 0.28);
+  background: rgba(var(--surface-6-rgb), 0.9);
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.vision-lab__upload-label:hover {
+  border-color: rgba(var(--accent-sky-rgb), 0.6);
+  transform: translateY(-1px);
+}
+
+.vision-lab__upload-label input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.vision-lab__clear {
+  background: transparent;
+  border: 1px solid rgba(var(--text-muted-rgb), 0.25);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.vision-lab__clear:hover {
+  border-color: rgba(var(--accent-sky-rgb), 0.6);
+  transform: translateY(-1px);
+}
+
+.vision-lab__history {
+  margin-top: 12px;
+  border: 1px solid rgba(var(--text-muted-rgb), 0.18);
+  border-radius: var(--radius-md);
+  background: rgba(var(--surface-6-rgb), 0.72);
+  overflow-x: auto;
+  font-family: "Fira Code", "DM Mono", "JetBrains Mono", monospace;
+}
+
+.vision-lab__history-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(80px, 1fr));
+}
+
+.vision-lab__history-row span {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(var(--text-muted-rgb), 0.2);
+  font-size: 0.82rem;
+}
+
+.vision-lab__history-row--head {
+  background: rgba(var(--surface-7-rgb), 0.9);
+  font-weight: 600;
+}
+
+.vision-lab__history-row:last-child span {
+  border-bottom: none;
+}
+
+@media (max-width: 720px) {
+  .vision-lab {
+    padding: 32px 16px 80px;
+  }
+
+  .vision-lab__intro h1 {
+    font-size: 1.8rem;
+  }
+
+  .vision-lab__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .palette__header {
   display: flex;
   justify-content: space-between;
