@@ -105,7 +105,7 @@ export default function VisionLab() {
           const response = await fetch("/api/vision/predict", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ image: result }),
+            body: JSON.stringify({ image: result, renderer: rendererUrl }),
           });
           if (!response.ok) {
             const payload = await response.json().catch(() => ({}));
@@ -123,7 +123,7 @@ export default function VisionLab() {
       };
       reader.readAsDataURL(file);
     },
-    [t],
+    [rendererUrl, t],
   );
 
   const handlePredictChange = useCallback(
@@ -171,7 +171,12 @@ export default function VisionLab() {
                 <span>{t("vision.lab.generate.renderer")}</span>
                 <input value={rendererUrl} onChange={(event) => setRendererUrl(event.target.value)} />
               </label>
-              <button type="button" onClick={handleGenerate} disabled={generateStatus === "running"}>
+              <button
+                type="button"
+                className="vision-lab__button vision-lab__button--primary"
+                onClick={handleGenerate}
+                disabled={generateStatus === "running"}
+              >
                 {t("vision.lab.generate.button")}
               </button>
               {generateStatusMessage ? (
@@ -226,7 +231,12 @@ export default function VisionLab() {
                 />
               </label>
             </div>
-            <button type="button" onClick={handleTrain} disabled={trainStatus === "running"}>
+            <button
+              type="button"
+              className="vision-lab__button vision-lab__button--primary"
+              onClick={handleTrain}
+              disabled={trainStatus === "running"}
+            >
               {t("vision.lab.train.button")}
             </button>
             {trainStatusMessage ? (
@@ -264,7 +274,10 @@ export default function VisionLab() {
             <div className="vision-lab__upload">
               <label className="vision-lab__upload-label">
                 <input type="file" accept="image/*" onChange={handlePredictChange} />
-                <span>{t("vision.lab.predict.upload")}</span>
+                <span className="vision-lab__upload-content">
+                  <span className="vision-lab__upload-icon" aria-hidden="true">📤</span>
+                  <span>{t("vision.lab.predict.upload")}</span>
+                </span>
               </label>
               <button
                 type="button"
@@ -272,7 +285,7 @@ export default function VisionLab() {
                   setPredictionResult(null);
                   setPredictionError(null);
                 }}
-                className="vision-lab__clear"
+                className="vision-lab__button vision-lab__button--ghost"
               >
                 {t("actions.clear") ?? "Effacer"}
               </button>

@@ -21,13 +21,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { image, modelDir, imgSize } = req.body ?? {};
+    const { image, modelDir, imgSize, renderer } = req.body ?? {};
     if (!image || typeof image !== "string") {
       return res.status(400).json({ error: "Missing image payload" });
     }
 
     const buffer = decodeBase64Image(image);
-    const result = await predictImage({ imageBuffer: buffer, modelDir, imgSize });
+    const result = await predictImage({ imageBuffer: buffer, modelDir, imgSize, renderer });
     return res.status(200).json(result);
   } catch (error: any) {
     console.error("Prediction failed", error);

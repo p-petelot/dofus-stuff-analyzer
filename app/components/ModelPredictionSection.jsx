@@ -23,6 +23,14 @@ export function ModelPredictionSection({
   placeholder,
   labels,
 }) {
+  const previewImage = result?.preview?.image ?? null;
+  const previewRenderer = result?.preview?.renderer ?? null;
+  const previewPayload = result?.preview?.payload ?? null;
+  const previewHeadLabel =
+    previewPayload && typeof previewPayload.head === "number"
+      ? `#${previewPayload.head}`
+      : labels.preview.noHead;
+
   return (
     <section className="model-insights" aria-live="polite">
       <header className="model-insights__header">
@@ -39,6 +47,45 @@ export function ModelPredictionSection({
       ) : null}
       {result ? (
         <div className="model-insights__content">
+          <div className="model-insights__preview">
+            <h3>{labels.preview.title}</h3>
+            {previewImage ? (
+              <div className="model-insights__preview-frame">
+                <img
+                  src={previewImage}
+                  alt={labels.preview.alt}
+                  className="model-insights__preview-image"
+                  loading="lazy"
+                />
+              </div>
+            ) : (
+              <p className="model-insights__preview-placeholder">{labels.preview.missing}</p>
+            )}
+            {previewRenderer ? (
+              <a
+                className="model-insights__preview-link"
+                href={previewRenderer}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {labels.preview.openRenderer}
+              </a>
+            ) : null}
+            {previewPayload ? (
+              <dl className="model-insights__preview-meta">
+                <div>
+                  <dt>{labels.preview.metaClass}</dt>
+                  <dd>
+                    {getBreedName(result.prediction.breed)} · <SexLabel sex={result.prediction.sex} labels={labels.sex} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>{labels.preview.metaHead}</dt>
+                  <dd>{previewHeadLabel}</dd>
+                </div>
+              </dl>
+            ) : null}
+          </div>
           <div className="model-insights__summary">
             <div className="model-insights__summary-badge">
               <span className="model-insights__summary-label">{labels.topClass}</span>
@@ -105,6 +152,16 @@ ModelPredictionSection.propTypes = {
         prob: PropTypes.number.isRequired,
       }),
     ).isRequired,
+    preview: PropTypes.shape({
+      image: PropTypes.string,
+      renderer: PropTypes.string,
+      payload: PropTypes.shape({
+        breed: PropTypes.number.isRequired,
+        sex: PropTypes.number.isRequired,
+        colors: PropTypes.arrayOf(PropTypes.number).isRequired,
+        head: PropTypes.number,
+      }),
+    }),
   }),
   isLoading: PropTypes.bool,
   error: PropTypes.string,
@@ -117,6 +174,15 @@ ModelPredictionSection.propTypes = {
     confidence: PropTypes.string.isRequired,
     colors: PropTypes.string.isRequired,
     top5: PropTypes.string.isRequired,
+    preview: PropTypes.shape({
+      title: PropTypes.string.isRequired,
+      alt: PropTypes.string.isRequired,
+      missing: PropTypes.string.isRequired,
+      openRenderer: PropTypes.string.isRequired,
+      metaClass: PropTypes.string.isRequired,
+      metaHead: PropTypes.string.isRequired,
+      noHead: PropTypes.string.isRequired,
+    }).isRequired,
     sex: PropTypes.shape({
       male: PropTypes.string.isRequired,
       female: PropTypes.string.isRequired,

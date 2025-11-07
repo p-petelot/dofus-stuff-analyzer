@@ -596,12 +596,23 @@ export interface PredictOptions {
   imageBuffer?: Buffer;
   modelDir?: string;
   imgSize?: number;
+  renderer?: string;
 }
 
 export interface PredictResult {
   prediction: { class_idx: number; breed: number; sex: number; prob: number };
   top5: Array<{ class_idx: number; breed: number; sex: number; prob: number }>;
   colors: number[];
+  preview?: {
+    image: string;
+    renderer: string;
+    payload: {
+      breed: number;
+      sex: number;
+      colors: number[];
+      head?: number;
+    };
+  } | null;
 }
 
 let loadedModels = new Map<string, import("@tensorflow/tfjs").LayersModel>();
@@ -620,6 +631,7 @@ export async function predictImage({
   imageBuffer,
   modelDir = path.resolve("./models/class_sex"),
   imgSize,
+  renderer,
 }: PredictOptions): Promise<PredictResult> {
   if (!imagePath && !imageBuffer) {
     throw new Error("Provide either imagePath or imageBuffer");
@@ -656,6 +668,22 @@ export async function predictImage({
   const best = top5[0];
   const colors = await extract6Colors(tmpPath);
 
+  let preview: PredictResult["preview"] = null;
+  if (best) {
+    try {
+      const head = fixedHeadFor(best.breed, best.sex);
+      const payload = buildPayload({ breed: best.breed, sex: best.sex, colors, head });
+      const sprite = await renderSprite(payload, renderer ?? DEFAULT_RENDERER);
+      preview = {
+        image: `data:image/png;base64,${sprite.toString("base64")}`,
+        renderer: renderer ?? DEFAULT_RENDERER,
+        payload,
+      };
+    } catch (error) {
+      console.warn("predictImage: failed to render preview", error);
+    }
+  }
+
   if (!imagePath) {
     fs.unlink(tmpPath, () => {});
   }
@@ -664,6 +692,7 @@ export async function predictImage({
     prediction: best,
     top5,
     colors,
+    preview,
   };
 }
 

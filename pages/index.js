@@ -3977,6 +3977,47 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const [breedsError, setBreedsError] = useState(null);
   const [selectedBreedId, setSelectedBreedId] = useState(null);
   const [selectedGender, setSelectedGender] = useState(BARBOFUS_DEFAULT_GENDER_KEY);
+
+  useEffect(() => {
+    if (!modelResult || !modelResult.prediction) {
+      return;
+    }
+
+    const predictedBreed = modelResult.prediction.breed;
+    if (Number.isFinite(predictedBreed)) {
+      setSelectedBreedId(predictedBreed);
+    }
+
+    const predictedGender = modelResult.prediction.sex === 1 ? "female" : "male";
+    setSelectedGender(predictedGender);
+
+    if (Array.isArray(modelResult.colors) && modelResult.colors.length) {
+      const palette = modelResult.colors
+        .map((value) => {
+          const hex = normalizeColorToHex(value);
+          if (!hex) {
+            return null;
+          }
+          const rgb = hexToRgb(hex) ?? { r: 0, g: 0, b: 0 };
+          return {
+            hex,
+            rgb: `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`,
+            r: rgb.r,
+            g: rgb.g,
+            b: rgb.b,
+            weight: 1,
+            source: "model",
+          };
+        })
+        .filter(Boolean);
+      if (palette.length) {
+        setColors(palette);
+        setSelectedColor((previous) => palette[0]?.hex ?? previous);
+        setUseCustomSkinTone(true);
+      }
+    }
+  }, [modelResult]);
+
   const progressHandles = useRef({ frame: null, timeout: null, value: 0 });
   const breedsRequestRef = useRef(null);
   const previewBackgroundOptions = useMemo(
