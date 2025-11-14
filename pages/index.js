@@ -120,28 +120,112 @@ const IMAGE_REFERENCE_KEYS = [
   "src",
 ];
 
-const PALETTE_LOADER_COLORS = ["#1bdd8d", "#22d3ee", "#facc15", "#fb923c", "#a855f7"];
+const DOFUS_PRIMORDIALS = [
+  {
+    key: "emerald",
+    label: "Dofus Émeraude",
+    base: "#0c8f51",
+    highlight: "#74ffbe",
+    sheen: "#c7ffe7",
+    shadow: "#043924",
+    rune: "#72ffd7",
+    glow: "rgba(12, 143, 81, 0.55)",
+  },
+  {
+    key: "turquoise",
+    label: "Dofus Turquoise",
+    base: "#0580b5",
+    highlight: "#7fd8ff",
+    sheen: "#d1f4ff",
+    shadow: "#053352",
+    rune: "#5fe7ff",
+    glow: "rgba(5, 128, 181, 0.55)",
+  },
+  {
+    key: "ivoire",
+    label: "Dofus Ivoire",
+    base: "#d6b872",
+    highlight: "#ffe9b0",
+    sheen: "#fff4d0",
+    shadow: "#8f6a2b",
+    rune: "#fff2c9",
+    glow: "rgba(214, 184, 114, 0.55)",
+  },
+  {
+    key: "ocre",
+    label: "Dofus Ocre",
+    base: "#c7791a",
+    highlight: "#ffd88a",
+    sheen: "#ffe7b3",
+    shadow: "#8a4305",
+    rune: "#ffd89c",
+    glow: "rgba(199, 121, 26, 0.6)",
+  },
+  {
+    key: "pourpre",
+    label: "Dofus Pourpre",
+    base: "#a0172f",
+    highlight: "#ff7a9a",
+    sheen: "#ffb3c6",
+    shadow: "#520415",
+    rune: "#ff99b6",
+    glow: "rgba(160, 23, 47, 0.6)",
+  },
+  {
+    key: "ebene",
+    label: "Dofus Ébène",
+    base: "#151c2c",
+    highlight: "#4f5b77",
+    sheen: "#8a95b0",
+    shadow: "#05070d",
+    rune: "#9ba4bb",
+    glow: "rgba(21, 28, 44, 0.65)",
+  },
+];
 
 const PaletteLoader = ({ label }) => (
   <div className="palette-loader" role="status" aria-live="polite">
     <span className="sr-only">{label}</span>
-    <div className="palette-loader__aurora" aria-hidden="true">
-      <span className="palette-loader__halo" />
-      <div className="palette-loader__spectrum">
-        <span className="palette-loader__ring palette-loader__ring--outer" />
-        <span className="palette-loader__ring palette-loader__ring--inner" />
-        {PALETTE_LOADER_COLORS.map((color, index) => (
+    <div className="palette-loader__galaxy" aria-hidden="true">
+      <span className="palette-loader__starfield" />
+      <span className="palette-loader__orbit-trail" />
+      <span className="palette-loader__planet">
+        <span className="palette-loader__planet-halo" />
+        <span className="palette-loader__planet-core" />
+      </span>
+      <div className="palette-loader__orbit" aria-hidden="true">
+        {DOFUS_PRIMORDIALS.map((dofus, index) => (
           <span
-            key={`${color}-${index}`}
-            className={`palette-loader__pulse palette-loader__pulse--${index}`}
+            key={dofus.key}
+            className="palette-loader__dofus"
             style={{
-              "--palette-loader-color": color,
-              "--palette-loader-index": String(index),
+              "--palette-loader-angle": `${index * 60}deg`,
+              "--palette-loader-angle-negative": `${index * -60}deg`,
+              "--palette-loader-radius": "72px",
+              "--palette-loader-delay": `${index * 0.35}s`,
             }}
-          />
+            aria-hidden="true"
+          >
+            <span className="palette-loader__dofus-positioner">
+              <span
+                className={`palette-loader__dofus-shell palette-loader__dofus-shell--${dofus.key}`}
+                style={{
+                  "--palette-loader-dofus-base": dofus.base,
+                  "--palette-loader-dofus-highlight": dofus.highlight,
+                  "--palette-loader-dofus-sheen": dofus.sheen,
+                  "--palette-loader-dofus-shadow": dofus.shadow,
+                  "--palette-loader-dofus-rune": dofus.rune,
+                  "--palette-loader-dofus-glow": dofus.glow,
+                }}
+              >
+                <span className="palette-loader__dofus-cap" />
+                <span className="palette-loader__dofus-glow" />
+                <span className="palette-loader__dofus-rune" />
+              </span>
+            </span>
+          </span>
         ))}
       </div>
-      <span className="palette-loader__core" />
     </div>
   </div>
 );
