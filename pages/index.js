@@ -6662,7 +6662,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           const frameX = cardX + framePadding;
           const frameY = cardY + framePadding;
           drawRoundedRect(context, frameX, frameY, frameSize, frameSize, frameRadius);
-          context.fillStyle = "#CCCCEB";
+          context.fillStyle = "#f8fafc";
           context.fill();
           context.strokeStyle = "rgba(142, 174, 178, 0.4)";
           context.lineWidth = 2;
