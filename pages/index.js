@@ -121,6 +121,7 @@ const IMAGE_REFERENCE_KEYS = [
 ];
 
 const PALETTE_LOADER_COLORS = ["#1bdd8d", "#22d3ee", "#facc15", "#fb923c", "#a855f7"];
+const RECAP_BACKGROUND_SRC = "/backgrounds/Destin_du_monde_nuage.png";
 
 const PaletteLoader = ({ label }) => (
   <div className="palette-loader" role="status" aria-live="polite">
@@ -6321,7 +6322,10 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       try {
         setExportingRecapId(proposal.id);
 
-        const previewImage = await loadImageElement(previewSrc);
+        const [previewImage, recapBackground] = await Promise.all([
+          loadImageElement(previewSrc),
+          loadImageElement(RECAP_BACKGROUND_SRC).catch(() => null),
+        ]);
         const primaryColor = normalizeColorToHex(proposal.palette?.[0]) ?? "#1F2937";
         const darker = adjustHexLightness(primaryColor, -0.2, -0.08);
         const lighter = adjustHexLightness(primaryColor, 0.18, -0.12);
@@ -6337,13 +6341,27 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           throw new Error("Canvas unavailable");
         }
 
-        const gradient = context.createLinearGradient(0, 0, width, height);
-        gradient.addColorStop(0, darker);
-        gradient.addColorStop(0.5, primaryColor);
-        gradient.addColorStop(1, lighter);
-        context.fillStyle = gradient;
-        context.fillRect(0, 0, width, height);
-        context.fillStyle = "rgba(0, 0, 0, 0.28)";
+        if (recapBackground) {
+          const { width: bgW, height: bgH } = getImageDimensions(recapBackground);
+          const bgRatio = Math.max(width / bgW, height / bgH);
+          const drawW = Math.ceil(bgW * bgRatio);
+          const drawH = Math.ceil(bgH * bgRatio);
+          const dx = Math.round((width - drawW) / 2);
+          const dy = Math.round((height - drawH) / 2);
+          context.drawImage(recapBackground, dx, dy, drawW, drawH);
+        } else {
+          const gradient = context.createLinearGradient(0, 0, width, height);
+          gradient.addColorStop(0, darker);
+          gradient.addColorStop(0.5, primaryColor);
+          gradient.addColorStop(1, lighter);
+          context.fillStyle = gradient;
+          context.fillRect(0, 0, width, height);
+        }
+
+        const vignette = context.createLinearGradient(0, 0, 0, height);
+        vignette.addColorStop(0, "rgba(6, 10, 24, 0.36)");
+        vignette.addColorStop(1, "rgba(6, 10, 24, 0.56)");
+        context.fillStyle = vignette;
         context.fillRect(0, 0, width, height);
 
         const { width: previewWidth, height: previewHeight } = getImageDimensions(previewImage);
@@ -6360,11 +6378,11 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         context.shadowBlur = 0;
 
         const panelX = Math.round(width * 0.52);
-        const panelY = Math.round(height * 0.12);
-        const panelWidth = Math.round(width * 0.38);
-        const panelHeight = Math.round(height * 0.76);
-        const panelRadius = 18;
-        context.fillStyle = "rgba(8, 11, 24, 0.74)";
+        const panelY = Math.round(height * 0.11);
+        const panelWidth = Math.round(width * 0.39);
+        const panelHeight = Math.round(height * 0.78);
+        const panelRadius = 20;
+        context.fillStyle = "rgba(5, 8, 18, 0.78)";
         context.beginPath();
         context.moveTo(panelX + panelRadius, panelY);
         context.lineTo(panelX + panelWidth - panelRadius, panelY);
@@ -6388,32 +6406,69 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         context.font = "700 32px 'Inter', system-ui, -apple-system, sans-serif";
         context.fillText(title, panelX + 24, panelY + 46);
 
-        let blockY = panelY + 78;
-        context.font = "600 18px 'Inter', system-ui, -apple-system, sans-serif";
-        context.fillStyle = "rgba(255, 255, 255, 0.82)";
-        context.fillText(t("palette.title"), panelX + 24, blockY);
-        blockY += 18;
+        const drawRoundedRect = (ctx, x, y, w, h, radius) => {
+          const r = Math.min(radius, w / 2, h / 2);
+          ctx.beginPath();
+          ctx.moveTo(x + r, y);
+          ctx.lineTo(x + w - r, y);
+          ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+          ctx.lineTo(x + w, y + h - r);
+          ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+          ctx.lineTo(x + r, y + h);
+          ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+          ctx.lineTo(x, y + r);
+          ctx.quadraticCurveTo(x, y, x + r, y);
+          ctx.closePath();
+        };
+
+        const textOnColor = (hex) => {
+          const normalized = normalizeColorToHex(hex);
+          if (!normalized) {
+            return "rgba(15, 23, 42, 0.9)";
+          }
+          const value = normalized.replace("#", "");
+          const r = parseInt(value.slice(0, 2), 16) / 255;
+          const g = parseInt(value.slice(2, 4), 16) / 255;
+          const b = parseInt(value.slice(4, 6), 16) / 255;
+          const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+          return luminance > 0.55 ? "rgba(15, 23, 42, 0.9)" : "rgba(255, 255, 255, 0.94)";
+        };
+
+        let blockY = panelY + 66;
 
         const palette = Array.isArray(proposal.palette)
           ? proposal.palette.map((hex) => normalizeColorToHex(hex)).filter(Boolean).slice(0, MAX_ITEM_PALETTE_COLORS)
           : [];
-        const swatchSize = 40;
+        const swatchWidth = 176;
+        const swatchHeight = 48;
         const swatchGap = 12;
-        const swatchesPerRow = 3;
+        const swatchesPerRow = 2;
         const swatchRows = Math.ceil(palette.length / swatchesPerRow) || 1;
         for (let index = 0; index < palette.length; index += 1) {
           const col = index % swatchesPerRow;
           const row = Math.floor(index / swatchesPerRow);
-          const x = panelX + 24 + col * (swatchSize + swatchGap);
-          const y = blockY + row * (swatchSize + swatchGap);
-          const hex = palette[index];
+          const x = panelX + 20 + col * (swatchWidth + swatchGap);
+          const y = blockY + row * (swatchHeight + swatchGap);
+          const hex = palette[index] ?? primaryColor;
+          drawRoundedRect(context, x, y, swatchWidth, swatchHeight, 14);
+          context.fillStyle = withAlpha(hex, 0.72);
+          context.fill();
+          context.strokeStyle = "rgba(255, 255, 255, 0.12)";
+          context.lineWidth = 1.5;
+          context.stroke();
+
+          context.beginPath();
+          context.arc(x + 18, y + swatchHeight / 2, 9, 0, Math.PI * 2);
           context.fillStyle = hex;
-          context.fillRect(x, y, swatchSize, swatchSize);
-          context.strokeStyle = "rgba(255, 255, 255, 0.5)";
-          context.lineWidth = 2;
-          context.strokeRect(x + 1, y + 1, swatchSize - 2, swatchSize - 2);
+          context.fill();
+          context.strokeStyle = "rgba(255, 255, 255, 0.2)";
+          context.stroke();
+
+          context.fillStyle = textOnColor(hex);
+          context.font = "700 16px 'Inter', system-ui, -apple-system, sans-serif";
+          context.fillText(hex.toUpperCase(), x + 38, y + swatchHeight / 2 + 6);
         }
-        blockY += swatchRows * (swatchSize + swatchGap) + 4;
+        blockY += swatchRows * (swatchHeight + swatchGap) + 22;
 
         const itemsLabel = t("workspace.mode.items");
         context.fillStyle = "rgba(255, 255, 255, 0.82)";
@@ -6442,21 +6497,31 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         );
 
         const itemIconSize = 56;
-        const itemGap = 14;
+        const itemGap = 16;
         const maxItems = Math.min(itemsWithImages.length, 7);
         for (let index = 0; index < maxItems; index += 1) {
           const entry = itemsWithImages[index];
-          const y = blockY + index * (itemIconSize + itemGap);
-          const iconX = panelX + 24;
+          const y = blockY + index * (itemIconSize + itemGap + 8);
+          const rowHeight = itemIconSize + 12;
+          const rowX = panelX + 18;
+          const rowWidth = panelWidth - 36;
+          drawRoundedRect(context, rowX, y - 6, rowWidth, rowHeight + 12, 14);
+          context.fillStyle = "rgba(255, 255, 255, 0.06)";
+          context.fill();
+          context.strokeStyle = "rgba(255, 255, 255, 0.08)";
+          context.stroke();
+
+          const iconX = panelX + 32;
           const iconY = y;
           const slotLabel = fallbackSlot(entry.item?.slotType);
           const itemName = entry.item?.name ?? slotLabel;
           const paletteSample = normalizeColorToHex(entry.item?.palette?.[0]) ?? primaryColor;
 
-          context.fillStyle = withAlpha(paletteSample, 0.35);
-          context.fillRect(iconX, iconY, itemIconSize, itemIconSize);
-          context.strokeStyle = "rgba(255, 255, 255, 0.32)";
-          context.strokeRect(iconX + 1, iconY + 1, itemIconSize - 2, itemIconSize - 2);
+          drawRoundedRect(context, iconX - 4, iconY - 4, itemIconSize + 8, itemIconSize + 8, 14);
+          context.fillStyle = withAlpha(paletteSample, 0.32);
+          context.fill();
+          context.strokeStyle = "rgba(255, 255, 255, 0.18)";
+          context.stroke();
 
           if (entry.image) {
             const { width: iconW, height: iconH } = getImageDimensions(entry.image);
@@ -6469,11 +6534,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           }
 
           context.fillStyle = "rgba(255, 255, 255, 0.96)";
-          context.font = "700 18px 'Inter', system-ui, -apple-system, sans-serif";
-          context.fillText(itemName, iconX + itemIconSize + 12, iconY + 26);
-          context.fillStyle = "rgba(255, 255, 255, 0.7)";
-          context.font = "500 15px 'Inter', system-ui, -apple-system, sans-serif";
-          context.fillText(slotLabel, iconX + itemIconSize + 12, iconY + 48);
+          context.font = "700 19px 'Inter', system-ui, -apple-system, sans-serif";
+          context.fillText(itemName, iconX + itemIconSize + 16, iconY + 32);
         }
 
         const footerLabel = "krospalette.app";
