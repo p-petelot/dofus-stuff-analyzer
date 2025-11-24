@@ -2812,6 +2812,21 @@ function drawImageRegion(image, { sourceRect, targetWidth, targetHeight, maxDime
   return { canvas, context, width, height };
 }
 
+function loadImageElement(src) {
+  if (!src || typeof window === "undefined" || typeof Image === "undefined") {
+    return Promise.reject(new Error("Image element unavailable"));
+  }
+
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.decoding = "async";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Failed to load image"));
+    image.src = src;
+  });
+}
+
 function extractPalette(image, options = {}) {
   const sourceRect = options.sourceRect ?? resolveSourceRect(image, options);
   const region = drawImageRegion(image, { sourceRect, maxDimension: MAX_DIMENSION });
@@ -3940,6 +3955,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const [downloadingPreviewId, setDownloadingPreviewId] = useState(null);
   const [copyingPreviewId, setCopyingPreviewId] = useState(null);
   const [supportsImageClipboard, setSupportsImageClipboard] = useState(false);
+  const [exportingRecapId, setExportingRecapId] = useState(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -6280,6 +6296,221 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     [getShareDescriptor, handleCopy, t, setError]
   );
 
+  const handleExportRecap = useCallback(
+    async (proposal) => {
+      if (!proposal) {
+        setError(t("errors.recapExport"));
+        return;
+      }
+
+      const activeDirection = normalizeLookDirection(lookDirection);
+      const lookPreviewGroup = proposal.lookBaseKey
+        ? lookPreviews?.[proposal.lookBaseKey]
+        : null;
+      const lookPreview = lookPreviewGroup?.directions?.[activeDirection] ?? null;
+      const previewSrc =
+        typeof lookPreview?.dataUrl === "string" && lookPreview.dataUrl.length > 0
+          ? lookPreview.dataUrl
+          : null;
+
+      if (!previewSrc) {
+        setError(t("errors.recapExport"));
+        return;
+      }
+
+      try {
+        setExportingRecapId(proposal.id);
+
+        const previewImage = await loadImageElement(previewSrc);
+        const primaryColor = normalizeColorToHex(proposal.palette?.[0]) ?? "#1F2937";
+        const darker = adjustHexLightness(primaryColor, -0.2, -0.08);
+        const lighter = adjustHexLightness(primaryColor, 0.18, -0.12);
+
+        const canvas = document.createElement("canvas");
+        const width = 1280;
+        const height = 720;
+        canvas.width = width;
+        canvas.height = height;
+
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        if (!context) {
+          throw new Error("Canvas unavailable");
+        }
+
+        const gradient = context.createLinearGradient(0, 0, width, height);
+        gradient.addColorStop(0, darker);
+        gradient.addColorStop(0.5, primaryColor);
+        gradient.addColorStop(1, lighter);
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, width, height);
+        context.fillStyle = "rgba(0, 0, 0, 0.28)";
+        context.fillRect(0, 0, width, height);
+
+        const { width: previewWidth, height: previewHeight } = getImageDimensions(previewImage);
+        const previewMaxWidth = width * 0.42;
+        const previewMaxHeight = height * 0.82;
+        const previewRatio = Math.min(previewMaxWidth / previewWidth, previewMaxHeight / previewHeight, 1);
+        const previewDrawWidth = Math.max(1, Math.round(previewWidth * previewRatio));
+        const previewDrawHeight = Math.max(1, Math.round(previewHeight * previewRatio));
+        const previewX = Math.round(width * 0.08);
+        const previewY = Math.round((height - previewDrawHeight) / 2);
+        context.shadowColor = withAlpha(primaryColor, 0.28);
+        context.shadowBlur = 24;
+        context.drawImage(previewImage, previewX, previewY, previewDrawWidth, previewDrawHeight);
+        context.shadowBlur = 0;
+
+        const panelX = Math.round(width * 0.52);
+        const panelY = Math.round(height * 0.12);
+        const panelWidth = Math.round(width * 0.38);
+        const panelHeight = Math.round(height * 0.76);
+        const panelRadius = 18;
+        context.fillStyle = "rgba(8, 11, 24, 0.74)";
+        context.beginPath();
+        context.moveTo(panelX + panelRadius, panelY);
+        context.lineTo(panelX + panelWidth - panelRadius, panelY);
+        context.quadraticCurveTo(panelX + panelWidth, panelY, panelX + panelWidth, panelY + panelRadius);
+        context.lineTo(panelX + panelWidth, panelY + panelHeight - panelRadius);
+        context.quadraticCurveTo(
+          panelX + panelWidth,
+          panelY + panelHeight,
+          panelX + panelWidth - panelRadius,
+          panelY + panelHeight
+        );
+        context.lineTo(panelX + panelRadius, panelY + panelHeight);
+        context.quadraticCurveTo(panelX, panelY + panelHeight, panelX, panelY + panelHeight - panelRadius);
+        context.lineTo(panelX, panelY + panelRadius);
+        context.quadraticCurveTo(panelX, panelY, panelX + panelRadius, panelY);
+        context.closePath();
+        context.fill();
+
+        const title = proposal.className ?? t("suggestions.render.defaultName", { index: proposal.index + 1 });
+        context.fillStyle = "rgba(255, 255, 255, 0.96)";
+        context.font = "700 32px 'Inter', system-ui, -apple-system, sans-serif";
+        context.fillText(title, panelX + 24, panelY + 46);
+
+        let blockY = panelY + 78;
+        context.font = "600 18px 'Inter', system-ui, -apple-system, sans-serif";
+        context.fillStyle = "rgba(255, 255, 255, 0.82)";
+        context.fillText(t("palette.title"), panelX + 24, blockY);
+        blockY += 18;
+
+        const palette = Array.isArray(proposal.palette)
+          ? proposal.palette.map((hex) => normalizeColorToHex(hex)).filter(Boolean).slice(0, MAX_ITEM_PALETTE_COLORS)
+          : [];
+        const swatchSize = 40;
+        const swatchGap = 12;
+        const swatchesPerRow = 3;
+        const swatchRows = Math.ceil(palette.length / swatchesPerRow) || 1;
+        for (let index = 0; index < palette.length; index += 1) {
+          const col = index % swatchesPerRow;
+          const row = Math.floor(index / swatchesPerRow);
+          const x = panelX + 24 + col * (swatchSize + swatchGap);
+          const y = blockY + row * (swatchSize + swatchGap);
+          const hex = palette[index];
+          context.fillStyle = hex;
+          context.fillRect(x, y, swatchSize, swatchSize);
+          context.strokeStyle = "rgba(255, 255, 255, 0.5)";
+          context.lineWidth = 2;
+          context.strokeRect(x + 1, y + 1, swatchSize - 2, swatchSize - 2);
+        }
+        blockY += swatchRows * (swatchSize + swatchGap) + 4;
+
+        const itemsLabel = t("workspace.mode.items");
+        context.fillStyle = "rgba(255, 255, 255, 0.82)";
+        context.font = "600 18px 'Inter', system-ui, -apple-system, sans-serif";
+        context.fillText(itemsLabel, panelX + 24, blockY + 26);
+        blockY += 42;
+
+        const fallbackSlot = (slotType) => {
+          const key = ITEM_TYPE_LABEL_KEYS[slotType];
+          return key ? t(key) : slotType ?? "";
+        };
+
+        const defaultItems = Array.isArray(proposal.items) ? proposal.items.slice(0, ITEM_TYPES.length) : [];
+        const itemsWithImages = await Promise.all(
+          defaultItems.map(async (item) => {
+            if (!item?.imageUrl) {
+              return { item, image: null };
+            }
+            try {
+              const image = await loadImageElement(item.imageUrl);
+              return { item, image };
+            } catch (error) {
+              return { item, image: null };
+            }
+          })
+        );
+
+        const itemIconSize = 56;
+        const itemGap = 14;
+        const maxItems = Math.min(itemsWithImages.length, 7);
+        for (let index = 0; index < maxItems; index += 1) {
+          const entry = itemsWithImages[index];
+          const y = blockY + index * (itemIconSize + itemGap);
+          const iconX = panelX + 24;
+          const iconY = y;
+          const slotLabel = fallbackSlot(entry.item?.slotType);
+          const itemName = entry.item?.name ?? slotLabel;
+          const paletteSample = normalizeColorToHex(entry.item?.palette?.[0]) ?? primaryColor;
+
+          context.fillStyle = withAlpha(paletteSample, 0.35);
+          context.fillRect(iconX, iconY, itemIconSize, itemIconSize);
+          context.strokeStyle = "rgba(255, 255, 255, 0.32)";
+          context.strokeRect(iconX + 1, iconY + 1, itemIconSize - 2, itemIconSize - 2);
+
+          if (entry.image) {
+            const { width: iconW, height: iconH } = getImageDimensions(entry.image);
+            const ratio = Math.min(itemIconSize / iconW, itemIconSize / iconH, 1);
+            const drawW = Math.round(iconW * ratio);
+            const drawH = Math.round(iconH * ratio);
+            const dx = iconX + Math.round((itemIconSize - drawW) / 2);
+            const dy = iconY + Math.round((itemIconSize - drawH) / 2);
+            context.drawImage(entry.image, dx, dy, drawW, drawH);
+          }
+
+          context.fillStyle = "rgba(255, 255, 255, 0.96)";
+          context.font = "700 18px 'Inter', system-ui, -apple-system, sans-serif";
+          context.fillText(itemName, iconX + itemIconSize + 12, iconY + 26);
+          context.fillStyle = "rgba(255, 255, 255, 0.7)";
+          context.font = "500 15px 'Inter', system-ui, -apple-system, sans-serif";
+          context.fillText(slotLabel, iconX + itemIconSize + 12, iconY + 48);
+        }
+
+        const footerLabel = "krospalette.app";
+        context.fillStyle = "rgba(255, 255, 255, 0.55)";
+        context.font = "600 16px 'Inter', system-ui, -apple-system, sans-serif";
+        context.fillText(footerLabel, panelX + 24, panelY + panelHeight - 18);
+
+        const filenameBase =
+          slugify(title) || slugify(t("suggestions.render.defaultName", { index: proposal.index + 1 })) || "recap-skin";
+        const blob = await new Promise((resolve, reject) => {
+          canvas.toBlob((value) => {
+            if (value) {
+              resolve(value);
+            } else {
+              reject(new Error("Unable to build blob"));
+            }
+          }, "image/png");
+        });
+
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = `${filenameBase}-recap.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(downloadUrl);
+      } catch (error) {
+        console.error(error);
+        setError(t("errors.recapExport"));
+      } finally {
+        setExportingRecapId(null);
+      }
+    },
+    [lookDirection, lookPreviews, setError, t]
+  );
+
   const rotateLookDirection = useCallback(
     (step) => {
       const total = ALL_LOOK_DIRECTIONS.length;
@@ -7757,6 +7988,12 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                               const copySkinUnavailableLabel = t("suggestions.render.copySkinUnavailable");
                               const isCopyingPreview = copyingPreviewId === proposal.id;
                               const canCopySkinImage = supportsImageClipboard && lookLoaded;
+                              const recapCtaLabel =
+                                exportingRecapId === proposal.id
+                                  ? t("suggestions.render.downloading")
+                                  : t("suggestions.render.recap");
+                              const recapUnavailableLabel = t("suggestions.render.recapUnavailable");
+                              const isExportingRecap = exportingRecapId === proposal.id;
                               const canvasStyle = activeBackground
                                 ? {
                                     backgroundImage: `url(${activeBackground.src})`,
@@ -8175,6 +8412,26 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           </span>
                                           <span className="sr-only">{copySkinUnavailableLabel}</span>
                                         </button>
+                                      )}
+                                      {lookLoaded ? (
+                                        <button
+                                          type="button"
+                                          className="skin-card__cta"
+                                          onClick={() => handleExportRecap(proposal)}
+                                          title={recapCtaLabel}
+                                          aria-label={recapCtaLabel}
+                                          disabled={isExportingRecap}
+                                          aria-busy={isExportingRecap}
+                                        >
+                                          <span className="skin-card__cta-icon" aria-hidden="true">
+                                            <img src="/icons/download.svg" alt="" />
+                                          </span>
+                                          <span className="sr-only">{recapCtaLabel}</span>
+                                        </button>
+                                      ) : (
+                                        <span className="skin-card__cta skin-card__cta--disabled">
+                                          {recapUnavailableLabel}
+                                        </span>
                                       )}
                                       {canShareSkin ? (
                                         <button
