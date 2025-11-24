@@ -122,6 +122,7 @@ const IMAGE_REFERENCE_KEYS = [
 
 const PALETTE_LOADER_COLORS = ["#1bdd8d", "#22d3ee", "#facc15", "#fb923c", "#a855f7"];
 const RECAP_BACKGROUND_SRC = "/backgrounds/Destin_du_monde_nuage.png";
+const APP_ICON_SRC = "/logo.svg";
 
 const PaletteLoader = ({ label }) => (
   <div className="palette-loader" role="status" aria-live="polite">
@@ -6322,9 +6323,11 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       try {
         setExportingRecapId(proposal.id);
 
-        const [previewImage, recapBackground] = await Promise.all([
+        const [previewImage, recapBackground, appIcon, classIcon] = await Promise.all([
           loadImageElement(previewSrc),
           loadImageElement(RECAP_BACKGROUND_SRC).catch(() => null),
+          loadImageElement(APP_ICON_SRC).catch(() => null),
+          proposal.classIcon ? loadImageElement(proposal.classIcon).catch(() => null) : Promise.resolve(null),
         ]);
         const primaryColor = normalizeColorToHex(proposal.palette?.[0]) ?? "#1F2937";
         const darker = adjustHexLightness(primaryColor, -0.2, -0.08);
@@ -6378,9 +6381,9 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         context.shadowBlur = 0;
 
         const panelX = Math.round(width * 0.52);
-        const panelY = Math.round(height * 0.11);
+        const panelY = Math.round(height * 0.085);
         const panelWidth = Math.round(width * 0.39);
-        const panelHeight = Math.round(height * 0.78);
+        const panelHeight = Math.round(height * 0.82);
         const panelRadius = 20;
         context.fillStyle = "rgba(5, 8, 18, 0.78)";
         context.beginPath();
@@ -6402,9 +6405,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         context.fill();
 
         const title = proposal.className ?? t("suggestions.render.defaultName", { index: proposal.index + 1 });
-        context.fillStyle = "rgba(255, 255, 255, 0.96)";
-        context.font = "700 32px 'Inter', system-ui, -apple-system, sans-serif";
-        context.fillText(title, panelX + 24, panelY + 46);
 
         const drawRoundedRect = (ctx, x, y, w, h, radius) => {
           const r = Math.min(radius, w / 2, h / 2);
@@ -6434,15 +6434,62 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           return luminance > 0.55 ? "rgba(15, 23, 42, 0.9)" : "rgba(255, 255, 255, 0.94)";
         };
 
-        let blockY = panelY + 66;
+        const genderSymbol = proposal.lookGender === "f" ? "f" : "m";
+        const genderPath = new Path2D(
+          genderSymbol === "f"
+            ? "M12 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm0 12v8m-4-4h8"
+            : "M15 3h6v6m0-6-7.5 7.5m1.5-1.5a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"
+        );
+
+        const drawBadge = (x, y, size, render) => {
+          drawRoundedRect(context, x, y, size, size, size * 0.3);
+          context.fillStyle = "rgba(255, 255, 255, 0.08)";
+          context.fill();
+          context.strokeStyle = "rgba(255, 255, 255, 0.12)";
+          context.lineWidth = 1.2;
+          context.stroke();
+          render(x, y, size);
+        };
+
+        const badgeSize = 60;
+        const badgeY = panelY + 18;
+        const badgeX = panelX + 24;
+        if (classIcon) {
+          drawBadge(badgeX, badgeY, badgeSize, (x, y, size) => {
+            const padding = 12;
+            const drawW = size - padding * 2;
+            const drawH = size - padding * 2;
+            const ratio = Math.min(drawW / classIcon.width, drawH / classIcon.height, 1);
+            const w = Math.round(classIcon.width * ratio);
+            const h = Math.round(classIcon.height * ratio);
+            const dx = x + Math.round((size - w) / 2);
+            const dy = y + Math.round((size - h) / 2);
+            context.drawImage(classIcon, dx, dy, w, h);
+          });
+        }
+
+        drawBadge(badgeX + badgeSize + 14, badgeY + 6, 44, (x, y, size) => {
+          context.save();
+          context.translate(x + size / 2, y + size / 2);
+          const scale = (size * 0.8) / 24;
+          context.scale(scale, scale);
+          context.strokeStyle = "rgba(255, 255, 255, 0.92)";
+          context.lineWidth = 1.6;
+          context.lineCap = "round";
+          context.lineJoin = "round";
+          context.stroke(genderPath);
+          context.restore();
+        });
+
+        let blockY = panelY + 62;
 
         const palette = Array.isArray(proposal.palette)
           ? proposal.palette.map((hex) => normalizeColorToHex(hex)).filter(Boolean).slice(0, MAX_ITEM_PALETTE_COLORS)
           : [];
-        const swatchWidth = 176;
-        const swatchHeight = 48;
-        const swatchGap = 12;
-        const swatchesPerRow = 2;
+        const swatchWidth = 148;
+        const swatchHeight = 42;
+        const swatchGap = 10;
+        const swatchesPerRow = 3;
         const swatchRows = Math.ceil(palette.length / swatchesPerRow) || 1;
         for (let index = 0; index < palette.length; index += 1) {
           const col = index % swatchesPerRow;
@@ -6465,16 +6512,16 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           context.stroke();
 
           context.fillStyle = textOnColor(hex);
-          context.font = "700 16px 'Inter', system-ui, -apple-system, sans-serif";
-          context.fillText(hex.toUpperCase(), x + 38, y + swatchHeight / 2 + 6);
+          context.font = "700 15px 'Inter', system-ui, -apple-system, sans-serif";
+          context.fillText(hex.toUpperCase(), x + 38, y + swatchHeight / 2 + 5);
         }
-        blockY += swatchRows * (swatchHeight + swatchGap) + 22;
+        blockY += swatchRows * (swatchHeight + swatchGap) + 16;
 
         const itemsLabel = t("workspace.mode.items");
-        context.fillStyle = "rgba(255, 255, 255, 0.82)";
-        context.font = "600 18px 'Inter', system-ui, -apple-system, sans-serif";
-        context.fillText(itemsLabel, panelX + 24, blockY + 26);
-        blockY += 42;
+        context.fillStyle = "rgba(255, 255, 255, 0.86)";
+        context.font = "600 17px 'Inter', system-ui, -apple-system, sans-serif";
+        context.fillText(itemsLabel, panelX + 24, blockY + 24);
+        blockY += 38;
 
         const fallbackSlot = (slotType) => {
           const key = ITEM_TYPE_LABEL_KEYS[slotType];
@@ -6496,23 +6543,27 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           })
         );
 
-        const itemIconSize = 56;
-        const itemGap = 16;
-        const maxItems = Math.min(itemsWithImages.length, 7);
-        for (let index = 0; index < maxItems; index += 1) {
+        const footerSafeY = panelY + panelHeight - 36;
+        const availableHeight = Math.max(120, footerSafeY - blockY);
+        const itemGap = 10;
+        const itemsCount = Math.max(1, itemsWithImages.length);
+        const itemStep = Math.max(46, Math.floor(availableHeight / itemsCount));
+        const rowHeight = Math.max(40, itemStep - 6);
+        const itemIconSize = Math.max(34, Math.min(50, rowHeight - 12));
+
+        for (let index = 0; index < itemsWithImages.length; index += 1) {
           const entry = itemsWithImages[index];
-          const y = blockY + index * (itemIconSize + itemGap + 8);
-          const rowHeight = itemIconSize + 12;
+          const y = blockY + index * itemStep;
           const rowX = panelX + 18;
           const rowWidth = panelWidth - 36;
-          drawRoundedRect(context, rowX, y - 6, rowWidth, rowHeight + 12, 14);
-          context.fillStyle = "rgba(255, 255, 255, 0.06)";
+          drawRoundedRect(context, rowX, y - 4, rowWidth, rowHeight + 10, 14);
+          context.fillStyle = "rgba(255, 255, 255, 0.07)";
           context.fill();
-          context.strokeStyle = "rgba(255, 255, 255, 0.08)";
+          context.strokeStyle = "rgba(255, 255, 255, 0.1)";
           context.stroke();
 
           const iconX = panelX + 32;
-          const iconY = y;
+          const iconY = y + Math.max(4, Math.floor((rowHeight - itemIconSize) / 2));
           const slotLabel = fallbackSlot(entry.item?.slotType);
           const itemName = entry.item?.name ?? slotLabel;
           const paletteSample = normalizeColorToHex(entry.item?.palette?.[0]) ?? primaryColor;
@@ -6533,15 +6584,19 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
             context.drawImage(entry.image, dx, dy, drawW, drawH);
           }
 
-          context.fillStyle = "rgba(255, 255, 255, 0.96)";
-          context.font = "700 19px 'Inter', system-ui, -apple-system, sans-serif";
-          context.fillText(itemName, iconX + itemIconSize + 16, iconY + 32);
+          context.fillStyle = "rgba(255, 255, 255, 0.94)";
+          context.font = "700 17px 'Inter', system-ui, -apple-system, sans-serif";
+          context.fillText(itemName, iconX + itemIconSize + 14, iconY + Math.round(itemIconSize / 2) + 7);
         }
 
-        const footerLabel = "krospalette.app";
-        context.fillStyle = "rgba(255, 255, 255, 0.55)";
-        context.font = "600 16px 'Inter', system-ui, -apple-system, sans-serif";
-        context.fillText(footerLabel, panelX + 24, panelY + panelHeight - 18);
+        if (appIcon) {
+          const footerSize = 34;
+          const dx = panelX + panelWidth - footerSize - 22;
+          const dy = panelY + panelHeight - footerSize - 18;
+          context.globalAlpha = 0.9;
+          context.drawImage(appIcon, dx, dy, footerSize, footerSize);
+          context.globalAlpha = 1;
+        }
 
         const filenameBase =
           slugify(title) || slugify(t("suggestions.render.defaultName", { index: proposal.index + 1 })) || "recap-skin";
@@ -8491,9 +8546,18 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           <span className="sr-only">{recapCtaLabel}</span>
                                         </button>
                                       ) : (
-                                        <span className="skin-card__cta skin-card__cta--disabled">
-                                          {recapUnavailableLabel}
-                                        </span>
+                                        <button
+                                          type="button"
+                                          className="skin-card__cta skin-card__cta--disabled"
+                                          disabled
+                                          title={recapUnavailableLabel}
+                                          aria-label={recapUnavailableLabel}
+                                        >
+                                          <span className="skin-card__cta-icon" aria-hidden="true">
+                                            <img src="/icons/download.svg" alt="" />
+                                          </span>
+                                          <span className="sr-only">{recapUnavailableLabel}</span>
+                                        </button>
                                       )}
                                       {canShareSkin ? (
                                         <button
