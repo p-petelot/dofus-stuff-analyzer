@@ -6365,7 +6365,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           proposal.classIcon ? loadImageElement(proposal.classIcon).catch(() => null) : Promise.resolve(null),
           proposal.barbofusLink
             ? loadQrCodeImage(proposal.barbofusLink, {
-                size: 240,
+                size: 220,
                 margin: 0,
                 dark: "#0b1024",
                 light: "#f9fafb",
@@ -6635,37 +6635,71 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         }
 
         if (barbofusQrCode) {
-          const qrSize = 204;
-          const qrPadding = 14;
-          const cardWidth = qrSize + qrPadding * 2;
-          const cardHeight = qrSize + qrPadding * 2 + 50;
+          const qrSize = 154;
+          const qrPadding = 12;
+          const framePadding = 12;
+          const frameSize = qrSize + qrPadding * 2;
+          const ctaHeight = 42;
+          const ctaGap = 12;
+          const cardWidth = frameSize + framePadding * 2;
+          const cardHeight = frameSize + framePadding * 2 + ctaGap + ctaHeight;
           const cardRadius = 18;
-          const cardX = Math.round(width * 0.045);
-          const cardY = height - cardHeight - Math.round(height * 0.06);
+          const frameRadius = 16;
+          const innerRadius = 14;
+          const ctaRadius = 20;
+          const cardX = Math.round(width * 0.04);
+          const cardY = height - cardHeight - Math.round(height * 0.055);
 
+          context.save();
+          context.shadowColor = withAlpha(primaryColor, 0.35);
+          context.shadowBlur = 14;
           drawRoundedRect(context, cardX, cardY, cardWidth, cardHeight, cardRadius);
-          const cardGradient = context.createLinearGradient(cardX, cardY, cardX + cardWidth, cardY + cardHeight);
-          cardGradient.addColorStop(0, withAlpha(primaryColor, 0.35));
-          cardGradient.addColorStop(1, withAlpha(lighter, 0.25));
-          context.fillStyle = cardGradient;
+          context.fillStyle = withAlpha("#d3e4e6", 0.92);
           context.fill();
-          context.strokeStyle = "rgba(255, 255, 255, 0.14)";
-          context.lineWidth = 1.6;
+          context.restore();
+
+          const frameX = cardX + framePadding;
+          const frameY = cardY + framePadding;
+          drawRoundedRect(context, frameX, frameY, frameSize, frameSize, frameRadius);
+          context.fillStyle = "#f6fbfc";
+          context.fill();
+          context.strokeStyle = "rgba(142, 174, 178, 0.4)";
+          context.lineWidth = 2;
           context.stroke();
 
-          context.shadowColor = withAlpha(primaryColor, 0.32);
-          context.shadowBlur = 16;
-          context.drawImage(barbofusQrCode, cardX + qrPadding, cardY + qrPadding, qrSize, qrSize);
-          context.shadowBlur = 0;
+          const qrX = frameX + qrPadding;
+          const qrY = frameY + qrPadding;
+          drawRoundedRect(context, qrX, qrY, qrSize, qrSize, innerRadius);
+          context.fillStyle = "#f8fafc";
+          context.fill();
+          context.drawImage(barbofusQrCode, qrX, qrY, qrSize, qrSize);
 
-          context.fillStyle = "rgba(248, 250, 252, 0.96)";
-          context.font = "700 18px 'Inter', system-ui, -apple-system, sans-serif";
-          context.fillText("Barbofus", cardX + qrPadding, cardY + qrPadding + qrSize + 26);
+          const ctaWidth = frameSize;
+          const ctaX = cardX + Math.round((cardWidth - ctaWidth) / 2);
+          const ctaY = frameY + frameSize + ctaGap;
+          drawRoundedRect(context, ctaX, ctaY, ctaWidth, ctaHeight, ctaRadius);
+          const ctaGradient = context.createLinearGradient(ctaX, ctaY, ctaX + ctaWidth, ctaY + ctaHeight);
+          ctaGradient.addColorStop(0, "#9bb8bc");
+          ctaGradient.addColorStop(1, "#8aaab0");
+          context.fillStyle = ctaGradient;
+          context.fill();
 
-          const barbofusCta = t("suggestions.render.link");
-          context.fillStyle = "rgba(226, 232, 240, 0.9)";
-          context.font = "600 14px 'Inter', system-ui, -apple-system, sans-serif";
-          context.fillText(barbofusCta, cardX + qrPadding, cardY + qrPadding + qrSize + 44);
+          const iconSize = 18;
+          const iconX = ctaX + 18;
+          const iconY = ctaY + Math.round((ctaHeight - iconSize) / 2);
+          context.fillStyle = "#f6fbfc";
+          drawRoundedRect(context, iconX, iconY, iconSize, iconSize, 5);
+          context.fill();
+          context.fillStyle = "#93aeb2";
+          context.fillRect(iconX + 5, iconY + 5, 3, 3);
+          context.fillRect(iconX + 10, iconY + 5, 3, 3);
+          context.fillRect(iconX + 5, iconY + 10, 3, 3);
+          context.fillRect(iconX + 10, iconY + 10, 3, 3);
+
+          const barbofusCta = t("suggestions.render.link") || "Voir sur Barbofus";
+          context.fillStyle = "#f6fbfc";
+          context.font = "700 16px 'Inter', system-ui, -apple-system, sans-serif";
+          context.fillText(barbofusCta, iconX + iconSize + 10, ctaY + Math.round(ctaHeight / 2) + 6);
         }
 
         if (appIcon) {
