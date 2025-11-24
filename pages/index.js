@@ -6452,7 +6452,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         };
 
         const badgeSize = 60;
-        const badgeY = panelY + 18;
+        const badgeY = panelY + 10;
         const badgeX = panelX + 24;
         if (classIcon) {
           drawBadge(badgeX, badgeY, badgeSize, (x, y, size) => {
@@ -6468,10 +6468,10 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           });
         }
 
-        drawBadge(badgeX + badgeSize + 14, badgeY + 6, 44, (x, y, size) => {
+        drawBadge(badgeX + badgeSize + 14, badgeY + 2, 44, (x, y, size) => {
           context.save();
           context.translate(x + size / 2, y + size / 2);
-          const scale = (size * 0.8) / 24;
+          const scale = (size * 0.72) / 24;
           context.scale(scale, scale);
           context.strokeStyle = "rgba(255, 255, 255, 0.92)";
           context.lineWidth = 1.6;
@@ -6481,7 +6481,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           context.restore();
         });
 
-        let blockY = panelY + 62;
+        let blockY = badgeY + badgeSize + 26;
 
         const palette = Array.isArray(proposal.palette)
           ? proposal.palette.map((hex) => normalizeColorToHex(hex)).filter(Boolean).slice(0, MAX_ITEM_PALETTE_COLORS)
@@ -6592,7 +6592,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         if (appIcon) {
           const footerSize = 34;
           const dx = panelX + panelWidth - footerSize - 22;
-          const dy = panelY + panelHeight - footerSize - 18;
+          const dy = panelY + panelHeight - footerSize - 10;
           context.globalAlpha = 0.9;
           context.drawImage(appIcon, dx, dy, footerSize, footerSize);
           context.globalAlpha = 1;
