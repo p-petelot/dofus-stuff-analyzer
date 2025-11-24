@@ -6445,9 +6445,9 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           drawRoundedRect(context, x, y, size, size, size * 0.3);
           context.fillStyle = "rgba(255, 255, 255, 0.08)";
           context.fill();
-          context.strokeStyle = "rgba(255, 255, 255, 0.12)";
-          context.lineWidth = 1.2;
-          context.stroke();
+          context.strokeStyle = "rgba(255, 255, 255, 0.96)";
+          context.lineWidth = 1.5;
+          // context.stroke();
           render(x, y, size);
         };
 
@@ -6467,19 +6467,21 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
             context.drawImage(classIcon, dx, dy, w, h);
           });
         }
-
-        drawBadge(badgeX + badgeSize + 14, badgeY + 2, 44, (x, y, size) => {
+        
+        /*
+        drawBadge(badgeX + badgeSize, badgeY + 2, 44, (x, y, size) => {
           context.save();
           context.translate(x + size / 2, y + size / 2);
-          const scale = (size * 0.72) / 24;
+          const scale = (size * 1) / 24;
           context.scale(scale, scale);
           context.strokeStyle = "rgba(255, 255, 255, 0.92)";
           context.lineWidth = 1.6;
           context.lineCap = "round";
           context.lineJoin = "round";
-          context.stroke(genderPath);
+          //context.stroke(genderPath);
           context.restore();
         });
+        */
 
         let blockY = badgeY + badgeSize + 26;
 
@@ -6556,7 +6558,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           const y = blockY + index * itemStep;
           const rowX = panelX + 18;
           const rowWidth = panelWidth - 36;
-          drawRoundedRect(context, rowX, y - 4, rowWidth, rowHeight + 10, 14);
+          // drawRoundedRect(context, rowX, y - 4, rowWidth, rowHeight + 10, 14);
           context.fillStyle = "rgba(255, 255, 255, 0.07)";
           context.fill();
           context.strokeStyle = "rgba(255, 255, 255, 0.1)";
@@ -6591,8 +6593,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
 
         if (appIcon) {
           const footerSize = 34;
-          const dx = panelX + panelWidth - footerSize - 22;
-          const dy = panelY + panelHeight - footerSize - 10;
+          const dx = panelX + panelWidth - footerSize + 42;
+          const dy = panelY + panelHeight - footerSize + 30;
           context.globalAlpha = 0.9;
           context.drawImage(appIcon, dx, dy, footerSize, footerSize);
           context.globalAlpha = 1;
