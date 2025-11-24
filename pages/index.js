@@ -6358,19 +6358,20 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       try {
         setExportingRecapId(proposal.id);
 
-        const [previewImage, recapBackground, appIcon, classIcon, barbofusQrCode] = await Promise.all([
+        const [previewImage, recapBackground, appIcon, classIcon, barbofusQrCode, barbofusIcon] = await Promise.all([
           loadImageElement(previewSrc),
           loadImageElement(RECAP_BACKGROUND_SRC).catch(() => null),
           loadImageElement(APP_ICON_SRC).catch(() => null),
           proposal.classIcon ? loadImageElement(proposal.classIcon).catch(() => null) : Promise.resolve(null),
           proposal.barbofusLink
             ? loadQrCodeImage(proposal.barbofusLink, {
-                size: 220,
+                size: 176,
                 margin: 0,
                 dark: "#0b1024",
                 light: "#f9fafb",
               }).catch(() => null)
             : Promise.resolve(null),
+          loadImageElement("/icons/barbofus.svg").catch(() => null),
         ]);
         const primaryColor = normalizeColorToHex(proposal.palette?.[0]) ?? "#1F2937";
         const darker = adjustHexLightness(primaryColor, -0.2, -0.08);
@@ -6635,20 +6636,20 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         }
 
         if (barbofusQrCode) {
-          const qrSize = 154;
-          const qrPadding = 12;
-          const framePadding = 12;
+          const qrSize = 112;
+          const qrPadding = 9;
+          const framePadding = 10;
           const frameSize = qrSize + qrPadding * 2;
-          const ctaHeight = 42;
-          const ctaGap = 12;
+          const ctaHeight = 32;
+          const ctaGap = 10;
           const cardWidth = frameSize + framePadding * 2;
           const cardHeight = frameSize + framePadding * 2 + ctaGap + ctaHeight;
-          const cardRadius = 18;
-          const frameRadius = 16;
-          const innerRadius = 14;
-          const ctaRadius = 20;
-          const cardX = Math.round(width * 0.04);
-          const cardY = height - cardHeight - Math.round(height * 0.055);
+          const cardRadius = 16;
+          const frameRadius = 14;
+          const innerRadius = 12;
+          const ctaRadius = 16;
+          const cardX = Math.round(width * 0.036);
+          const cardY = height - cardHeight - Math.round(height * 0.05);
 
           context.save();
           context.shadowColor = withAlpha(primaryColor, 0.35);
@@ -6684,22 +6685,26 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           context.fillStyle = ctaGradient;
           context.fill();
 
-          const iconSize = 18;
-          const iconX = ctaX + 18;
+          const iconSize = 20;
+          const iconX = ctaX + 14;
           const iconY = ctaY + Math.round((ctaHeight - iconSize) / 2);
-          context.fillStyle = "#f6fbfc";
-          drawRoundedRect(context, iconX, iconY, iconSize, iconSize, 5);
-          context.fill();
-          context.fillStyle = "#93aeb2";
-          context.fillRect(iconX + 5, iconY + 5, 3, 3);
-          context.fillRect(iconX + 10, iconY + 5, 3, 3);
-          context.fillRect(iconX + 5, iconY + 10, 3, 3);
-          context.fillRect(iconX + 10, iconY + 10, 3, 3);
+          if (barbofusIcon) {
+            context.drawImage(barbofusIcon, iconX, iconY, iconSize, iconSize);
+          } else {
+            context.fillStyle = "#f6fbfc";
+            drawRoundedRect(context, iconX, iconY, iconSize, iconSize, 6);
+            context.fill();
+            context.fillStyle = "#93aeb2";
+            context.fillRect(iconX + 5, iconY + 5, 3, 3);
+            context.fillRect(iconX + 12, iconY + 5, 3, 3);
+            context.fillRect(iconX + 5, iconY + 12, 3, 3);
+            context.fillRect(iconX + 12, iconY + 12, 3, 3);
+          }
 
-          const barbofusCta = t("suggestions.render.link") || "Voir sur Barbofus";
+          const barbofusCta = "Barbofus";
           context.fillStyle = "#f6fbfc";
-          context.font = "700 16px 'Inter', system-ui, -apple-system, sans-serif";
-          context.fillText(barbofusCta, iconX + iconSize + 10, ctaY + Math.round(ctaHeight / 2) + 6);
+          context.font = "700 15px 'Inter', system-ui, -apple-system, sans-serif";
+          context.fillText(barbofusCta, iconX + iconSize + 10, ctaY + Math.round(ctaHeight / 2) + 5);
         }
 
         if (appIcon) {
