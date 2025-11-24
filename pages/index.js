@@ -2829,6 +2829,41 @@ function loadImageElement(src) {
   });
 }
 
+function buildQrCodeUrl(data, options = {}) {
+  if (!data) {
+    return null;
+  }
+
+  const size = Math.max(120, Math.min(600, Math.trunc(options.size ?? 240)));
+  const margin = Math.max(0, Math.min(8, Math.trunc(options.margin ?? 1)));
+  const dark = typeof options.dark === "string" ? options.dark : "#0b1224";
+  const light = typeof options.light === "string" ? options.light : "#f8fafc";
+
+  const params = new URLSearchParams();
+  params.set("text", data);
+  params.set("size", String(size));
+  params.set("margin", String(margin));
+  params.set("format", "png");
+  params.set("dark", dark);
+  params.set("light", light);
+
+  return `https://quickchart.io/qr?${params.toString()}`;
+}
+
+async function loadQrCodeImage(data, options = {}) {
+  try {
+    const url = buildQrCodeUrl(data, options);
+    if (!url) {
+      return null;
+    }
+    const image = await loadImageElement(url);
+    return image;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
 function extractPalette(image, options = {}) {
   const sourceRect = options.sourceRect ?? resolveSourceRect(image, options);
   const region = drawImageRegion(image, { sourceRect, maxDimension: MAX_DIMENSION });
@@ -6323,11 +6358,19 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       try {
         setExportingRecapId(proposal.id);
 
-        const [previewImage, recapBackground, appIcon, classIcon] = await Promise.all([
+        const [previewImage, recapBackground, appIcon, classIcon, barbofusQrCode] = await Promise.all([
           loadImageElement(previewSrc),
           loadImageElement(RECAP_BACKGROUND_SRC).catch(() => null),
           loadImageElement(APP_ICON_SRC).catch(() => null),
           proposal.classIcon ? loadImageElement(proposal.classIcon).catch(() => null) : Promise.resolve(null),
+          proposal.barbofusLink
+            ? loadQrCodeImage(proposal.barbofusLink, {
+                size: 240,
+                margin: 0,
+                dark: "#0b1024",
+                light: "#f9fafb",
+              }).catch(() => null)
+            : Promise.resolve(null),
         ]);
         const primaryColor = normalizeColorToHex(proposal.palette?.[0]) ?? "#1F2937";
         const darker = adjustHexLightness(primaryColor, -0.2, -0.08);
@@ -6589,6 +6632,40 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           context.fillStyle = "rgba(255, 255, 255, 0.94)";
           context.font = "700 17px 'Inter', system-ui, -apple-system, sans-serif";
           context.fillText(itemName, iconX + itemIconSize + 14, iconY + Math.round(itemIconSize / 2) + 7);
+        }
+
+        if (barbofusQrCode) {
+          const qrSize = 204;
+          const qrPadding = 14;
+          const cardWidth = qrSize + qrPadding * 2;
+          const cardHeight = qrSize + qrPadding * 2 + 50;
+          const cardRadius = 18;
+          const cardX = Math.round(width * 0.045);
+          const cardY = height - cardHeight - Math.round(height * 0.06);
+
+          drawRoundedRect(context, cardX, cardY, cardWidth, cardHeight, cardRadius);
+          const cardGradient = context.createLinearGradient(cardX, cardY, cardX + cardWidth, cardY + cardHeight);
+          cardGradient.addColorStop(0, withAlpha(primaryColor, 0.35));
+          cardGradient.addColorStop(1, withAlpha(lighter, 0.25));
+          context.fillStyle = cardGradient;
+          context.fill();
+          context.strokeStyle = "rgba(255, 255, 255, 0.14)";
+          context.lineWidth = 1.6;
+          context.stroke();
+
+          context.shadowColor = withAlpha(primaryColor, 0.32);
+          context.shadowBlur = 16;
+          context.drawImage(barbofusQrCode, cardX + qrPadding, cardY + qrPadding, qrSize, qrSize);
+          context.shadowBlur = 0;
+
+          context.fillStyle = "rgba(248, 250, 252, 0.96)";
+          context.font = "700 18px 'Inter', system-ui, -apple-system, sans-serif";
+          context.fillText("Barbofus", cardX + qrPadding, cardY + qrPadding + qrSize + 26);
+
+          const barbofusCta = t("suggestions.render.link");
+          context.fillStyle = "rgba(226, 232, 240, 0.9)";
+          context.font = "600 14px 'Inter', system-ui, -apple-system, sans-serif";
+          context.fillText(barbofusCta, cardX + qrPadding, cardY + qrPadding + qrSize + 44);
         }
 
         if (appIcon) {
