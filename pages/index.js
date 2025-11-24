@@ -6417,7 +6417,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         const previewRatio = Math.min(previewMaxWidth / previewWidth, previewMaxHeight / previewHeight, 1);
         const previewDrawWidth = Math.max(1, Math.round(previewWidth * previewRatio));
         const previewDrawHeight = Math.max(1, Math.round(previewHeight * previewRatio));
-        const previewX = Math.round(width * 0.1);
+        const previewX = Math.round(width * 0.2);
         const previewY = Math.round((height - previewDrawHeight) / 2);
         context.shadowColor = withAlpha(primaryColor, 0.28);
         context.shadowBlur = 24;
@@ -6636,46 +6636,42 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
         }
 
         if (barbofusQrCode) {
-          const qrSize = 84;
-          const qrPadding = 6;
-          const framePadding = 8;
+          const qrSize = 140;
+          const qrPadding = 9;
+          const framePadding = 10;
           const frameSize = qrSize + qrPadding * 2;
-          const ctaHeight = 26;
-          const ctaGap = 8;
+          const ctaHeight = 32;
+          const ctaGap = 10;
           const cardWidth = frameSize + framePadding * 2;
           const cardHeight = frameSize + framePadding * 2 + ctaGap + ctaHeight;
-          const cardRadius = 14;
-          const frameRadius = 12;
-          const innerRadius = 10;
-          const ctaRadius = 14;
-          const cardX = Math.round(width * 0.022);
-          const cardY = height - cardHeight - Math.round(height * 0.02);
-          const qrBase = adjustHexLightness(primaryColor, -0.32, -0.12);
-          const qrFrame = adjustHexLightness(primaryColor, -0.18, -0.08);
-          const qrInner = adjustHexLightness(primaryColor, -0.08, -0.04);
-          const qrAccent = adjustHexLightness(primaryColor, 0.18, -0.06);
+          const cardRadius = 16;
+          const frameRadius = 14;
+          const innerRadius = 12;
+          const ctaRadius = 16;
+          const cardX = Math.round(width * 0.036);
+          const cardY = height - cardHeight - Math.round(height * 0.05);
 
           context.save();
-          context.shadowColor = withAlpha(primaryColor, 0.3);
-          context.shadowBlur = 10;
+          context.shadowColor = withAlpha(primaryColor, 0.35);
+          context.shadowBlur = 14;
           drawRoundedRect(context, cardX, cardY, cardWidth, cardHeight, cardRadius);
-          context.fillStyle = withAlpha(qrBase, 0.94);
+          context.fillStyle = withAlpha("#131331", 0.92);
           context.fill();
           context.restore();
 
           const frameX = cardX + framePadding;
           const frameY = cardY + framePadding;
           drawRoundedRect(context, frameX, frameY, frameSize, frameSize, frameRadius);
-          context.fillStyle = withAlpha(qrFrame, 0.94);
+          context.fillStyle = "#CCCCEB";
           context.fill();
-          context.strokeStyle = withAlpha(qrAccent, 0.56);
+          context.strokeStyle = "rgba(142, 174, 178, 0.4)";
           context.lineWidth = 2;
           context.stroke();
 
           const qrX = frameX + qrPadding;
           const qrY = frameY + qrPadding;
           drawRoundedRect(context, qrX, qrY, qrSize, qrSize, innerRadius);
-          context.fillStyle = withAlpha(qrInner, 0.98);
+          context.fillStyle = "#f8fafc";
           context.fill();
           context.drawImage(barbofusQrCode, qrX, qrY, qrSize, qrSize);
 
@@ -6684,21 +6680,21 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           const ctaY = frameY + frameSize + ctaGap;
           drawRoundedRect(context, ctaX, ctaY, ctaWidth, ctaHeight, ctaRadius);
           const ctaGradient = context.createLinearGradient(ctaX, ctaY, ctaX + ctaWidth, ctaY + ctaHeight);
-          ctaGradient.addColorStop(0, adjustHexLightness(primaryColor, 0.22, -0.08));
-          ctaGradient.addColorStop(1, adjustHexLightness(primaryColor, 0.08, -0.06));
+          ctaGradient.addColorStop(0, "#4747B8");
+          ctaGradient.addColorStop(1, "#4747B8");
           context.fillStyle = ctaGradient;
           context.fill();
 
-          const iconSize = 18;
-          const iconX = ctaX + 12;
+          const iconSize = 20;
+          const iconX = ctaX + 14;
           const iconY = ctaY + Math.round((ctaHeight - iconSize) / 2);
           if (barbofusIcon) {
             context.drawImage(barbofusIcon, iconX, iconY, iconSize, iconSize);
           } else {
-            context.fillStyle = withAlpha(qrInner, 0.9);
+            context.fillStyle = "#f6fbfc";
             drawRoundedRect(context, iconX, iconY, iconSize, iconSize, 6);
             context.fill();
-            context.fillStyle = adjustHexLightness(primaryColor, 0.22, -0.04);
+            context.fillStyle = "#FF0000";
             context.fillRect(iconX + 5, iconY + 5, 3, 3);
             context.fillRect(iconX + 12, iconY + 5, 3, 3);
             context.fillRect(iconX + 5, iconY + 12, 3, 3);
@@ -6706,8 +6702,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           }
 
           const barbofusCta = "Barbofus";
-          context.fillStyle = "#f8fbfd";
-          context.font = "700 14px 'Inter', system-ui, -apple-system, sans-serif";
+          context.fillStyle = "#f6fbfc";
+          context.font = "700 15px 'Inter', system-ui, -apple-system, sans-serif";
           context.fillText(barbofusCta, iconX + iconSize + 10, ctaY + Math.round(ctaHeight / 2) + 5);
         }
 
