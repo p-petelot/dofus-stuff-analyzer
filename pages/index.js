@@ -121,6 +121,8 @@ const IMAGE_REFERENCE_KEYS = [
 ];
 
 const PALETTE_LOADER_COLORS = ["#1bdd8d", "#22d3ee", "#facc15", "#fb923c", "#a855f7"];
+const RECAP_BACKGROUND_SRC = "/backgrounds/Destin_du_monde_nuage.png";
+const APP_ICON_SRC = "/logo.svg";
 
 const PaletteLoader = ({ label }) => (
   <div className="palette-loader" role="status" aria-live="polite">
@@ -2812,6 +2814,56 @@ function drawImageRegion(image, { sourceRect, targetWidth, targetHeight, maxDime
   return { canvas, context, width, height };
 }
 
+function loadImageElement(src) {
+  if (!src || typeof window === "undefined" || typeof Image === "undefined") {
+    return Promise.reject(new Error("Image element unavailable"));
+  }
+
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.decoding = "async";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Failed to load image"));
+    image.src = src;
+  });
+}
+
+function buildQrCodeUrl(data, options = {}) {
+  if (!data) {
+    return null;
+  }
+
+  const size = Math.max(120, Math.min(600, Math.trunc(options.size ?? 240)));
+  const margin = Math.max(0, Math.min(8, Math.trunc(options.margin ?? 1)));
+  const dark = typeof options.dark === "string" ? options.dark : "#0b1224";
+  const light = typeof options.light === "string" ? options.light : "#f8fafc";
+
+  const params = new URLSearchParams();
+  params.set("text", data);
+  params.set("size", String(size));
+  params.set("margin", String(margin));
+  params.set("format", "png");
+  params.set("dark", dark);
+  params.set("light", light);
+
+  return `https://quickchart.io/qr?${params.toString()}`;
+}
+
+async function loadQrCodeImage(data, options = {}) {
+  try {
+    const url = buildQrCodeUrl(data, options);
+    if (!url) {
+      return null;
+    }
+    const image = await loadImageElement(url);
+    return image;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
 function extractPalette(image, options = {}) {
   const sourceRect = options.sourceRect ?? resolveSourceRect(image, options);
   const region = drawImageRegion(image, { sourceRect, maxDimension: MAX_DIMENSION });
@@ -3940,6 +3992,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const [downloadingPreviewId, setDownloadingPreviewId] = useState(null);
   const [copyingPreviewId, setCopyingPreviewId] = useState(null);
   const [supportsImageClipboard, setSupportsImageClipboard] = useState(false);
+  const [exportingRecapId, setExportingRecapId] = useState(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -6280,6 +6333,419 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     [getShareDescriptor, handleCopy, t, setError]
   );
 
+  const handleExportRecap = useCallback(
+    async (proposal) => {
+      if (!proposal) {
+        setError(t("errors.recapExport"));
+        return;
+      }
+
+      const activeDirection = normalizeLookDirection(lookDirection);
+      const lookPreviewGroup = proposal.lookBaseKey
+        ? lookPreviews?.[proposal.lookBaseKey]
+        : null;
+      const lookPreview = lookPreviewGroup?.directions?.[activeDirection] ?? null;
+      const previewSrc =
+        typeof lookPreview?.dataUrl === "string" && lookPreview.dataUrl.length > 0
+          ? lookPreview.dataUrl
+          : null;
+
+      if (!previewSrc) {
+        setError(t("errors.recapExport"));
+        return;
+      }
+
+      try {
+        setExportingRecapId(proposal.id);
+
+        const [previewImage, recapBackground, appIcon, classIcon, barbofusQrCode, barbofusIcon] = await Promise.all([
+          loadImageElement(previewSrc),
+          loadImageElement(RECAP_BACKGROUND_SRC).catch(() => null),
+          loadImageElement(APP_ICON_SRC).catch(() => null),
+          proposal.classIcon ? loadImageElement(proposal.classIcon).catch(() => null) : Promise.resolve(null),
+          proposal.barbofusLink
+            ? loadQrCodeImage(proposal.barbofusLink, {
+                size: 152,
+                margin: 0,
+                dark: "#0d1a24",
+                light: "#e6f2f3",
+              }).catch(() => null)
+            : Promise.resolve(null),
+          loadImageElement("/icons/barbofus.svg").catch(() => null),
+        ]);
+        const primaryColor = normalizeColorToHex(proposal.palette?.[0]) ?? "#1F2937";
+        const darker = adjustHexLightness(primaryColor, -0.2, -0.08);
+        const lighter = adjustHexLightness(primaryColor, 0.18, -0.12);
+
+        const canvas = document.createElement("canvas");
+        const width = 1280;
+        const height = 720;
+        canvas.width = width;
+        canvas.height = height;
+
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        if (!context) {
+          throw new Error("Canvas unavailable");
+        }
+
+        if (recapBackground) {
+          const { width: bgW, height: bgH } = getImageDimensions(recapBackground);
+          const bgRatio = Math.max(width / bgW, height / bgH);
+          const drawW = Math.ceil(bgW * bgRatio);
+          const drawH = Math.ceil(bgH * bgRatio);
+          const dx = Math.round((width - drawW) / 2);
+          const dy = Math.round((height - drawH) / 2);
+          context.drawImage(recapBackground, dx, dy, drawW, drawH);
+        } else {
+          const gradient = context.createLinearGradient(0, 0, width, height);
+          gradient.addColorStop(0, darker);
+          gradient.addColorStop(0.5, primaryColor);
+          gradient.addColorStop(1, lighter);
+          context.fillStyle = gradient;
+          context.fillRect(0, 0, width, height);
+        }
+
+        const vignette = context.createLinearGradient(0, 0, 0, height);
+        vignette.addColorStop(0, "rgba(6, 10, 24, 0.36)");
+        vignette.addColorStop(1, "rgba(6, 10, 24, 0.56)");
+        context.fillStyle = vignette;
+        context.fillRect(0, 0, width, height);
+
+        const { width: previewWidth, height: previewHeight } = getImageDimensions(previewImage);
+        const previewMaxWidth = width * 0.42;
+        const previewMaxHeight = height * 0.82;
+        const previewRatio = Math.min(previewMaxWidth / previewWidth, previewMaxHeight / previewHeight, 1);
+        const previewDrawWidth = Math.max(1, Math.round(previewWidth * previewRatio));
+        const previewDrawHeight = Math.max(1, Math.round(previewHeight * previewRatio));
+        const previewX = Math.round(width * 0.2);
+        const previewY = Math.round((height - previewDrawHeight) / 2);
+        context.shadowColor = withAlpha(primaryColor, 0.28);
+        context.shadowBlur = 24;
+        context.drawImage(previewImage, previewX, previewY, previewDrawWidth, previewDrawHeight);
+        context.shadowBlur = 0;
+
+        const panelX = Math.round(width * 0.52);
+        const panelY = Math.round(height * 0.085);
+        const panelWidth = Math.round(width * 0.39);
+        const panelHeight = Math.round(height * 0.82);
+        const panelRadius = 20;
+        context.fillStyle = "rgba(5, 8, 18, 0.78)";
+        context.beginPath();
+        context.moveTo(panelX + panelRadius, panelY);
+        context.lineTo(panelX + panelWidth - panelRadius, panelY);
+        context.quadraticCurveTo(panelX + panelWidth, panelY, panelX + panelWidth, panelY + panelRadius);
+        context.lineTo(panelX + panelWidth, panelY + panelHeight - panelRadius);
+        context.quadraticCurveTo(
+          panelX + panelWidth,
+          panelY + panelHeight,
+          panelX + panelWidth - panelRadius,
+          panelY + panelHeight
+        );
+        context.lineTo(panelX + panelRadius, panelY + panelHeight);
+        context.quadraticCurveTo(panelX, panelY + panelHeight, panelX, panelY + panelHeight - panelRadius);
+        context.lineTo(panelX, panelY + panelRadius);
+        context.quadraticCurveTo(panelX, panelY, panelX + panelRadius, panelY);
+        context.closePath();
+        context.fill();
+
+        const title = proposal.className ?? t("suggestions.render.defaultName", { index: proposal.index + 1 });
+
+        const drawRoundedRect = (ctx, x, y, w, h, radius) => {
+          const r = Math.min(radius, w / 2, h / 2);
+          ctx.beginPath();
+          ctx.moveTo(x + r, y);
+          ctx.lineTo(x + w - r, y);
+          ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+          ctx.lineTo(x + w, y + h - r);
+          ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+          ctx.lineTo(x + r, y + h);
+          ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+          ctx.lineTo(x, y + r);
+          ctx.quadraticCurveTo(x, y, x + r, y);
+          ctx.closePath();
+        };
+
+        const textOnColor = (hex) => {
+          const normalized = normalizeColorToHex(hex);
+          if (!normalized) {
+            return "rgba(15, 23, 42, 0.9)";
+          }
+          const value = normalized.replace("#", "");
+          const r = parseInt(value.slice(0, 2), 16) / 255;
+          const g = parseInt(value.slice(2, 4), 16) / 255;
+          const b = parseInt(value.slice(4, 6), 16) / 255;
+          const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+          return luminance > 0.55 ? "rgba(15, 23, 42, 0.9)" : "rgba(255, 255, 255, 0.94)";
+        };
+
+        const genderSymbol = proposal.lookGender === "f" ? "f" : "m";
+        const genderPath = new Path2D(
+          genderSymbol === "f"
+            ? "M12 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm0 12v8m-4-4h8"
+            : "M15 3h6v6m0-6-7.5 7.5m1.5-1.5a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"
+        );
+
+        const drawBadge = (x, y, size, render) => {
+          drawRoundedRect(context, x, y, size, size, size * 0.3);
+          context.fillStyle = "rgba(255, 255, 255, 0.08)";
+          context.fill();
+          context.strokeStyle = "rgba(255, 255, 255, 0.96)";
+          context.lineWidth = 1.5;
+          // context.stroke();
+          render(x, y, size);
+        };
+
+        const badgeSize = 60;
+        const badgeY = panelY + 10;
+        const badgeX = panelX + 24;
+        if (classIcon) {
+          drawBadge(badgeX, badgeY, badgeSize, (x, y, size) => {
+            const padding = 12;
+            const drawW = size - padding * 2;
+            const drawH = size - padding * 2;
+            const ratio = Math.min(drawW / classIcon.width, drawH / classIcon.height, 1);
+            const w = Math.round(classIcon.width * ratio);
+            const h = Math.round(classIcon.height * ratio);
+            const dx = x + Math.round((size - w) / 2);
+            const dy = y + Math.round((size - h) / 2);
+            context.drawImage(classIcon, dx, dy, w, h);
+          });
+        }
+        
+        /*
+        drawBadge(badgeX + badgeSize, badgeY + 2, 44, (x, y, size) => {
+          context.save();
+          context.translate(x + size / 2, y + size / 2);
+          const scale = (size * 1) / 24;
+          context.scale(scale, scale);
+          context.strokeStyle = "rgba(255, 255, 255, 0.92)";
+          context.lineWidth = 1.6;
+          context.lineCap = "round";
+          context.lineJoin = "round";
+          //context.stroke(genderPath);
+          context.restore();
+        });
+        */
+
+        let blockY = badgeY + badgeSize + 26;
+
+        const palette = Array.isArray(proposal.palette)
+          ? proposal.palette.map((hex) => normalizeColorToHex(hex)).filter(Boolean).slice(0, MAX_ITEM_PALETTE_COLORS)
+          : [];
+        const swatchWidth = 148;
+        const swatchHeight = 42;
+        const swatchGap = 10;
+        const swatchesPerRow = 3;
+        const swatchRows = Math.ceil(palette.length / swatchesPerRow) || 1;
+        for (let index = 0; index < palette.length; index += 1) {
+          const col = index % swatchesPerRow;
+          const row = Math.floor(index / swatchesPerRow);
+          const x = panelX + 20 + col * (swatchWidth + swatchGap);
+          const y = blockY + row * (swatchHeight + swatchGap);
+          const hex = palette[index] ?? primaryColor;
+          drawRoundedRect(context, x, y, swatchWidth, swatchHeight, 14);
+          context.fillStyle = withAlpha(hex, 0.72);
+          context.fill();
+          context.strokeStyle = "rgba(255, 255, 255, 0.12)";
+          context.lineWidth = 1.5;
+          context.stroke();
+
+          context.beginPath();
+          context.arc(x + 18, y + swatchHeight / 2, 9, 0, Math.PI * 2);
+          context.fillStyle = hex;
+          context.fill();
+          context.strokeStyle = "rgba(255, 255, 255, 0.2)";
+          context.stroke();
+
+          context.fillStyle = textOnColor(hex);
+          context.font = "700 15px 'Inter', system-ui, -apple-system, sans-serif";
+          context.fillText(hex.toUpperCase(), x + 38, y + swatchHeight / 2 + 5);
+        }
+        blockY += swatchRows * (swatchHeight + swatchGap) + 16;
+
+        const itemsLabel = t("workspace.mode.items");
+        context.fillStyle = "rgba(255, 255, 255, 0.86)";
+        context.font = "600 17px 'Inter', system-ui, -apple-system, sans-serif";
+        context.fillText(itemsLabel, panelX + 24, blockY + 24);
+        blockY += 38;
+
+        const fallbackSlot = (slotType) => {
+          const key = ITEM_TYPE_LABEL_KEYS[slotType];
+          return key ? t(key) : slotType ?? "";
+        };
+
+        const defaultItems = Array.isArray(proposal.items) ? proposal.items.slice(0, ITEM_TYPES.length) : [];
+        const itemsWithImages = await Promise.all(
+          defaultItems.map(async (item) => {
+            if (!item?.imageUrl) {
+              return { item, image: null };
+            }
+            try {
+              const image = await loadImageElement(item.imageUrl);
+              return { item, image };
+            } catch (error) {
+              return { item, image: null };
+            }
+          })
+        );
+
+        const footerSafeY = panelY + panelHeight - 36;
+        const availableHeight = Math.max(120, footerSafeY - blockY);
+        const itemGap = 10;
+        const itemsCount = Math.max(1, itemsWithImages.length);
+        const itemStep = Math.max(46, Math.floor(availableHeight / itemsCount));
+        const rowHeight = Math.max(40, itemStep - 6);
+        const itemIconSize = Math.max(34, Math.min(50, rowHeight - 12));
+
+        for (let index = 0; index < itemsWithImages.length; index += 1) {
+          const entry = itemsWithImages[index];
+          const y = blockY + index * itemStep;
+          const rowX = panelX + 18;
+          const rowWidth = panelWidth - 36;
+          // drawRoundedRect(context, rowX, y - 4, rowWidth, rowHeight + 10, 14);
+          context.fillStyle = "rgba(255, 255, 255, 0.07)";
+          context.fill();
+          context.strokeStyle = "rgba(255, 255, 255, 0.1)";
+          context.stroke();
+
+          const iconX = panelX + 32;
+          const iconY = y + Math.max(4, Math.floor((rowHeight - itemIconSize) / 2));
+          const slotLabel = fallbackSlot(entry.item?.slotType);
+          const itemName = entry.item?.name ?? slotLabel;
+          const paletteSample = normalizeColorToHex(entry.item?.palette?.[0]) ?? primaryColor;
+
+          drawRoundedRect(context, iconX - 4, iconY - 4, itemIconSize + 8, itemIconSize + 8, 14);
+          context.fillStyle = withAlpha(paletteSample, 0.32);
+          context.fill();
+          context.strokeStyle = "rgba(255, 255, 255, 0.18)";
+          context.stroke();
+
+          if (entry.image) {
+            const { width: iconW, height: iconH } = getImageDimensions(entry.image);
+            const ratio = Math.min(itemIconSize / iconW, itemIconSize / iconH, 1);
+            const drawW = Math.round(iconW * ratio);
+            const drawH = Math.round(iconH * ratio);
+            const dx = iconX + Math.round((itemIconSize - drawW) / 2);
+            const dy = iconY + Math.round((itemIconSize - drawH) / 2);
+            context.drawImage(entry.image, dx, dy, drawW, drawH);
+          }
+
+          context.fillStyle = "rgba(255, 255, 255, 0.94)";
+          context.font = "700 17px 'Inter', system-ui, -apple-system, sans-serif";
+          context.fillText(itemName, iconX + itemIconSize + 14, iconY + Math.round(itemIconSize / 2) + 7);
+        }
+
+        if (barbofusQrCode) {
+          const qrSize = 140;
+          const qrPadding = 9;
+          const framePadding = 10;
+          const frameSize = qrSize + qrPadding * 2;
+          const ctaHeight = 32;
+          const ctaGap = 10;
+          const cardWidth = frameSize + framePadding * 2;
+          const cardHeight = frameSize + framePadding * 2 + ctaGap + ctaHeight;
+          const cardRadius = 16;
+          const frameRadius = 14;
+          const innerRadius = 12;
+          const ctaRadius = 16;
+          const cardX = Math.round(width * 0.036);
+          const cardY = height - cardHeight - Math.round(height * 0.05);
+
+          context.save();
+          context.shadowColor = withAlpha(primaryColor, 0.35);
+          context.shadowBlur = 14;
+          drawRoundedRect(context, cardX, cardY, cardWidth, cardHeight, cardRadius);
+          context.fillStyle = withAlpha("#131331", 0.92);
+          context.fill();
+          context.restore();
+
+          const frameX = cardX + framePadding;
+          const frameY = cardY + framePadding;
+          drawRoundedRect(context, frameX, frameY, frameSize, frameSize, frameRadius);
+          context.fillStyle = "#f8fafc";
+          context.fill();
+          context.strokeStyle = "rgba(142, 174, 178, 0.4)";
+          context.lineWidth = 2;
+          context.stroke();
+
+          const qrX = frameX + qrPadding;
+          const qrY = frameY + qrPadding;
+          drawRoundedRect(context, qrX, qrY, qrSize, qrSize, innerRadius);
+          context.fillStyle = "#f8fafc";
+          context.fill();
+          context.drawImage(barbofusQrCode, qrX, qrY, qrSize, qrSize);
+
+          const ctaWidth = frameSize;
+          const ctaX = cardX + Math.round((cardWidth - ctaWidth) / 2);
+          const ctaY = frameY + frameSize + ctaGap;
+          drawRoundedRect(context, ctaX, ctaY, ctaWidth, ctaHeight, ctaRadius);
+          const ctaGradient = context.createLinearGradient(ctaX, ctaY, ctaX + ctaWidth, ctaY + ctaHeight);
+          ctaGradient.addColorStop(0, "#4747B8");
+          ctaGradient.addColorStop(1, "#4747B8");
+          context.fillStyle = ctaGradient;
+          context.fill();
+
+          const iconSize = 20;
+          const iconX = ctaX + 14;
+          const iconY = ctaY + Math.round((ctaHeight - iconSize) / 2);
+          if (barbofusIcon) {
+            context.drawImage(barbofusIcon, iconX, iconY, iconSize, iconSize);
+          } else {
+            context.fillStyle = "#f6fbfc";
+            drawRoundedRect(context, iconX, iconY, iconSize, iconSize, 6);
+            context.fill();
+            context.fillStyle = "#FF0000";
+            context.fillRect(iconX + 5, iconY + 5, 3, 3);
+            context.fillRect(iconX + 12, iconY + 5, 3, 3);
+            context.fillRect(iconX + 5, iconY + 12, 3, 3);
+            context.fillRect(iconX + 12, iconY + 12, 3, 3);
+          }
+
+          const barbofusCta = "Barbofus";
+          context.fillStyle = "#f6fbfc";
+          context.font = "700 15px 'Inter', system-ui, -apple-system, sans-serif";
+          context.fillText(barbofusCta, iconX + iconSize + 10, ctaY + Math.round(ctaHeight / 2) + 5);
+        }
+
+        if (appIcon) {
+          const footerSize = 34;
+          const dx = panelX + panelWidth - footerSize + 42;
+          const dy = panelY + panelHeight - footerSize + 30;
+          context.globalAlpha = 0.9;
+          context.drawImage(appIcon, dx, dy, footerSize, footerSize);
+          context.globalAlpha = 1;
+        }
+
+        const filenameBase =
+          slugify(title) || slugify(t("suggestions.render.defaultName", { index: proposal.index + 1 })) || "recap-skin";
+        const blob = await new Promise((resolve, reject) => {
+          canvas.toBlob((value) => {
+            if (value) {
+              resolve(value);
+            } else {
+              reject(new Error("Unable to build blob"));
+            }
+          }, "image/png");
+        });
+
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = `${filenameBase}-recap.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(downloadUrl);
+      } catch (error) {
+        console.error(error);
+        setError(t("errors.recapExport"));
+      } finally {
+        setExportingRecapId(null);
+      }
+    },
+    [lookDirection, lookPreviews, setError, t]
+  );
+
   const rotateLookDirection = useCallback(
     (step) => {
       const total = ALL_LOOK_DIRECTIONS.length;
@@ -7757,6 +8223,12 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                               const copySkinUnavailableLabel = t("suggestions.render.copySkinUnavailable");
                               const isCopyingPreview = copyingPreviewId === proposal.id;
                               const canCopySkinImage = supportsImageClipboard && lookLoaded;
+                              const recapCtaLabel =
+                                exportingRecapId === proposal.id
+                                  ? t("suggestions.render.downloading")
+                                  : t("suggestions.render.recap");
+                              const recapUnavailableLabel = t("suggestions.render.recapUnavailable");
+                              const isExportingRecap = exportingRecapId === proposal.id;
                               const canvasStyle = activeBackground
                                 ? {
                                     backgroundImage: `url(${activeBackground.src})`,
@@ -8174,6 +8646,35 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                             <img src="/icons/copy.svg" alt="" />
                                           </span>
                                           <span className="sr-only">{copySkinUnavailableLabel}</span>
+                                        </button>
+                                      )}
+                                      {lookLoaded ? (
+                                        <button
+                                          type="button"
+                                          className="skin-card__cta"
+                                          onClick={() => handleExportRecap(proposal)}
+                                          title={recapCtaLabel}
+                                          aria-label={recapCtaLabel}
+                                          disabled={isExportingRecap}
+                                          aria-busy={isExportingRecap}
+                                        >
+                                          <span className="skin-card__cta-icon" aria-hidden="true">
+                                            <img src="/icons/download.svg" alt="" />
+                                          </span>
+                                          <span className="sr-only">{recapCtaLabel}</span>
+                                        </button>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          className="skin-card__cta skin-card__cta--disabled"
+                                          disabled
+                                          title={recapUnavailableLabel}
+                                          aria-label={recapUnavailableLabel}
+                                        >
+                                          <span className="skin-card__cta-icon" aria-hidden="true">
+                                            <img src="/icons/download.svg" alt="" />
+                                          </span>
+                                          <span className="sr-only">{recapUnavailableLabel}</span>
                                         </button>
                                       )}
                                       {canShareSkin ? (
