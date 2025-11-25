@@ -18,6 +18,8 @@ const SLOT_LABELS = {
   familier: "Familier & montures",
 };
 
+const PALETTE_LOADER_COLORS = ["#1bdd8d", "#22d3ee", "#facc15", "#fb923c", "#a855f7"];
+
 function slotSortValue(slot) {
   const index = SLOT_ORDER.indexOf(slot);
   return index === -1 ? SLOT_ORDER.length + 1 : index;
@@ -192,13 +194,37 @@ async function copyColorToClipboard(value) {
   }
 }
 
+function PaletteLoader({ label }) {
+  return (
+    <div className="palette-loader" role="presentation" aria-hidden="true">
+      <span className="palette-loader__aurora">
+        <span className="palette-loader__halo" />
+        <span className="palette-loader__spectrum">
+          <span className="palette-loader__ring palette-loader__ring--outer" />
+          <span className="palette-loader__ring palette-loader__ring--inner" />
+          {PALETTE_LOADER_COLORS.map((color, index) => (
+            <span
+              key={`${color}-${index}`}
+              className={`palette-loader__pulse palette-loader__pulse--${index}`}
+              style={{
+                "--palette-loader-color": color,
+                "--palette-loader-index": String(index),
+              }}
+            />
+          ))}
+        </span>
+        <span className="palette-loader__core" />
+      </span>
+      <span className="sr-only">{label}</span>
+    </div>
+  );
+}
+
 function GalleryLoader({ message }) {
   return (
     <div className="gallery-loader" role="status" aria-live="polite">
-      <span className="gallery-loader__icon" aria-hidden="true">
-        <img src="/logo.svg" alt="" />
-      </span>
-      <span>{message}</span>
+      <PaletteLoader label={message ?? "Chargement"} />
+      {message ? <span className="gallery-loader__message">{message}</span> : null}
     </div>
   );
 }

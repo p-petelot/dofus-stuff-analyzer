@@ -20,14 +20,9 @@ const links: NavLink[] = [
     href: "/collections",
     children: [
       {
-        label: "Dernières",
-        href: "/collections/recent",
-        desc: "Skins ajoutés récemment",
-      },
-      {
-        label: "Populaires",
-        href: "/collections/top",
-        desc: "Tendances du moment",
+        label: "Galerie IA",
+        href: "/collections/galerie",
+        desc: "Skins générés automatiquement",
       },
     ],
   },
