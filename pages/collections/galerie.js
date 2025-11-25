@@ -676,6 +676,18 @@ export default function GalleryCollectionsPage() {
     fetchGallery();
   }, [fetchGallery, refreshIndex]);
 
+  const handleColorChange = useCallback((value) => {
+    const normalized = normalizeHex(value);
+    if (!normalized) {
+      setReferenceColor(null);
+      setRefreshIndex((current) => current + 1);
+      return;
+    }
+    setReferenceColor(normalized);
+    setToneFilter("all");
+    setRefreshIndex((current) => current + 1);
+  }, []);
+
   const handleRefresh = useCallback(() => {
     setRefreshIndex((value) => value + 1);
   }, []);
@@ -688,18 +700,6 @@ export default function GalleryCollectionsPage() {
   const handleToneChange = useCallback((value) => {
     setReferenceColor(null);
     setToneFilter(value);
-    setRefreshIndex((current) => current + 1);
-  }, []);
-
-  const handleColorChange = useCallback((value) => {
-    const normalized = normalizeHex(value);
-    if (!normalized) {
-      setReferenceColor(null);
-      setRefreshIndex((current) => current + 1);
-      return;
-    }
-    setReferenceColor(normalized);
-    setToneFilter("all");
     setRefreshIndex((current) => current + 1);
   }, []);
 
@@ -825,63 +825,63 @@ export default function GalleryCollectionsPage() {
             <Link href="/collections" className="gallery-breadcrumb">
               ← Collections
             </Link>
-          <h1>Galerie</h1>
-          <p>
-            Explorez des combinaisons de couleurs et d'équipements sélectionnés automatiquement pour correspondre à une
-            palette harmonieuse. Cliquez sur un skin pour découvrir les détails de sa composition.
-          </p>
-          <div className="gallery-actions">
-            <div className="gallery-color-picker" role="group" aria-label="Référence couleur">
-              <div className="gallery-color-picker__header">
-                <span className="gallery-color-picker__label">Référence créative</span>
-                <span className="gallery-color-picker__hint">Couleur</span>
-              </div>
-              <div className="gallery-color-picker__controls">
-                <label className="gallery-color-picker__input">
-                  <span
-                    className="gallery-color-picker__preview"
-                    style={{ backgroundImage: buildGradientFromHex(referenceColor || "#7C3AED") }}
-                  />
-                  <input
-                    type="color"
-                    value={referenceColor || "#7C3AED"}
-                    aria-label="Choisir une couleur de référence"
-                    onChange={(event) => handleColorChange(event.target.value)}
-                  />
-                </label>
-                <button type="button" className="gallery-random" onClick={handleRandomColor}>
-                  Nuance aléatoire
-                </button>
-                <div className="gallery-color-picker__swatches" role="listbox" aria-label="Nuances suggérées">
-                  {CREATIVE_COLOR_PRESETS.map((hex) => {
-                    const active = referenceColor === hex;
-                    return (
-                      <button
-                        key={hex}
-                        type="button"
-                        className={classNames("gallery-color-picker__swatch", active && "is-active")}
-                        style={{ backgroundColor: hex }}
-                        aria-label={`Sélectionner la teinte ${hex}`}
-                        aria-pressed={active}
-                        onClick={() => handleColorChange(hex)}
-                      />
-                    );
-                  })}
+            <h1>Galerie</h1>
+            <p>
+              Explorez des combinaisons de couleurs et d'équipements sélectionnés automatiquement pour correspondre à une
+              palette harmonieuse. Cliquez sur un skin pour découvrir les détails de sa composition.
+            </p>
+            <div className="gallery-actions">
+              <div className="gallery-color-picker" role="group" aria-label="Référence couleur">
+                <div className="gallery-color-picker__header">
+                  <span className="gallery-color-picker__label">Référence créative</span>
+                  <span className="gallery-color-picker__hint">Couleur</span>
+                </div>
+                <div className="gallery-color-picker__controls">
+                  <label className="gallery-color-picker__input">
+                    <span
+                      className="gallery-color-picker__preview"
+                      style={{ backgroundImage: buildGradientFromHex(referenceColor || "#7C3AED") }}
+                    />
+                    <input
+                      type="color"
+                      value={referenceColor || "#7C3AED"}
+                      aria-label="Choisir une couleur de référence"
+                      onChange={(event) => handleColorChange(event.target.value)}
+                    />
+                  </label>
+                  <button type="button" className="gallery-random" onClick={handleRandomColor}>
+                    Nuance aléatoire
+                  </button>
+                  <div className="gallery-color-picker__swatches" role="listbox" aria-label="Nuances suggérées">
+                    {CREATIVE_COLOR_PRESETS.map((hex) => {
+                      const active = referenceColor === hex;
+                      return (
+                        <button
+                          key={hex}
+                          type="button"
+                          className={classNames("gallery-color-picker__swatch", active && "is-active")}
+                          style={{ backgroundColor: hex }}
+                          aria-label={`Sélectionner la teinte ${hex}`}
+                          aria-pressed={active}
+                          onClick={() => handleColorChange(hex)}
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="gallery-filters" role="group" aria-label="Filtrer par couleur dominante">
-              {COLOR_FILTERS.map((filter) => {
+              <div className="gallery-filters" role="group" aria-label="Filtrer par couleur dominante">
+                {COLOR_FILTERS.map((filter) => {
                   const active = !referenceColor && toneFilter === filter.id;
-                return (
-                  <button
-                    key={filter.id}
-                    type="button"
-                    className={classNames("gallery-filter", active && "gallery-filter--active")}
+                  return (
+                    <button
+                      key={filter.id}
+                      type="button"
+                      className={classNames("gallery-filter", active && "gallery-filter--active")}
                       onClick={() => handleToneChange(filter.id)}
-                  >
-                    {filter.swatch ? (
-                      <span className="gallery-filter__swatch" style={{ backgroundColor: filter.swatch }} />
+                    >
+                      {filter.swatch ? (
+                        <span className="gallery-filter__swatch" style={{ backgroundColor: filter.swatch }} />
                       ) : (
                         <span className="gallery-filter__swatch gallery-filter__swatch--all" />
                       )}
