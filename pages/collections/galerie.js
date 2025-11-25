@@ -615,9 +615,11 @@ export default function GalleryCollectionsPage() {
       }
       setError(null);
       try {
+        const startIndex = append ? totalCountRef.current : 0;
         const params = new URLSearchParams();
         params.set("lang", language);
         params.set("count", String(DEFAULT_COUNT));
+        params.set("offset", String(startIndex));
         if (referenceColor) {
           params.set("color", referenceColor);
         }
@@ -630,7 +632,6 @@ export default function GalleryCollectionsPage() {
         const dataset = Array.isArray(payload?.skins) ? payload.skins : [];
         setSkins((prev) => {
           const base = append ? prev : [];
-          const startIndex = append ? totalCountRef.current : 0;
           const mapped = dataset.map((skin, index) => ({
             ...skin,
             displayNumber: startIndex + index + 1,
