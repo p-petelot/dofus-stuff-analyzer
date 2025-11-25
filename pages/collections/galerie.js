@@ -20,6 +20,17 @@ const SLOT_LABELS = {
 
 const PALETTE_LOADER_COLORS = ["#1bdd8d", "#22d3ee", "#facc15", "#fb923c", "#a855f7"];
 
+const COLOR_FILTERS = [
+  { id: "all", label: "Toutes", swatch: null },
+  { id: "blue", label: "Bleus", swatch: "#3B82F6" },
+  { id: "teal", label: "Turquoises", swatch: "#14B8A6" },
+  { id: "green", label: "Verts", swatch: "#22C55E" },
+  { id: "orange", label: "Oranges", swatch: "#F97316" },
+  { id: "red", label: "Rouges", swatch: "#EF4444" },
+  { id: "purple", label: "Violets", swatch: "#8B5CF6" },
+  { id: "neutral", label: "Neutres", swatch: "#9CA3AF" },
+];
+
 function slotSortValue(slot) {
   const index = SLOT_ORDER.indexOf(slot);
   return index === -1 ? SLOT_ORDER.length + 1 : index;
@@ -273,6 +284,7 @@ function GalleryCard({ skin, language, onSelect }) {
   const [status, setStatus] = useState("loading");
   const [preview, setPreview] = useState(null);
   const abortRef = useRef(null);
+  const mainColor = normalizeHex(skin?.primaryColor ?? skin?.palette?.hex?.[0]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -350,7 +362,10 @@ function GalleryCard({ skin, language, onSelect }) {
         )}
       </div>
       <div className="gallery-card__meta">
-        <span className="gallery-card__number">#{(skin.displayNumber ?? skin.number).toString().padStart(2, "0")}</span>
+        <div className="gallery-card__meta-left">
+          {mainColor ? <span className="gallery-card__swatch" style={{ backgroundColor: mainColor }} /> : null}
+          <span className="gallery-card__number">#{(skin.displayNumber ?? skin.number).toString().padStart(2, "0")}</span>
+        </div>
         <div className="gallery-card__identity">
           {skin.classIcon ? (
             <img
@@ -580,6 +595,7 @@ export default function GalleryCollectionsPage() {
   const [error, setError] = useState(null);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const [selection, setSelection] = useState(null);
+  const [toneFilter, setToneFilter] = useState("all");
   const loadMoreRef = useRef(null);
   const totalCountRef = useRef(0);
   const inFlightRef = useRef(false);
@@ -601,6 +617,9 @@ export default function GalleryCollectionsPage() {
         const params = new URLSearchParams();
         params.set("lang", language);
         params.set("count", String(DEFAULT_COUNT));
+        if (toneFilter && toneFilter !== "all") {
+          params.set("tone", toneFilter);
+        }
         const response = await fetch(`/api/gallery?${params.toString()}`);
         if (!response.ok) {
           const payload = await response.json().catch(() => null);
@@ -635,7 +654,7 @@ export default function GalleryCollectionsPage() {
         inFlightRef.current = false;
       }
     },
-    [language],
+    [language, toneFilter],
   );
 
   useEffect(() => {
@@ -644,6 +663,11 @@ export default function GalleryCollectionsPage() {
 
   const handleRefresh = useCallback(() => {
     setRefreshIndex((value) => value + 1);
+  }, []);
+
+  const handleToneChange = useCallback((value) => {
+    setToneFilter(value);
+    setRefreshIndex((current) => current + 1);
   }, []);
 
   const handleSelect = useCallback((entry) => {
@@ -774,6 +798,26 @@ export default function GalleryCollectionsPage() {
               palette harmonieuse. Cliquez sur un skin pour découvrir les détails de sa composition.
             </p>
             <div className="gallery-actions">
+              <div className="gallery-filters" role="group" aria-label="Filtrer par couleur dominante">
+                {COLOR_FILTERS.map((filter) => {
+                  const active = toneFilter === filter.id;
+                  return (
+                    <button
+                      key={filter.id}
+                      type="button"
+                      className={classNames("gallery-filter", active && "gallery-filter--active")}
+                      onClick={() => handleToneChange(filter.id)}
+                    >
+                      {filter.swatch ? (
+                        <span className="gallery-filter__swatch" style={{ backgroundColor: filter.swatch }} />
+                      ) : (
+                        <span className="gallery-filter__swatch gallery-filter__swatch--all" />
+                      )}
+                      <span>{filter.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
               <button type="button" onClick={handleRefresh} className="gallery-refresh" disabled={loading}>
                 {loading ? "Génération en cours..." : "Régénérer la galerie"}
               </button>
