@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { ModelPredictionSection } from "../app/components/ModelPredictionSection";
+import { PaletteLoader } from "../app/components/PaletteLoader";
 import { usePredictionLabels } from "../lib/vision/usePredictionLabels";
 import {
   DEFAULT_LANGUAGE,
@@ -120,33 +121,8 @@ const IMAGE_REFERENCE_KEYS = [
   "src",
 ];
 
-const PALETTE_LOADER_COLORS = ["#1bdd8d", "#22d3ee", "#facc15", "#fb923c", "#a855f7"];
 const RECAP_BACKGROUND_SRC = "/backgrounds/Destin_du_monde_nuage.png";
 const APP_ICON_SRC = "/logo.svg";
-
-const PaletteLoader = ({ label }) => (
-  <div className="palette-loader" role="status" aria-live="polite">
-    <span className="sr-only">{label}</span>
-    <div className="palette-loader__aurora" aria-hidden="true">
-      <span className="palette-loader__halo" />
-      <div className="palette-loader__spectrum">
-        <span className="palette-loader__ring palette-loader__ring--outer" />
-        <span className="palette-loader__ring palette-loader__ring--inner" />
-        {PALETTE_LOADER_COLORS.map((color, index) => (
-          <span
-            key={`${color}-${index}`}
-            className={`palette-loader__pulse palette-loader__pulse--${index}`}
-            style={{
-              "--palette-loader-color": color,
-              "--palette-loader-index": String(index),
-            }}
-          />
-        ))}
-      </div>
-      <span className="palette-loader__core" />
-    </div>
-  </div>
-);
 
 const THEME_KEYS = Object.freeze({
   DARK: "dark",
@@ -3806,6 +3782,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       return next;
     });
   }, []);
+  const predictionLabels = usePredictionLabels(t);
   const languagePriority = useMemo(() => getLanguagePriority(language), [language]);
   useEffect(() => {
     setActiveLocalizationPriority(language);
@@ -3912,7 +3889,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const themeSelectorAria = typeof themeSelectorLabel === "string" ? themeSelectorLabel : "";
   const languageSelectorLabel = t("language.selectorAria");
   const languageSelectorAria = typeof languageSelectorLabel === "string" ? languageSelectorLabel : "";
-  const predictionLabels = usePredictionLabels(t);
   const activeThemeOption = useMemo(
     () => themeOptions.find((option) => option.key === theme) ?? null,
     [themeOptions, theme]
@@ -3941,11 +3917,11 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const [imageTones, setImageTones] = useState(null);
   const [imageHash, setImageHash] = useState(null);
   const [imageEdges, setImageEdges] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [modelResult, setModelResult] = useState(null);
   const [modelError, setModelError] = useState(null);
   const [isPredicting, setIsPredicting] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [copiedCode, setCopiedCode] = useState(null);
   const [toast, setToast] = useState(null);
@@ -4030,46 +4006,6 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const [breedsError, setBreedsError] = useState(null);
   const [selectedBreedId, setSelectedBreedId] = useState(null);
   const [selectedGender, setSelectedGender] = useState(BARBOFUS_DEFAULT_GENDER_KEY);
-
-  useEffect(() => {
-    if (!modelResult || !modelResult.prediction) {
-      return;
-    }
-
-    const predictedBreed = modelResult.prediction.breed;
-    if (Number.isFinite(predictedBreed)) {
-      setSelectedBreedId(predictedBreed);
-    }
-
-    const predictedGender = modelResult.prediction.sex === 1 ? "female" : "male";
-    setSelectedGender(predictedGender);
-
-    if (Array.isArray(modelResult.colors) && modelResult.colors.length) {
-      const palette = modelResult.colors
-        .map((value) => {
-          const hex = normalizeColorToHex(value);
-          if (!hex) {
-            return null;
-          }
-          const rgb = hexToRgb(hex) ?? { r: 0, g: 0, b: 0 };
-          return {
-            hex,
-            rgb: `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`,
-            r: rgb.r,
-            g: rgb.g,
-            b: rgb.b,
-            weight: 1,
-            source: "model",
-          };
-        })
-        .filter(Boolean);
-      if (palette.length) {
-        setColors(palette);
-        setSelectedColor((previous) => palette[0]?.hex ?? previous);
-        setUseCustomSkinTone(true);
-      }
-    }
-  }, [modelResult]);
 
   const progressHandles = useRef({ frame: null, timeout: null, value: 0 });
   const breedsRequestRef = useRef(null);
@@ -7964,15 +7900,15 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
               </div>
             )}
           </div>
-
-          <ModelPredictionSection
-            result={modelResult}
-            isLoading={isPredicting}
-            error={modelError}
-            placeholder={predictionLabels.placeholder}
-            labels={predictionLabels}
-          />
-
+          <div style={{ display: "none" }} aria-hidden>
+            <ModelPredictionSection
+              result={modelResult}
+              isLoading={isPredicting}
+              error={modelError}
+              placeholder={predictionLabels.placeholder}
+              labels={predictionLabels}
+            />
+          </div>
           <div className="suggestions" style={suggestionsAccentStyle}>
             <div
               className="identity-card suggestions__identity-card"

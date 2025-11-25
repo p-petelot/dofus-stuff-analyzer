@@ -3,6 +3,7 @@ import Head from "next/head";
 import Link from "next/link";
 import { useLanguage } from "../../lib/i18n";
 import { useLockBody } from "../../app/components/hooks/useLockBody";
+import { PaletteLoader } from "../../app/components/PaletteLoader";
 
 const DEFAULT_COUNT = 12;
 
@@ -195,10 +196,10 @@ async function copyColorToClipboard(value) {
 function GalleryLoader({ message }) {
   return (
     <div className="gallery-loader" role="status" aria-live="polite">
-      <span className="gallery-loader__icon" aria-hidden="true">
-        <img src="/logo.svg" alt="" />
-      </span>
-      <span>{message}</span>
+      <div className="gallery-loader__icon gallery-loader__icon--palette">
+        <PaletteLoader label={message ?? "Chargement"} />
+      </div>
+      {message ? <span>{message}</span> : null}
     </div>
   );
 }
