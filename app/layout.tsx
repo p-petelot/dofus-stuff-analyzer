@@ -15,22 +15,7 @@ export const metadata: Metadata = {
 
 const links: NavLink[] = [
   { label: "Accueil", href: "/" },
-  {
-    label: "Collections",
-    href: "/collections",
-    children: [
-      {
-        label: "Dernières",
-        href: "/collections/recent",
-        desc: "Skins ajoutés récemment",
-      },
-      {
-        label: "Populaires",
-        href: "/collections/top",
-        desc: "Tendances du moment",
-      },
-    ],
-  },
+  { label: "Collections", href: "/collections" },
 ];
 
 export default function RootLayout({

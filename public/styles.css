@@ -509,6 +509,23 @@ a {
   animation: gallery-loader-spin 1.8s ease-in-out infinite;
 }
 
+.gallery-loader__icon--palette {
+  width: 180px;
+  height: auto;
+  background: none;
+  box-shadow: none;
+  animation: none;
+}
+
+.gallery-loader__icon--palette .palette-loader {
+  padding: 0;
+}
+
+.gallery-loader__icon--palette .palette-loader__aurora {
+  width: 120px;
+  height: 120px;
+}
+
 .gallery-loader__icon img {
   width: 36px;
   height: 36px;
