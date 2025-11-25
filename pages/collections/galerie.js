@@ -32,17 +32,6 @@ const CREATIVE_COLOR_PRESETS = [
   "#22C55E",
 ];
 
-const COLOR_FILTERS = [
-  { id: "all", label: "Toutes", swatch: null },
-  { id: "blue", label: "Bleus", swatch: "#3B82F6" },
-  { id: "teal", label: "Turquoises", swatch: "#14B8A6" },
-  { id: "green", label: "Verts", swatch: "#22C55E" },
-  { id: "orange", label: "Oranges", swatch: "#F97316" },
-  { id: "red", label: "Rouges", swatch: "#EF4444" },
-  { id: "purple", label: "Violets", swatch: "#8B5CF6" },
-  { id: "neutral", label: "Neutres", swatch: "#9CA3AF" },
-];
-
 function slotSortValue(slot) {
   const index = SLOT_ORDER.indexOf(slot);
   return index === -1 ? SLOT_ORDER.length + 1 : index;
@@ -607,7 +596,6 @@ export default function GalleryCollectionsPage() {
   const [error, setError] = useState(null);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const [selection, setSelection] = useState(null);
-  const [toneFilter, setToneFilter] = useState("all");
   const [referenceColor, setReferenceColor] = useState(null);
   const loadMoreRef = useRef(null);
   const totalCountRef = useRef(0);
@@ -632,8 +620,6 @@ export default function GalleryCollectionsPage() {
         params.set("count", String(DEFAULT_COUNT));
         if (referenceColor) {
           params.set("color", referenceColor);
-        } else if (toneFilter && toneFilter !== "all") {
-          params.set("tone", toneFilter);
         }
         const response = await fetch(`/api/gallery?${params.toString()}`);
         if (!response.ok) {
@@ -669,7 +655,7 @@ export default function GalleryCollectionsPage() {
         inFlightRef.current = false;
       }
     },
-    [language, toneFilter, referenceColor],
+    [language, referenceColor],
   );
 
   useEffect(() => {
@@ -684,7 +670,6 @@ export default function GalleryCollectionsPage() {
       return;
     }
     setReferenceColor(normalized);
-    setToneFilter("all");
     setRefreshIndex((current) => current + 1);
   }, []);
 
@@ -696,12 +681,6 @@ export default function GalleryCollectionsPage() {
     const choice = CREATIVE_COLOR_PRESETS[Math.floor(Math.random() * CREATIVE_COLOR_PRESETS.length)];
     handleColorChange(choice);
   }, [handleColorChange]);
-
-  const handleToneChange = useCallback((value) => {
-    setReferenceColor(null);
-    setToneFilter(value);
-    setRefreshIndex((current) => current + 1);
-  }, []);
 
   const handleSelect = useCallback((entry) => {
     setSelection(entry);
@@ -869,26 +848,6 @@ export default function GalleryCollectionsPage() {
                     })}
                   </div>
                 </div>
-              </div>
-              <div className="gallery-filters" role="group" aria-label="Filtrer par couleur dominante">
-                {COLOR_FILTERS.map((filter) => {
-                  const active = !referenceColor && toneFilter === filter.id;
-                  return (
-                    <button
-                      key={filter.id}
-                      type="button"
-                      className={classNames("gallery-filter", active && "gallery-filter--active")}
-                      onClick={() => handleToneChange(filter.id)}
-                    >
-                      {filter.swatch ? (
-                        <span className="gallery-filter__swatch" style={{ backgroundColor: filter.swatch }} />
-                      ) : (
-                        <span className="gallery-filter__swatch gallery-filter__swatch--all" />
-                      )}
-                      <span>{filter.label}</span>
-                    </button>
-                  );
-                })}
               </div>
               <button type="button" onClick={handleRefresh} className="gallery-refresh" disabled={loading}>
                 {loading ? "Génération en cours..." : "Régénérer la galerie"}
