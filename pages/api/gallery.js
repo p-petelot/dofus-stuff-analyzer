@@ -9,10 +9,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { lang, count, tone } = req.query ?? {};
+    const { lang, count, tone, color } = req.query ?? {};
     const language = normalizeLanguage(lang) ?? DEFAULT_LANGUAGE;
     const limit = Number.isFinite(Number(count)) ? Math.trunc(Number(count)) : undefined;
-    const skins = await generateGallerySkins({ language, count: limit, tone });
+    const skins = await generateGallerySkins({ language, count: limit, tone, color });
     res.status(200).json({ skins });
   } catch (error) {
     console.error("gallery api error", error);
