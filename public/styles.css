@@ -4000,7 +4000,7 @@ a {
 
 .skin-carousel__track.skin-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   width: 100%;
 }
@@ -4155,22 +4155,23 @@ a {
 
 .skin-card--modal {
   position: fixed;
-  top: 8vh;
+  top: 11vh;
   left: 50%;
   transform: translateX(-50%);
   width: min(1080px, calc(100% - 32px));
   max-height: 84vh;
-  overflow: auto;
   z-index: 31;
   background: rgba(var(--surface-1-rgb), 0.98);
-  border-radius: var(--radius-xl);
+  border-radius: 10px;
+  outline: 2px solid white;
+  padding:15px !important;
   box-shadow: 0 20px 60px rgba(var(--shadow-rgb), 0.45), 0 0 0 1px rgba(var(--accent-primary-rgb), 0.18);
-  padding: 18px;
 }
 
 .skin-card__modal-arrow {
   position: absolute;
   top: 50%;
+  z-index: 900;
   transform: translateY(-50%);
   border: none;
   background: rgba(var(--surface-4-rgb), 0.92);
@@ -4191,11 +4192,11 @@ a {
 }
 
 .skin-card__modal-arrow--prev {
-  left: -18px;
+  left: 2.8em;
 }
 
 .skin-card__modal-arrow--next {
-  right: -18px;
+  left: 39em;
 }
 
 .skin-card--modal .skin-card__body {
@@ -4846,7 +4847,7 @@ a {
   padding: 0;
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 7px;
 }
 
