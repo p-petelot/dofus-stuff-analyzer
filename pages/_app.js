@@ -6,6 +6,7 @@ import { Navbar } from "../app/components/Navbar";
 
 const NAV_LINKS = [
   { label: "Accueil", href: "/" },
+  { label: "Inspiration", href: "/inspiration" },
   { label: "Vision", href: "/vision" },
 ];
 

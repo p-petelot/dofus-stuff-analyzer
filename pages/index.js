@@ -3774,7 +3774,18 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
   return enriched;
 }
 
-export default function Home({ initialBreeds = [], previewBackgrounds: initialPreviewBackgrounds = [] }) {
+function sanitizeInputMode(value) {
+  if (value === "color" || value === "items" || value === "image") {
+    return value;
+  }
+  return "image";
+}
+
+export default function Home({
+  initialBreeds = [],
+  previewBackgrounds: initialPreviewBackgrounds = [],
+  defaultInputMode = "image",
+}) {
   const router = useRouter();
   const routerLang = router?.query?.lang;
   const { language, languages: languageOptions, setLanguage, t } = useLanguage();
@@ -3972,7 +3983,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const [activeItemSlot, setActiveItemSlot] = useState(null);
   const [itemSearchQuery, setItemSearchQuery] = useState("");
   const [analysisProgress, setAnalysisProgress] = useState(0);
-  const [inputMode, setInputMode] = useState("image");
+  const [inputMode, setInputMode] = useState(sanitizeInputMode(defaultInputMode));
   const [selectedColor, setSelectedColor] = useState(null);
   const [activeProposal, setActiveProposal] = useState(0);
   const [lookPreviews, setLookPreviews] = useState({});
