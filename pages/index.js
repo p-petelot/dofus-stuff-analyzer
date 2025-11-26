@@ -1435,7 +1435,7 @@ const MIN_ALPHA_WEIGHT = 0.05;
 const MAX_RECOMMENDATIONS = 12;
 const PANEL_ITEMS_LIMIT = 5;
 const DEFAULT_PROPOSAL_COUNT = 5;
-const MAX_PROPOSAL_COUNT = 24;
+const MAX_PROPOSAL_COUNT = 48;
 const INPUT_MODE_LABEL_KEYS = {
   image: "workspace.mode.image",
   color: "workspace.mode.color",
@@ -4110,6 +4110,8 @@ export default function Home({
   const [selectedGender, setSelectedGender] = useState(BARBOFUS_DEFAULT_GENDER_KEY);
   const isIdentityRandom = identitySelectionMode === "random";
   const isGridLayout = proposalLayout === "grid";
+  const isInspirationLayout = layoutVariant === "inspiration";
+  const [modalProposalId, setModalProposalId] = useState(null);
   const proposalLimit = Math.max(
     1,
     Math.min(
@@ -5618,6 +5620,11 @@ export default function Home({
     lookAnimation,
     lookDirection,
   ]);
+
+  const modalProposal = useMemo(
+    () => proposals.find((proposal) => proposal.id === modalProposalId) ?? null,
+    [modalProposalId, proposals]
+  );
 
   const lookPreviewDescriptors = useMemo(() => {
     if (!Array.isArray(proposals) || proposals.length === 0) {
@@ -8397,9 +8404,44 @@ export default function Home({
                                     backgroundColor: primaryColor,
                                   }
                                 : { backgroundImage: canvasBackground };
+                              const isActiveModal = modalProposalId === proposal.id;
+                              const showDetails = !isInspirationLayout || isActiveModal;
+                              const cardClasses = ["skin-card"];
+                              const tapForDetailsLabel =
+                                typeof t("suggestions.render.tapForDetails") === "string"
+                                  ? t("suggestions.render.tapForDetails")
+                                  : "Voir le détail complet";
+                              const openDetailsLabel =
+                                typeof t("suggestions.render.openDetails") === "string"
+                                  ? t("suggestions.render.openDetails")
+                                  : "Voir le détail";
+                              const closeLabel =
+                                typeof t("aria.close") === "string" ? t("aria.close") : "Fermer";
+                              if (!showDetails) {
+                                cardClasses.push("skin-card--compact");
+                              }
+                              if (isActiveModal && isInspirationLayout) {
+                                cardClasses.push("skin-card--modal");
+                              }
+
                               return (
-                                <article key={proposal.id} className="skin-card">
-                                  <h3 className="sr-only">{t("suggestions.carousel.proposalTitle", { index: proposal.index + 1 })}</h3>
+                                <article key={proposal.id} className={cardClasses.join(" ")}>
+                                  <div className="skin-card__header">
+                                    {isInspirationLayout ? (
+                                      <div className="skin-card__badge">#{proposal.index + 1}</div>
+                                    ) : null}
+                                    <h3 className="sr-only">{t("suggestions.carousel.proposalTitle", { index: proposal.index + 1 })}</h3>
+                                    {isActiveModal ? (
+                                      <button
+                                        type="button"
+                                        className="skin-card__close"
+                                        onClick={() => setModalProposalId(null)}
+                                        aria-label={closeLabel}
+                                      >
+                                        <span aria-hidden="true">×</span>
+                                      </button>
+                                    ) : null}
+                                  </div>
                                   <div className="skin-card__body">
                                     <div
                                       className="skin-card__canvas"
@@ -8512,7 +8554,8 @@ export default function Home({
                                           ) : null}
                                         </div>
                                       </div>
-                                      <ul className="skin-card__equipment" role="list">
+                                      {showDetails ? (
+                                        <ul className="skin-card__equipment" role="list">
                                       {proposal.items.map((item) => {
                                         const slotLabelKey = ITEM_TYPE_LABEL_KEYS[item.slotType];
                                         const slotLabel = slotLabelKey ? t(slotLabelKey) : item.slotType;
@@ -8605,260 +8648,276 @@ export default function Home({
                                         );
                                       })}
                                     </ul>
+                                      ) : null}
                                   </div>
-                                  <div className="skin-card__details">
-                                    <ul className="skin-card__swatches" role="list">
-                                      {proposal.palette.length ? (
-                                        proposal.palette.map((hex) => (
-                                          <li key={`${proposal.id}-${hex}`} className="skin-card__swatch">
-                                            <button
-                                              type="button"
-                                              onClick={() => handleCopy(hex, { swatch: hex })}
-                                              style={{ backgroundImage: buildGradientFromHex(hex) }}
-                                              className="skin-card__swatch-button"
-                                            >
-                                              <span>{hex}</span>
-                                            </button>
-                                          </li>
-                                        ))
-                                      ) : (
-                                        <li className="skin-card__swatch skin-card__swatch--empty">
-                                          Palette indisponible
-                                        </li>
-                                      )}
-                                    </ul>
-                                    <ul className="skin-card__list" role="list">
-                                      {proposal.items.map((item) => {
-                                        const slotLabelKey = ITEM_TYPE_LABEL_KEYS[item.slotType];
-                                        const slotLabel = slotLabelKey ? t(slotLabelKey) : item.slotType;
-                                        const itemName = item.name ?? slotLabel;
-                                        const rerollDisabled =
-                                          (recommendations?.[item.slotType]?.length ?? 0) <= 1 ||
-                                          Boolean(selectedItemsBySlot?.[item.slotType]);
-                                        const flagEntries = buildItemFlags(item, t);
-                                        const flagSummary = flagEntries.map((flag) => flag.label).join(", ");
-                                        return (
-                                          <li key={`${proposal.id}-${item.id}-entry`} className="skin-card__list-item">
-                                            <span className="skin-card__list-type">{slotLabel}</span>
-                                            <div className="skin-card__list-actions">
-                                              <a
-                                                href={item.url}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="skin-card__list-link"
-                                              >
-                                                {item.imageUrl ? (
-                                                  <span className="skin-card__list-thumb" aria-hidden="true">
-                                                    <img src={item.imageUrl} alt="" loading="lazy" />
-                                                  </span>
-                                                ) : null}
-                                                <span className="skin-card__list-text">{itemName}</span>
-                                                {flagEntries.length ? (
-                                                  <span
-                                                    className="item-flags item-flags--compact"
-                                                    role="img"
-                                                    aria-label={flagSummary}
-                                                    title={flagSummary}
-                                                  >
-                                                    {flagEntries.map((flag) => {
-                                                      const classes = ["item-flag"];
-                                                      if (flag.className) {
-                                                        classes.push(flag.className);
-                                                      }
-                                                      return (
-                                                        <span
-                                                          key={`${proposal.id}-${item.id}-${flag.key}-list`}
-                                                          className={classes.join(" ")}
-                                                        >
-                                                          <img src={flag.icon} alt="" aria-hidden="true" />
-                                                        </span>
-                                                      );
-                                                    })}
-                                                  </span>
-                                                ) : null}
-                                              </a>
+                                  {showDetails ? (
+                                    <div className="skin-card__details">
+                                      <ul className="skin-card__swatches" role="list">
+                                        {proposal.palette.length ? (
+                                          proposal.palette.map((hex) => (
+                                            <li key={`${proposal.id}-${hex}`} className="skin-card__swatch">
                                               <button
                                                 type="button"
-                                                className="skin-card__reroll skin-card__reroll--inline"
-                                                onClick={() =>
-                                                  handleRerollItem(item.slotType, {
-                                                    proposalIndex: proposal.index,
-                                                  })
-                                                }
-                                                title={t("suggestions.render.reroll")}
-                                                aria-label={t("aria.itemReroll", {
-                                                  type: slotLabel,
-                                                  item: itemName,
-                                                })}
-                                                disabled={rerollDisabled}
+                                                onClick={() => handleCopy(hex, { swatch: hex })}
+                                                style={{ backgroundImage: buildGradientFromHex(hex) }}
+                                                className="skin-card__swatch-button"
                                               >
-                                                <span aria-hidden="true">↻</span>
+                                                <span>{hex}</span>
                                               </button>
-                                            </div>
+                                            </li>
+                                          ))
+                                        ) : (
+                                          <li className="skin-card__swatch skin-card__swatch--empty">
+                                            Palette indisponible
                                           </li>
-                                        );
-                                      })}
-                                    </ul>
-                                    <div className="skin-card__actions">
-                                      {lookLoaded ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleDownloadPreview(proposal)}
-                                          className="skin-card__cta"
-                                          disabled={isDownloadingPreview}
-                                          aria-busy={isDownloadingPreview}
-                                          title={downloadCtaLabel}
-                                          aria-label={downloadCtaLabel}
-                                        >
-                                          <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/download.svg" alt="" />
+                                        )}
+                                      </ul>
+                                      <ul className="skin-card__list" role="list">
+                                        {proposal.items.map((item) => {
+                                          const slotLabelKey = ITEM_TYPE_LABEL_KEYS[item.slotType];
+                                          const slotLabel = slotLabelKey ? t(slotLabelKey) : item.slotType;
+                                          const itemName = item.name ?? slotLabel;
+                                          const rerollDisabled =
+                                            (recommendations?.[item.slotType]?.length ?? 0) <= 1 ||
+                                            Boolean(selectedItemsBySlot?.[item.slotType]);
+                                          const flagEntries = buildItemFlags(item, t);
+                                          const flagSummary = flagEntries.map((flag) => flag.label).join(", ");
+                                          return (
+                                            <li key={`${proposal.id}-${item.id}-entry`} className="skin-card__list-item">
+                                              <span className="skin-card__list-type">{slotLabel}</span>
+                                              <div className="skin-card__list-actions">
+                                                <a
+                                                  href={item.url}
+                                                  target="_blank"
+                                                  rel="noreferrer"
+                                                  className="skin-card__list-link"
+                                                >
+                                                  {item.imageUrl ? (
+                                                    <span className="skin-card__list-thumb" aria-hidden="true">
+                                                      <img src={item.imageUrl} alt="" loading="lazy" />
+                                                    </span>
+                                                  ) : null}
+                                                  <span className="skin-card__list-text">{itemName}</span>
+                                                  {flagEntries.length ? (
+                                                    <span
+                                                      className="item-flags item-flags--compact"
+                                                      role="img"
+                                                      aria-label={flagSummary}
+                                                      title={flagSummary}
+                                                    >
+                                                      {flagEntries.map((flag) => {
+                                                        const classes = ["item-flag"];
+                                                        if (flag.className) {
+                                                          classes.push(flag.className);
+                                                        }
+                                                        return (
+                                                          <span
+                                                            key={`${proposal.id}-${item.id}-${flag.key}-list`}
+                                                            className={classes.join(" ")}
+                                                          >
+                                                            <img src={flag.icon} alt="" aria-hidden="true" />
+                                                          </span>
+                                                        );
+                                                      })}
+                                                    </span>
+                                                  ) : null}
+                                                </a>
+                                                <button
+                                                  type="button"
+                                                  className="skin-card__reroll skin-card__reroll--inline"
+                                                  onClick={() =>
+                                                    handleRerollItem(item.slotType, {
+                                                      proposalIndex: proposal.index,
+                                                    })
+                                                  }
+                                                  title={t("suggestions.render.reroll")}
+                                                  aria-label={t("aria.itemReroll", {
+                                                    type: slotLabel,
+                                                    item: itemName,
+                                                  })}
+                                                  disabled={rerollDisabled}
+                                                >
+                                                  <span aria-hidden="true">↻</span>
+                                                </button>
+                                              </div>
+                                            </li>
+                                          );
+                                        })}
+                                      </ul>
+                                      <div className="skin-card__actions">
+                                        {lookLoaded ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDownloadPreview(proposal)}
+                                            className="skin-card__cta"
+                                            disabled={isDownloadingPreview}
+                                            aria-busy={isDownloadingPreview}
+                                            title={downloadCtaLabel}
+                                            aria-label={downloadCtaLabel}
+                                          >
+                                            <span className="skin-card__cta-icon" aria-hidden="true">
+                                              <img src="/icons/download.svg" alt="" />
+                                            </span>
+                                            <span className="sr-only">{downloadCtaLabel}</span>
+                                          </button>
+                                        ) : lookLoading ? (
+                                          <button
+                                            type="button"
+                                            className="skin-card__cta skin-card__cta--disabled"
+                                            disabled
+                                            aria-busy="true"
+                                            title={t("suggestions.render.loading")}
+                                            aria-label={t("suggestions.render.loading")}
+                                          >
+                                            <span className="skin-card__cta-icon" aria-hidden="true">
+                                              <img src="/icons/download.svg" alt="" />
+                                            </span>
+                                            <span className="sr-only">{t("suggestions.render.loading")}</span>
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            className="skin-card__cta skin-card__cta--disabled"
+                                            disabled
+                                            title={t("suggestions.render.unavailable")}
+                                            aria-label={t("suggestions.render.unavailable")}
+                                          >
+                                            <span className="skin-card__cta-icon" aria-hidden="true">
+                                              <img src="/icons/download.svg" alt="" />
+                                            </span>
+                                            <span className="sr-only">{t("suggestions.render.unavailable")}</span>
+                                          </button>
+                                        )}
+                                        {proposal.barbofusLink ? (
+                                          <a
+                                            href={proposal.barbofusLink}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="skin-card__cta"
+                                            title={barbofusCtaLabel}
+                                            aria-label={barbofusCtaLabel}
+                                          >
+                                            <span className="skin-card__cta-icon" aria-hidden="true">
+                                              <img src="/icons/barbofus.svg" alt="" />
+                                            </span>
+                                            <span className="sr-only">{barbofusCtaLabel}</span>
+                                          </a>
+                                        ) : (
+                                          <span className="skin-card__cta skin-card__cta--disabled">
+                                            {t("suggestions.render.linkUnavailable")}
                                           </span>
-                                          <span className="sr-only">{downloadCtaLabel}</span>
-                                        </button>
-                                      ) : lookLoading ? (
-                                        <button
-                                          type="button"
-                                          className="skin-card__cta skin-card__cta--disabled"
-                                          disabled
-                                          aria-busy="true"
-                                          title={t("suggestions.render.loading")}
-                                          aria-label={t("suggestions.render.loading")}
-                                        >
-                                          <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/download.svg" alt="" />
+                                        )}
+                                        {proposal.souffLink ? (
+                                          <a
+                                            href={proposal.souffLink}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="skin-card__cta"
+                                            title={souffCtaLabel}
+                                            aria-label={souffCtaLabel}
+                                          >
+                                            <span className="skin-card__cta-icon" aria-hidden="true">
+                                              <img src="/icons/souff.svg" alt="" />
+                                            </span>
+                                            <span className="sr-only">{souffCtaLabel}</span>
+                                          </a>
+                                        ) : (
+                                          <span className="skin-card__cta skin-card__cta--disabled">
+                                            {souffUnavailableLabel}
                                           </span>
-                                          <span className="sr-only">{t("suggestions.render.loading")}</span>
-                                        </button>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          className="skin-card__cta skin-card__cta--disabled"
-                                          disabled
-                                          title={t("suggestions.render.unavailable")}
-                                          aria-label={t("suggestions.render.unavailable")}
-                                        >
-                                          <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/download.svg" alt="" />
+                                        )}
+                                        {canCopySkinImage ? (
+                                          <button
+                                            type="button"
+                                            className="skin-card__cta"
+                                            onClick={() => handleCopyPreview(proposal)}
+                                            title={copySkinCtaLabel}
+                                            aria-label={copySkinCtaLabel}
+                                            disabled={isCopyingPreview}
+                                            aria-busy={isCopyingPreview}
+                                          >
+                                            <span className="skin-card__cta-icon" aria-hidden="true">
+                                              <img src="/icons/copy.svg" alt="" />
+                                            </span>
+                                            <span className="sr-only">{copySkinCtaLabel}</span>
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            className="skin-card__cta skin-card__cta--disabled"
+                                            disabled
+                                            title={copySkinUnavailableLabel}
+                                            aria-label={copySkinUnavailableLabel}
+                                          >
+                                            <span className="skin-card__cta-icon" aria-hidden="true">
+                                              <img src="/icons/copy.svg" alt="" />
+                                            </span>
+                                            <span className="sr-only">{copySkinUnavailableLabel}</span>
+                                          </button>
+                                        )}
+                                        {lookLoaded ? (
+                                          <button
+                                            type="button"
+                                            className="skin-card__cta"
+                                            onClick={() => handleExportRecap(proposal)}
+                                            title={recapCtaLabel}
+                                            aria-label={recapCtaLabel}
+                                            disabled={isExportingRecap}
+                                            aria-busy={isExportingRecap}
+                                          >
+                                            <span className="skin-card__cta-icon" aria-hidden="true">
+                                              <img src="/icons/download.svg" alt="" />
+                                            </span>
+                                            <span className="sr-only">{recapCtaLabel}</span>
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            className="skin-card__cta skin-card__cta--disabled"
+                                            disabled
+                                            title={recapUnavailableLabel}
+                                            aria-label={recapUnavailableLabel}
+                                          >
+                                            <span className="skin-card__cta-icon" aria-hidden="true">
+                                              <img src="/icons/download.svg" alt="" />
+                                            </span>
+                                            <span className="sr-only">{recapUnavailableLabel}</span>
+                                          </button>
+                                        )}
+                                        {canShareSkin ? (
+                                          <button
+                                            type="button"
+                                            className="skin-card__cta"
+                                            onClick={() => handleShareSkin(proposal)}
+                                            title={shareCtaLabel}
+                                            aria-label={shareCtaLabel}
+                                          >
+                                            <span className="skin-card__cta-icon" aria-hidden="true">
+                                              <img src="/icons/share.svg" alt="" />
+                                            </span>
+                                            <span className="sr-only">{shareCtaLabel}</span>
+                                          </button>
+                                        ) : (
+                                          <span className="skin-card__cta skin-card__cta--disabled">
+                                            {t("suggestions.render.shareUnavailable")}
                                           </span>
-                                          <span className="sr-only">{t("suggestions.render.unavailable")}</span>
-                                        </button>
-                                      )}
-                                      {proposal.barbofusLink ? (
-                                        <a
-                                          href={proposal.barbofusLink}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="skin-card__cta"
-                                          title={barbofusCtaLabel}
-                                          aria-label={barbofusCtaLabel}
-                                        >
-                                          <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/barbofus.svg" alt="" />
-                                          </span>
-                                          <span className="sr-only">{barbofusCtaLabel}</span>
-                                        </a>
-                                      ) : (
-                                        <span className="skin-card__cta skin-card__cta--disabled">
-                                          {t("suggestions.render.linkUnavailable")}
-                                        </span>
-                                      )}
-                                      {proposal.souffLink ? (
-                                        <a
-                                          href={proposal.souffLink}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="skin-card__cta"
-                                          title={souffCtaLabel}
-                                          aria-label={souffCtaLabel}
-                                        >
-                                          <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/souff.svg" alt="" />
-                                          </span>
-                                          <span className="sr-only">{souffCtaLabel}</span>
-                                        </a>
-                                      ) : (
-                                        <span className="skin-card__cta skin-card__cta--disabled">
-                                          {souffUnavailableLabel}
-                                        </span>
-                                      )}
-                                      {canCopySkinImage ? (
-                                        <button
-                                          type="button"
-                                          className="skin-card__cta"
-                                          onClick={() => handleCopyPreview(proposal)}
-                                          title={copySkinCtaLabel}
-                                          aria-label={copySkinCtaLabel}
-                                          disabled={isCopyingPreview}
-                                          aria-busy={isCopyingPreview}
-                                        >
-                                          <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/copy.svg" alt="" />
-                                          </span>
-                                          <span className="sr-only">{copySkinCtaLabel}</span>
-                                        </button>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          className="skin-card__cta skin-card__cta--disabled"
-                                          disabled
-                                          title={copySkinUnavailableLabel}
-                                          aria-label={copySkinUnavailableLabel}
-                                        >
-                                          <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/copy.svg" alt="" />
-                                          </span>
-                                          <span className="sr-only">{copySkinUnavailableLabel}</span>
-                                        </button>
-                                      )}
-                                      {lookLoaded ? (
-                                        <button
-                                          type="button"
-                                          className="skin-card__cta"
-                                          onClick={() => handleExportRecap(proposal)}
-                                          title={recapCtaLabel}
-                                          aria-label={recapCtaLabel}
-                                          disabled={isExportingRecap}
-                                          aria-busy={isExportingRecap}
-                                        >
-                                          <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/download.svg" alt="" />
-                                          </span>
-                                          <span className="sr-only">{recapCtaLabel}</span>
-                                        </button>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          className="skin-card__cta skin-card__cta--disabled"
-                                          disabled
-                                          title={recapUnavailableLabel}
-                                          aria-label={recapUnavailableLabel}
-                                        >
-                                          <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/download.svg" alt="" />
-                                          </span>
-                                          <span className="sr-only">{recapUnavailableLabel}</span>
-                                        </button>
-                                      )}
-                                      {canShareSkin ? (
-                                        <button
-                                          type="button"
-                                          className="skin-card__cta"
-                                          onClick={() => handleShareSkin(proposal)}
-                                          title={shareCtaLabel}
-                                          aria-label={shareCtaLabel}
-                                        >
-                                          <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/share.svg" alt="" />
-                                          </span>
-                                          <span className="sr-only">{shareCtaLabel}</span>
-                                        </button>
-                                      ) : (
-                                        <span className="skin-card__cta skin-card__cta--disabled">
-                                          {t("suggestions.render.shareUnavailable")}
-                                        </span>
-                                      )}
+                                        )}
+                                      </div>
                                     </div>
-                                  </div>
+                                  ) : (
+                                    <div className="skin-card__details skin-card__details--compact">
+                                      <div className="skin-card__compact-meta">
+                                        <p className="skin-card__compact-label">{tapForDetailsLabel}</p>
+                                        <button
+                                          type="button"
+                                          className="skin-card__cta skin-card__cta--primary"
+                                          onClick={() => setModalProposalId(proposal.id)}
+                                        >
+                                          {openDetailsLabel}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               </article>
                             );
@@ -9118,6 +9177,16 @@ export default function Home({
                     aria-label={t("aria.panelBackdrop")}
                   >
                     <span className="sr-only">{t("aria.panelBackdrop")}</span>
+                  </button>
+                ) : null}
+                {isInspirationLayout && modalProposalId ? (
+                  <button
+                    type="button"
+                    className="skin-modal__backdrop"
+                    onClick={() => setModalProposalId(null)}
+                    aria-label={typeof t("aria.close") === "string" ? t("aria.close") : "Fermer"}
+                  >
+                    <span className="sr-only">{typeof t("aria.close") === "string" ? t("aria.close") : "Fermer"}</span>
                   </button>
                 ) : null}
                 </div>
