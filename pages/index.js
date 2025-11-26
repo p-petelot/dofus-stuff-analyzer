@@ -1434,14 +1434,29 @@ const TONE_CONFIDENCE_WEIGHT = 0.18;
 const MIN_ALPHA_WEIGHT = 0.05;
 const MAX_RECOMMENDATIONS = 12;
 const PANEL_ITEMS_LIMIT = 5;
-const PROPOSAL_COUNT = 5;
+const DEFAULT_PROPOSAL_COUNT = 5;
+const MAX_PROPOSAL_COUNT = 48;
+const INPUT_MODE_LABEL_KEYS = {
+  image: "workspace.mode.image",
+  color: "workspace.mode.color",
+  items: "workspace.mode.items",
+};
 const HASH_CONFIDENCE_DISTANCE = 0.32;
 const HASH_CONFIDENCE_WEIGHT = 0.18;
 const HASH_STRONG_THRESHOLD = 0.12;
 const EDGE_CONFIDENCE_DISTANCE = 0.26;
 const EDGE_CONFIDENCE_WEIGHT = 0.12;
 const EDGE_STRONG_THRESHOLD = 0.1;
-const CURATED_COLOR_SWATCHES = ["#8B5CF6", "#F97316", "#10B981", "#38BDF8", "#F43F5E", "#FACC15", "#f368e0", "#cc8e35"];
+const CURATED_COLOR_SWATCHES = [
+  "#8B5CF6",
+  "#F97316",
+  "#10B981",
+  "#38BDF8",
+  "#F43F5E",
+  "#FACC15",
+  "#F368E0",
+  "#CC8E35",
+];
 
 const ITEM_TYPE_LABEL_KEYS = {
   coiffe: "itemTypes.coiffe",
@@ -3774,7 +3789,32 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
   return enriched;
 }
 
-export default function Home({ initialBreeds = [], previewBackgrounds: initialPreviewBackgrounds = [] }) {
+function sanitizeInputMode(value, allowedModes = Object.keys(INPUT_MODE_LABEL_KEYS)) {
+  const allowed = Array.isArray(allowedModes)
+    ? allowedModes.filter((mode) => mode in INPUT_MODE_LABEL_KEYS)
+    : Object.keys(INPUT_MODE_LABEL_KEYS);
+  if (allowed.length === 0) {
+    return "image";
+  }
+  if (allowed.includes(value)) {
+    return value;
+  }
+  return allowed[0];
+}
+
+export default function Home({
+  initialBreeds = [],
+  previewBackgrounds: initialPreviewBackgrounds = [],
+  defaultInputMode = "image",
+  allowedInputModes = Object.keys(INPUT_MODE_LABEL_KEYS),
+  identitySelectionMode = "manual",
+  proposalLayout = "carousel",
+  proposalCount: requestedProposalCount = DEFAULT_PROPOSAL_COUNT,
+  colorSuggestions = CURATED_COLOR_SWATCHES,
+  showModelPrediction = true,
+  showIdentityHint = true,
+  layoutVariant = "default",
+}) {
   const router = useRouter();
   const routerLang = router?.query?.lang;
   const { language, languages: languageOptions, setLanguage, t } = useLanguage();
@@ -3972,8 +4012,46 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const [activeItemSlot, setActiveItemSlot] = useState(null);
   const [itemSearchQuery, setItemSearchQuery] = useState("");
   const [analysisProgress, setAnalysisProgress] = useState(0);
-  const [inputMode, setInputMode] = useState("image");
+  const normalizedInputModes = useMemo(() => {
+    const options = Array.isArray(allowedInputModes)
+      ? allowedInputModes.filter((mode) => mode in INPUT_MODE_LABEL_KEYS)
+      : Object.keys(INPUT_MODE_LABEL_KEYS);
+    return options.length ? options : Object.keys(INPUT_MODE_LABEL_KEYS);
+  }, [allowedInputModes]);
+
+  const normalizedDefaultInputMode = useMemo(
+    () => sanitizeInputMode(defaultInputMode, normalizedInputModes),
+    [defaultInputMode, normalizedInputModes]
+  );
+
+  const [inputMode, setInputMode] = useState(normalizedDefaultInputMode);
   const [selectedColor, setSelectedColor] = useState(null);
+  const curatedColorSuggestions = useMemo(() => {
+    if (!Array.isArray(colorSuggestions)) {
+      return CURATED_COLOR_SWATCHES;
+    }
+    const cleaned = colorSuggestions
+      .map((value) => (typeof value === "string" ? value.trim().toUpperCase() : ""))
+      .filter(Boolean);
+    if (!cleaned.length) {
+      return CURATED_COLOR_SWATCHES;
+    }
+    const unique = [];
+    cleaned.forEach((value) => {
+      if (!unique.includes(value)) {
+        unique.push(value);
+      }
+    });
+    return unique;
+  }, [colorSuggestions]);
+
+  useEffect(() => {
+    setInputMode((previous) => sanitizeInputMode(previous, normalizedInputModes));
+  }, [normalizedInputModes]);
+
+  useEffect(() => {
+    setInputMode(normalizedDefaultInputMode);
+  }, [normalizedDefaultInputMode]);
   const [activeProposal, setActiveProposal] = useState(0);
   const [lookPreviews, setLookPreviews] = useState({});
   const lookPreviewsRef = useRef({});
@@ -4030,6 +4108,17 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   const [breedsError, setBreedsError] = useState(null);
   const [selectedBreedId, setSelectedBreedId] = useState(null);
   const [selectedGender, setSelectedGender] = useState(BARBOFUS_DEFAULT_GENDER_KEY);
+  const isIdentityRandom = identitySelectionMode === "random";
+  const isGridLayout = proposalLayout === "grid";
+  const isInspirationLayout = layoutVariant === "inspiration";
+  const [modalProposalId, setModalProposalId] = useState(null);
+  const proposalLimit = Math.max(
+    1,
+    Math.min(
+      MAX_PROPOSAL_COUNT,
+      Math.round(requestedProposalCount || DEFAULT_PROPOSAL_COUNT)
+    )
+  );
 
   useEffect(() => {
     if (!modelResult || !modelResult.prediction) {
@@ -4440,13 +4529,15 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   );
 
   const analysisModes = useMemo(
-    () => [
-      { key: "image", labelKey: "workspace.mode.image" },
-      { key: "color", labelKey: "workspace.mode.color" },
-      { key: "items", labelKey: "workspace.mode.items" },
-    ],
-    []
+    () =>
+      normalizedInputModes.map((mode) => ({
+        key: mode,
+        labelKey: INPUT_MODE_LABEL_KEYS[mode],
+      })),
+    [normalizedInputModes]
   );
+
+  const hasMultipleAnalysisModes = analysisModes.length > 1;
 
   const handleFamilierFilterToggle = useCallback((key) => {
     if (!FAMILIER_FILTERS.some((filter) => filter.key === key)) {
@@ -4542,6 +4633,40 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     const value = event?.target?.value ?? "";
     setItemSearchQuery(value);
   }, []);
+
+  const rerollIdentity = useCallback(() => {
+    if (!isIdentityRandom || !Array.isArray(breeds) || breeds.length === 0) {
+      return;
+    }
+
+    const randomBreed = breeds[Math.floor(Math.random() * breeds.length)];
+    const randomGender = Math.random() > 0.5 ? "male" : "female";
+
+    if (Number.isFinite(randomBreed?.id)) {
+      setSelectedBreedId(randomBreed.id);
+    }
+    setSelectedGender(randomGender);
+  }, [breeds, isIdentityRandom]);
+
+  useEffect(() => {
+    if (!isIdentityRandom) {
+      return;
+    }
+    if (!Array.isArray(breeds) || breeds.length === 0) {
+      return;
+    }
+    if (Number.isFinite(selectedBreedId)) {
+      return;
+    }
+    rerollIdentity();
+  }, [breeds, isIdentityRandom, rerollIdentity, selectedBreedId]);
+
+  useEffect(() => {
+    if (!isIdentityRandom || !colors.length) {
+      return;
+    }
+    rerollIdentity();
+  }, [colors, isIdentityRandom, rerollIdentity]);
 
   const activeBreed = useMemo(() => {
     if (!Array.isArray(breeds) || breeds.length === 0) {
@@ -5016,6 +5141,10 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
   }, [colorsCount, imageSrc, isProcessing]);
 
   const recommendations = useMemo(() => {
+    const recommendationCap = isInspirationLayout
+      ? Math.max(MAX_RECOMMENDATIONS, proposalLimit)
+      : MAX_RECOMMENDATIONS;
+
     if (!colors.length || !Number.isFinite(activeClassId)) {
       return null;
     }
@@ -5144,7 +5273,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           }
           return true;
         })
-        .slice(0, MAX_RECOMMENDATIONS);
+        .slice(0, recommendationCap);
       return accumulator;
     }, {});
   }, [
@@ -5160,6 +5289,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     itemFlagFilters,
     itemSlotFilters,
     selectedItemsBySlot,
+    isInspirationLayout,
+    proposalLimit,
   ]);
 
   useEffect(() => {
@@ -5222,7 +5353,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           return;
         }
 
-        const limit = Math.min(PROPOSAL_COUNT, pool.length);
+        const limit = Math.min(proposalLimit, pool.length);
         const { indexes, changed: normalizedChanged } = normalizeSelection(previous?.[type], limit, pool.length);
         next[type] = indexes;
         if (normalizedChanged) {
@@ -5258,7 +5389,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       ...ITEM_TYPES.map((type) => (recommendations[type]?.length ?? 0))
     );
 
-    const total = Math.min(PROPOSAL_COUNT, maxLength || 0);
+    const total = Math.min(proposalLimit, maxLength || 0);
     const combos = [];
     const subtitleParts = [];
     if (activeBreed?.name) {
@@ -5496,6 +5627,16 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     lookDirection,
   ]);
 
+  const modalProposal = useMemo(
+    () => proposals.find((proposal) => proposal.id === modalProposalId) ?? null,
+    [modalProposalId, proposals]
+  );
+
+  const modalProposalIndex = useMemo(
+    () => (modalProposalId ? proposals.findIndex((proposal) => proposal.id === modalProposalId) : -1),
+    [modalProposalId, proposals]
+  );
+
   const lookPreviewDescriptors = useMemo(() => {
     if (!Array.isArray(proposals) || proposals.length === 0) {
       return [];
@@ -5704,6 +5845,14 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       outline: `2px solid rgba(${r}, ${g}, ${b}, 0.38)`,
     };
   }, [activeProposalPalette, colors]);
+
+  const viewportClasses = `skin-carousel__viewport${
+    isGridLayout ? " skin-carousel__viewport--grid" : ""
+  }`;
+  const trackClasses = `skin-carousel__track${isGridLayout ? " skin-grid" : ""}`;
+  const trackStyle = isGridLayout
+    ? undefined
+    : { transform: `translateX(-${safeActiveProposalIndex * 100}%)` };
 
   useEffect(() => {
     if (theme === THEME_KEYS.INTELLIGENT) {
@@ -6037,6 +6186,25 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
     }
     setActiveProposal((previous) => (previous - 1 + proposalCount) % proposalCount);
   }, [proposalCount]);
+
+  const handleModalNavigate = useCallback(
+    (direction) => {
+      if (!isInspirationLayout || modalProposalIndex === -1 || proposals.length <= 1) {
+        return;
+      }
+
+      const nextIndex = (modalProposalIndex + direction + proposals.length) % proposals.length;
+      const nextProposal = proposals[nextIndex];
+      if (nextProposal?.id) {
+        setModalProposalId(nextProposal.id);
+      }
+    },
+    [isInspirationLayout, modalProposalIndex, proposals]
+  );
+
+  const handleModalPrev = useCallback(() => handleModalNavigate(-1), [handleModalNavigate]);
+
+  const handleModalNext = useCallback(() => handleModalNavigate(1), [handleModalNavigate]);
 
   const handleSelectProposal = useCallback(
     (index) => {
@@ -6933,7 +7101,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
       let nextSelection = null;
 
       if (Number.isFinite(proposalIndex)) {
-        const limit = Math.min(PROPOSAL_COUNT, pool.length);
+        const limit = Math.min(proposalLimit, pool.length);
         if (proposalIndex >= 0 && proposalIndex < limit) {
           setProposalItemIndexes((previous = {}) => {
             const prevIndexes = Array.isArray(previous[type]) ? previous[type] : [];
@@ -7602,33 +7770,37 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
           <h1 className="sr-only">{BRAND_NAME}</h1>
         </header>
         <div className="workspace-layout">
-          <section className="workspace">
+          <section
+            className={`workspace${layoutVariant === "inspiration" ? " workspace--inspiration" : ""}`}
+          >
           <div className={referenceClassName}>
             <div className="reference__header">
               <div className="reference__title">
                 <h2>{t("workspace.referenceTitle")}</h2>
               </div>
-              <div
-                className="input-switch"
-                role="radiogroup"
-                aria-label={t("aria.analysisMode")}
-              >
-                {analysisModes.map((mode) => {
-                  const isActive = inputMode === mode.key;
-                  return (
-                    <button
-                      key={mode.key}
-                      type="button"
-                      className={`input-switch__option${isActive ? " is-active" : ""}`}
-                      onClick={() => setInputMode(mode.key)}
-                      role="radio"
-                      aria-checked={isActive}
-                    >
-                      {t(mode.labelKey)}
-                    </button>
-                  );
-                })}
-              </div>
+              {hasMultipleAnalysisModes ? (
+                <div
+                  className="input-switch"
+                  role="radiogroup"
+                  aria-label={t("aria.analysisMode")}
+                >
+                  {analysisModes.map((mode) => {
+                    const isActive = inputMode === mode.key;
+                    return (
+                      <button
+                        key={mode.key}
+                        type="button"
+                        className={`input-switch__option${isActive ? " is-active" : ""}`}
+                        onClick={() => setInputMode(mode.key)}
+                        role="radio"
+                        aria-checked={isActive}
+                      >
+                        {t(mode.labelKey)}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
             {isImageMode ? (
               <div
@@ -7693,7 +7865,7 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                     </button>
                   </div>
                   <div className="color-picker__swatch-tray" role="list" aria-label={t("aria.colorSuggestions")}>
-                    {CURATED_COLOR_SWATCHES.map((hex) => {
+                    {curatedColorSuggestions.map((hex) => {
                       const isActive = selectedColor === hex.toUpperCase();
                       return (
                         <button
@@ -7965,137 +8137,167 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
             )}
           </div>
 
-          <ModelPredictionSection
-            result={modelResult}
-            isLoading={isPredicting}
-            error={modelError}
-            placeholder={predictionLabels.placeholder}
-            labels={predictionLabels}
-          />
+          {showModelPrediction ? (
+            <ModelPredictionSection
+              result={modelResult}
+              isLoading={isPredicting}
+              error={modelError}
+              placeholder={predictionLabels.placeholder}
+              labels={predictionLabels}
+            />
+          ) : null}
 
           <div className="suggestions" style={suggestionsAccentStyle}>
-            <div
-              className="identity-card suggestions__identity-card"
-              role="group"
-              aria-label={t("aria.identityCard")}
-            >
-              {directionAnnouncement ? (
-                <span className="sr-only" aria-live="polite">
-                  {directionAnnouncement}
-                </span>
-              ) : null}
-              <div className="identity-card__selectors">
-                <div
-                  className="identity-card__gender-wrapper"
-                  role="group"
-                  aria-label={t("aria.genderSection")}
+            {directionAnnouncement ? (
+              <span className="sr-only" aria-live="polite">
+                {directionAnnouncement}
+              </span>
+            ) : null}
+            {isIdentityRandom ? (
+              <div
+                className="identity-card suggestions__identity-card identity-card--summary"
+                role="status"
+                aria-live="polite"
+              >
+                <div className="identity-card__summary">
+                  <h3>Inspiration aléatoire</h3>
+                  {showIdentityHint ? (
+                    <p>Classe et sexe sont choisis automatiquement pour chaque skin proposé.</p>
+                  ) : null}
+                  {activeBreed ? (
+                    <p className="identity-card__summary-active">
+                      {activeBreed.name} · {activeGenderLabel}
+                    </p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  className="identity-card__reroll"
+                  onClick={rerollIdentity}
+                  disabled={breedsLoading || !breeds.length}
                 >
+                  Relancer l'identité
+                </button>
+              </div>
+            ) : (
+              <div
+                className="identity-card suggestions__identity-card"
+                role="group"
+                aria-label={t("aria.identityCard")}
+              >
+                <div className="identity-card__selectors">
                   <div
-                    className={`identity-card__gender${selectedGender === "female" ? " is-female" : ""}`}
-                    role="radiogroup"
-                    aria-label={t("aria.genderGroup")}
+                    className="identity-card__gender-wrapper"
+                    role="group"
+                    aria-label={t("aria.genderSection")}
                   >
-                    <button
-                      type="button"
-                      className={`identity-card__gender-option${selectedGender === "male" ? " is-active" : ""}`}
-                      onClick={() => setSelectedGender("male")}
-                      role="radio"
-                      aria-checked={selectedGender === "male"}
+                    <div
+                      className={`identity-card__gender${selectedGender === "female" ? " is-female" : ""}`}
+                      role="radiogroup"
+                      aria-label={t("aria.genderGroup")}
                     >
-                      <span className="identity-card__gender-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path
-                            d="M15 3h6v6m0-6-7.5 7.5m1.5-1.5a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"
-                            stroke="currentColor"
-                            strokeWidth="1.6"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </span>
-                      <span className="identity-card__gender-text">{t("identity.gender.male")}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`identity-card__gender-option${selectedGender === "female" ? " is-active" : ""}`}
-                      onClick={() => setSelectedGender("female")}
-                      role="radio"
-                      aria-checked={selectedGender === "female"}
-                    >
-                      <span className="identity-card__gender-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path
-                            d="M12 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm0 12v8m-4-4h8"
-                            stroke="currentColor"
-                            strokeWidth="1.6"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </span>
-                      <span className="identity-card__gender-text">{t("identity.gender.female")}</span>
-                    </button>
+                      <button
+                        type="button"
+                        className={`identity-card__gender-option${selectedGender === "male" ? " is-active" : ""}`}
+                        onClick={() => setSelectedGender("male")}
+                        role="radio"
+                        aria-checked={selectedGender === "male"}
+                      >
+                        <span className="identity-card__gender-icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                              d="M15 3h6v6m0-6-7.5 7.5m1.5-1.5a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"
+                              stroke="currentColor"
+                              strokeWidth="1.6"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </span>
+                        <span className="identity-card__gender-text">{t("identity.gender.male")}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`identity-card__gender-option${selectedGender === "female" ? " is-active" : ""}`}
+                        onClick={() => setSelectedGender("female")}
+                        role="radio"
+                        aria-checked={selectedGender === "female"}
+                      >
+                        <span className="identity-card__gender-icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                              d="M12 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm0 12v8m-4-4h8"
+                              stroke="currentColor"
+                              strokeWidth="1.6"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </span>
+                        <span className="identity-card__gender-text">{t("identity.gender.female")}</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div
+                    className="identity-card__class-wrapper"
+                    role="group"
+                    aria-label={t("aria.classSection")}
+                  >
+                    {breedsError ? (
+                      <div className="identity-card__status identity-card__status--error" role="alert">
+                        <span>{breedsError}</span>
+                        <button
+                          type="button"
+                          className="identity-card__retry"
+                          onClick={handleRetryBreeds}
+                          disabled={breedsLoading}
+                        >
+                          {t("actions.retry")}
+                        </button>
+                      </div>
+                    ) : null}
+                    {breedsLoading ? (
+                      <div className="identity-card__status" role="status" aria-live="polite">
+                        {t("identity.class.loading")}
+                      </div>
+                    ) : null}
+                    <div className="identity-card__grid" role="radiogroup" aria-label={t("aria.classGroup")}>
+                    {breeds.map((breed) => {
+                      if (!Number.isFinite(breed.id)) {
+                        return null;
+                      }
+                      const isActive = breed.id === selectedBreedId;
+                      const fallbackLetter = breed.name?.charAt(0)?.toUpperCase() ?? "?";
+                      const breedLabel = breed.name ?? t("identity.class.fallback", { id: breed.id });
+
+                      return (
+                        <button
+                          key={breed.slug ?? `breed-${breed.id}`}
+                          type="button"
+                          className={`identity-card__chip${isActive ? " is-active" : ""}`}
+                          onClick={() => setSelectedBreedId(breed.id)}
+                          role="radio"
+                          aria-checked={isActive}
+                          aria-label={t("identity.class.choose", { name: breedLabel })}
+                          title={breedLabel}
+                        >
+                          <span className="identity-card__chip-icon">
+                            {breed.icon ? (
+                              <img src={breed.icon} alt="" loading="lazy" />
+                            ) : (
+                              <span className="identity-card__chip-letter" aria-hidden="true">
+                                {fallbackLetter}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      );
+                    })}
+                    </div>
                   </div>
                 </div>
-                <div
-                  className="identity-card__class-wrapper"
-                  role="group"
-                  aria-label={t("aria.classSection")}
-                >
-                  {breedsError ? (
-                    <div className="identity-card__status identity-card__status--error" role="alert">
-                      <span>{breedsError}</span>
-                      <button
-                        type="button"
-                        className="identity-card__retry"
-                        onClick={handleRetryBreeds}
-                        disabled={breedsLoading}
-                      >
-                        {t("actions.retry")}
-                      </button>
-                    </div>
-                  ) : null}
-                  {breedsLoading ? (
-                    <div className="identity-card__status" role="status" aria-live="polite">
-                      {t("identity.class.loading")}
-                    </div>
-                  ) : null}
-                  <div className="identity-card__grid" role="radiogroup" aria-label={t("aria.classGroup")}>
-                  {breeds.map((breed) => {
-                    if (!Number.isFinite(breed.id)) {
-                      return null;
-                    }
-                    const isActive = breed.id === selectedBreedId;
-                    const fallbackLetter = breed.name?.charAt(0)?.toUpperCase() ?? "?";
-                    const breedLabel = breed.name ?? t("identity.class.fallback", { id: breed.id });
-
-                    return (
-                      <button
-                        key={breed.slug ?? `breed-${breed.id}`}
-                        type="button"
-                        className={`identity-card__chip${isActive ? " is-active" : ""}`}
-                        onClick={() => setSelectedBreedId(breed.id)}
-                        role="radio"
-                        aria-checked={isActive}
-                        aria-label={t("identity.class.choose", { name: breedLabel })}
-                        title={breedLabel}
-                      >
-                        <span className="identity-card__chip-icon">
-                          {breed.icon ? (
-                            <img src={breed.icon} alt="" loading="lazy" />
-                          ) : (
-                            <span className="identity-card__chip-letter" aria-hidden="true">
-                              {fallbackLetter}
-                            </span>
-                          )}
-                        </span>
-                      </button>
-                    );
-                  })}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
+              </div>
+            )}
           {itemsLoading || (itemsError && !showDetailedMatches) ? (
             <div className="suggestions__header">
               {itemsLoading ? (
@@ -8141,11 +8343,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                   <div className="suggestions__main" aria-live="polite">
                     <div className="skin-carousel__shell">
                       <div className="skin-carousel">
-                        <div className="skin-carousel__viewport">
-                          <div
-                            className="skin-carousel__track"
-                            style={{ transform: `translateX(-${safeActiveProposalIndex * 100}%)` }}
-                          >
+                        <div className={viewportClasses}>
+                          <div className={trackClasses} style={trackStyle}>
                             {proposals.map((proposal) => {
                               const primaryColor = proposal.palette[0] ?? "#1f2937";
                               const canvasBackground = buildGradientFromHex(primaryColor);
@@ -8235,12 +8434,93 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                     backgroundColor: primaryColor,
                                   }
                                 : { backgroundImage: canvasBackground };
-                              return (
-                                <article key={proposal.id} className="skin-card">
-                                  <h3 className="sr-only">{t("suggestions.carousel.proposalTitle", { index: proposal.index + 1 })}</h3>
-                                  <div className="skin-card__body">
-                                    <div
-                                      className="skin-card__canvas"
+                              const isActiveModal = modalProposalId === proposal.id;
+                              const showDetails = !isInspirationLayout || isActiveModal;
+                              const cardClasses = ["skin-card"];
+                              const tapForDetailsLabel =
+                                typeof t("suggestions.render.tapForDetails") === "string"
+                                  ? t("suggestions.render.tapForDetails")
+                                  : "Voir le détail complet";
+                              const openDetailsLabel =
+                                typeof t("suggestions.render.openDetails") === "string"
+                                  ? t("suggestions.render.openDetails")
+                                  : "Voir le détail";
+                              const closeLabel =
+                                typeof t("aria.close") === "string" ? t("aria.close") : "Fermer";
+                              if (!showDetails) {
+                                cardClasses.push("skin-card--compact");
+                              }
+                              if (isActiveModal && isInspirationLayout) {
+                                cardClasses.push("skin-card--modal");
+                              }
+
+                                  return (
+                                    <article key={proposal.id} className={cardClasses.join(" ")}>
+                                      {isActiveModal && isInspirationLayout && proposalCount > 1 ? (
+                                        <>
+                                          <button
+                                            type="button"
+                                            className="skin-card__modal-arrow skin-card__modal-arrow--prev"
+                                            onClick={handleModalPrev}
+                                            aria-label={t("aria.carouselPrevious")}
+                                          >
+                                            <span aria-hidden="true">←</span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="skin-card__modal-arrow skin-card__modal-arrow--next"
+                                            onClick={handleModalNext}
+                                            aria-label={t("aria.carouselNext")}
+                                          >
+                                            <span aria-hidden="true">→</span>
+                                          </button>
+                                        </>
+                                      ) : null}
+                                      <div className="skin-card__header">
+                                        {isInspirationLayout ? (
+                                          <div className="skin-card__badge">#{proposal.index + 1}</div>
+                                        ) : null}
+                                        <h3 className="sr-only">{t("suggestions.carousel.proposalTitle", { index: proposal.index + 1 })}</h3>
+                                        {isActiveModal ? (
+                                          <div className="skin-card__modal-actions">
+                                            {proposalCount > 1 ? (
+                                              <div
+                                                className="skin-card__modal-nav"
+                                                role="group"
+                                                aria-label={t("aria.carouselDots")}
+                                              >
+                                                <button
+                                                  type="button"
+                                                  className="skin-card__modal-nav-button"
+                                                  onClick={handleModalPrev}
+                                                  aria-label={t("aria.carouselPrevious")}
+                                                >
+                                                  <span aria-hidden="true">←</span>
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  className="skin-card__modal-nav-button"
+                                                  onClick={handleModalNext}
+                                                  aria-label={t("aria.carouselNext")}
+                                                >
+                                                  <span aria-hidden="true">→</span>
+                                                </button>
+                                              </div>
+                                            ) : null}
+                                            <button
+                                              type="button"
+                                              className="skin-card__close"
+                                              onClick={() => setModalProposalId(null)}
+                                              aria-label={closeLabel}
+                                            >
+                                              <span aria-hidden="true">×</span>
+                                            </button>
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                      <div className="skin-card__body">
+                                        <div
+                                          className="skin-card__canvas"
                                       style={canvasStyle}
                                     >
                                       <div
@@ -8350,7 +8630,8 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                           ) : null}
                                         </div>
                                       </div>
-                                      <ul className="skin-card__equipment" role="list">
+                                      {showDetails ? (
+                                        <ul className="skin-card__equipment" role="list">
                                       {proposal.items.map((item) => {
                                         const slotLabelKey = ITEM_TYPE_LABEL_KEYS[item.slotType];
                                         const slotLabel = slotLabelKey ? t(slotLabelKey) : item.slotType;
@@ -8443,335 +8724,353 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                                         );
                                       })}
                                     </ul>
+                                      ) : null}
                                   </div>
-                                  <div className="skin-card__details">
-                                    <ul className="skin-card__swatches" role="list">
-                                      {proposal.palette.length ? (
-                                        proposal.palette.map((hex) => (
-                                          <li key={`${proposal.id}-${hex}`} className="skin-card__swatch">
-                                            <button
-                                              type="button"
-                                              onClick={() => handleCopy(hex, { swatch: hex })}
-                                              style={{ backgroundImage: buildGradientFromHex(hex) }}
-                                              className="skin-card__swatch-button"
-                                            >
-                                              <span>{hex}</span>
-                                            </button>
-                                          </li>
-                                        ))
-                                      ) : (
-                                        <li className="skin-card__swatch skin-card__swatch--empty">
-                                          Palette indisponible
-                                        </li>
-                                      )}
-                                    </ul>
-                                    <ul className="skin-card__list" role="list">
-                                      {proposal.items.map((item) => {
-                                        const slotLabelKey = ITEM_TYPE_LABEL_KEYS[item.slotType];
-                                        const slotLabel = slotLabelKey ? t(slotLabelKey) : item.slotType;
-                                        const itemName = item.name ?? slotLabel;
-                                        const rerollDisabled =
-                                          (recommendations?.[item.slotType]?.length ?? 0) <= 1 ||
-                                          Boolean(selectedItemsBySlot?.[item.slotType]);
-                                        const flagEntries = buildItemFlags(item, t);
-                                        const flagSummary = flagEntries.map((flag) => flag.label).join(", ");
-                                        return (
-                                          <li key={`${proposal.id}-${item.id}-entry`} className="skin-card__list-item">
-                                            <span className="skin-card__list-type">{slotLabel}</span>
-                                            <div className="skin-card__list-actions">
-                                              <a
-                                                href={item.url}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="skin-card__list-link"
-                                              >
-                                                {item.imageUrl ? (
-                                                  <span className="skin-card__list-thumb" aria-hidden="true">
-                                                    <img src={item.imageUrl} alt="" loading="lazy" />
-                                                  </span>
-                                                ) : null}
-                                                <span className="skin-card__list-text">{itemName}</span>
-                                                {flagEntries.length ? (
-                                                  <span
-                                                    className="item-flags item-flags--compact"
-                                                    role="img"
-                                                    aria-label={flagSummary}
-                                                    title={flagSummary}
-                                                  >
-                                                    {flagEntries.map((flag) => {
-                                                      const classes = ["item-flag"];
-                                                      if (flag.className) {
-                                                        classes.push(flag.className);
-                                                      }
-                                                      return (
-                                                        <span
-                                                          key={`${proposal.id}-${item.id}-${flag.key}-list`}
-                                                          className={classes.join(" ")}
-                                                        >
-                                                          <img src={flag.icon} alt="" aria-hidden="true" />
-                                                        </span>
-                                                      );
-                                                    })}
-                                                  </span>
-                                                ) : null}
-                                              </a>
+                                  {showDetails ? (
+                                    <div className="skin-card__details">
+                                      <ul className="skin-card__swatches" role="list">
+                                        {proposal.palette.length ? (
+                                          proposal.palette.map((hex) => (
+                                            <li key={`${proposal.id}-${hex}`} className="skin-card__swatch">
                                               <button
                                                 type="button"
-                                                className="skin-card__reroll skin-card__reroll--inline"
-                                                onClick={() =>
-                                                  handleRerollItem(item.slotType, {
-                                                    proposalIndex: proposal.index,
-                                                  })
-                                                }
-                                                title={t("suggestions.render.reroll")}
-                                                aria-label={t("aria.itemReroll", {
-                                                  type: slotLabel,
-                                                  item: itemName,
-                                                })}
-                                                disabled={rerollDisabled}
+                                                onClick={() => handleCopy(hex, { swatch: hex })}
+                                                style={{ backgroundImage: buildGradientFromHex(hex) }}
+                                                className="skin-card__swatch-button"
                                               >
-                                                <span aria-hidden="true">↻</span>
+                                                <span>{hex}</span>
                                               </button>
-                                            </div>
+                                            </li>
+                                          ))
+                                        ) : (
+                                          <li className="skin-card__swatch skin-card__swatch--empty">
+                                            Palette indisponible
                                           </li>
-                                        );
-                                      })}
-                                    </ul>
-                                    <div className="skin-card__actions">
-                                      {lookLoaded ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleDownloadPreview(proposal)}
-                                          className="skin-card__cta"
-                                          disabled={isDownloadingPreview}
-                                          aria-busy={isDownloadingPreview}
-                                          title={downloadCtaLabel}
-                                          aria-label={downloadCtaLabel}
-                                        >
-                                          <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/download.svg" alt="" />
+                                        )}
+                                      </ul>
+                                      <ul className="skin-card__list" role="list">
+                                        {proposal.items.map((item) => {
+                                          const slotLabelKey = ITEM_TYPE_LABEL_KEYS[item.slotType];
+                                          const slotLabel = slotLabelKey ? t(slotLabelKey) : item.slotType;
+                                          const itemName = item.name ?? slotLabel;
+                                          const rerollDisabled =
+                                            (recommendations?.[item.slotType]?.length ?? 0) <= 1 ||
+                                            Boolean(selectedItemsBySlot?.[item.slotType]);
+                                          const flagEntries = buildItemFlags(item, t);
+                                          const flagSummary = flagEntries.map((flag) => flag.label).join(", ");
+                                          return (
+                                            <li key={`${proposal.id}-${item.id}-entry`} className="skin-card__list-item">
+                                              <span className="skin-card__list-type">{slotLabel}</span>
+                                              <div className="skin-card__list-actions">
+                                                <a
+                                                  href={item.url}
+                                                  target="_blank"
+                                                  rel="noreferrer"
+                                                  className="skin-card__list-link"
+                                                >
+                                                  {item.imageUrl ? (
+                                                    <span className="skin-card__list-thumb" aria-hidden="true">
+                                                      <img src={item.imageUrl} alt="" loading="lazy" />
+                                                    </span>
+                                                  ) : null}
+                                                  <span className="skin-card__list-text">{itemName}</span>
+                                                  {flagEntries.length ? (
+                                                    <span
+                                                      className="item-flags item-flags--compact"
+                                                      role="img"
+                                                      aria-label={flagSummary}
+                                                      title={flagSummary}
+                                                    >
+                                                      {flagEntries.map((flag) => {
+                                                        const classes = ["item-flag"];
+                                                        if (flag.className) {
+                                                          classes.push(flag.className);
+                                                        }
+                                                        return (
+                                                          <span
+                                                            key={`${proposal.id}-${item.id}-${flag.key}-list`}
+                                                            className={classes.join(" ")}
+                                                          >
+                                                            <img src={flag.icon} alt="" aria-hidden="true" />
+                                                          </span>
+                                                        );
+                                                      })}
+                                                    </span>
+                                                  ) : null}
+                                                </a>
+                                                <button
+                                                  type="button"
+                                                  className="skin-card__reroll skin-card__reroll--inline"
+                                                  onClick={() =>
+                                                    handleRerollItem(item.slotType, {
+                                                      proposalIndex: proposal.index,
+                                                    })
+                                                  }
+                                                  title={t("suggestions.render.reroll")}
+                                                  aria-label={t("aria.itemReroll", {
+                                                    type: slotLabel,
+                                                    item: itemName,
+                                                  })}
+                                                  disabled={rerollDisabled}
+                                                >
+                                                  <span aria-hidden="true">↻</span>
+                                                </button>
+                                              </div>
+                                            </li>
+                                          );
+                                        })}
+                                      </ul>
+                                      <div className="skin-card__actions">
+                                        {lookLoaded ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDownloadPreview(proposal)}
+                                            className="skin-card__cta"
+                                            disabled={isDownloadingPreview}
+                                            aria-busy={isDownloadingPreview}
+                                            title={downloadCtaLabel}
+                                            aria-label={downloadCtaLabel}
+                                          >
+                                            <span className="skin-card__cta-icon" aria-hidden="true">
+                                              <img src="/icons/download.svg" alt="" />
+                                            </span>
+                                            <span className="sr-only">{downloadCtaLabel}</span>
+                                          </button>
+                                        ) : lookLoading ? (
+                                          <button
+                                            type="button"
+                                            className="skin-card__cta skin-card__cta--disabled"
+                                            disabled
+                                            aria-busy="true"
+                                            title={t("suggestions.render.loading")}
+                                            aria-label={t("suggestions.render.loading")}
+                                          >
+                                            <span className="skin-card__cta-icon" aria-hidden="true">
+                                              <img src="/icons/download.svg" alt="" />
+                                            </span>
+                                            <span className="sr-only">{t("suggestions.render.loading")}</span>
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            className="skin-card__cta skin-card__cta--disabled"
+                                            disabled
+                                            title={t("suggestions.render.unavailable")}
+                                            aria-label={t("suggestions.render.unavailable")}
+                                          >
+                                            <span className="skin-card__cta-icon" aria-hidden="true">
+                                              <img src="/icons/download.svg" alt="" />
+                                            </span>
+                                            <span className="sr-only">{t("suggestions.render.unavailable")}</span>
+                                          </button>
+                                        )}
+                                        {proposal.barbofusLink ? (
+                                          <a
+                                            href={proposal.barbofusLink}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="skin-card__cta"
+                                            title={barbofusCtaLabel}
+                                            aria-label={barbofusCtaLabel}
+                                          >
+                                            <span className="skin-card__cta-icon" aria-hidden="true">
+                                              <img src="/icons/barbofus.svg" alt="" />
+                                            </span>
+                                            <span className="sr-only">{barbofusCtaLabel}</span>
+                                          </a>
+                                        ) : (
+                                          <span className="skin-card__cta skin-card__cta--disabled">
+                                            {t("suggestions.render.linkUnavailable")}
                                           </span>
-                                          <span className="sr-only">{downloadCtaLabel}</span>
-                                        </button>
-                                      ) : lookLoading ? (
-                                        <button
-                                          type="button"
-                                          className="skin-card__cta skin-card__cta--disabled"
-                                          disabled
-                                          aria-busy="true"
-                                          title={t("suggestions.render.loading")}
-                                          aria-label={t("suggestions.render.loading")}
-                                        >
-                                          <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/download.svg" alt="" />
+                                        )}
+                                        {proposal.souffLink ? (
+                                          <a
+                                            href={proposal.souffLink}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="skin-card__cta"
+                                            title={souffCtaLabel}
+                                            aria-label={souffCtaLabel}
+                                          >
+                                            <span className="skin-card__cta-icon" aria-hidden="true">
+                                              <img src="/icons/souff.svg" alt="" />
+                                            </span>
+                                            <span className="sr-only">{souffCtaLabel}</span>
+                                          </a>
+                                        ) : (
+                                          <span className="skin-card__cta skin-card__cta--disabled">
+                                            {souffUnavailableLabel}
                                           </span>
-                                          <span className="sr-only">{t("suggestions.render.loading")}</span>
-                                        </button>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          className="skin-card__cta skin-card__cta--disabled"
-                                          disabled
-                                          title={t("suggestions.render.unavailable")}
-                                          aria-label={t("suggestions.render.unavailable")}
-                                        >
-                                          <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/download.svg" alt="" />
+                                        )}
+                                        {canCopySkinImage ? (
+                                          <button
+                                            type="button"
+                                            className="skin-card__cta"
+                                            onClick={() => handleCopyPreview(proposal)}
+                                            title={copySkinCtaLabel}
+                                            aria-label={copySkinCtaLabel}
+                                            disabled={isCopyingPreview}
+                                            aria-busy={isCopyingPreview}
+                                          >
+                                            <span className="skin-card__cta-icon" aria-hidden="true">
+                                              <img src="/icons/copy.svg" alt="" />
+                                            </span>
+                                            <span className="sr-only">{copySkinCtaLabel}</span>
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            className="skin-card__cta skin-card__cta--disabled"
+                                            disabled
+                                            title={copySkinUnavailableLabel}
+                                            aria-label={copySkinUnavailableLabel}
+                                          >
+                                            <span className="skin-card__cta-icon" aria-hidden="true">
+                                              <img src="/icons/copy.svg" alt="" />
+                                            </span>
+                                            <span className="sr-only">{copySkinUnavailableLabel}</span>
+                                          </button>
+                                        )}
+                                        {lookLoaded ? (
+                                          <button
+                                            type="button"
+                                            className="skin-card__cta"
+                                            onClick={() => handleExportRecap(proposal)}
+                                            title={recapCtaLabel}
+                                            aria-label={recapCtaLabel}
+                                            disabled={isExportingRecap}
+                                            aria-busy={isExportingRecap}
+                                          >
+                                            <span className="skin-card__cta-icon" aria-hidden="true">
+                                              <img src="/icons/download.svg" alt="" />
+                                            </span>
+                                            <span className="sr-only">{recapCtaLabel}</span>
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            className="skin-card__cta skin-card__cta--disabled"
+                                            disabled
+                                            title={recapUnavailableLabel}
+                                            aria-label={recapUnavailableLabel}
+                                          >
+                                            <span className="skin-card__cta-icon" aria-hidden="true">
+                                              <img src="/icons/download.svg" alt="" />
+                                            </span>
+                                            <span className="sr-only">{recapUnavailableLabel}</span>
+                                          </button>
+                                        )}
+                                        {canShareSkin ? (
+                                          <button
+                                            type="button"
+                                            className="skin-card__cta"
+                                            onClick={() => handleShareSkin(proposal)}
+                                            title={shareCtaLabel}
+                                            aria-label={shareCtaLabel}
+                                          >
+                                            <span className="skin-card__cta-icon" aria-hidden="true">
+                                              <img src="/icons/share.svg" alt="" />
+                                            </span>
+                                            <span className="sr-only">{shareCtaLabel}</span>
+                                          </button>
+                                        ) : (
+                                          <span className="skin-card__cta skin-card__cta--disabled">
+                                            {t("suggestions.render.shareUnavailable")}
                                           </span>
-                                          <span className="sr-only">{t("suggestions.render.unavailable")}</span>
-                                        </button>
-                                      )}
-                                      {proposal.barbofusLink ? (
-                                        <a
-                                          href={proposal.barbofusLink}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="skin-card__cta"
-                                          title={barbofusCtaLabel}
-                                          aria-label={barbofusCtaLabel}
-                                        >
-                                          <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/barbofus.svg" alt="" />
-                                          </span>
-                                          <span className="sr-only">{barbofusCtaLabel}</span>
-                                        </a>
-                                      ) : (
-                                        <span className="skin-card__cta skin-card__cta--disabled">
-                                          {t("suggestions.render.linkUnavailable")}
-                                        </span>
-                                      )}
-                                      {proposal.souffLink ? (
-                                        <a
-                                          href={proposal.souffLink}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="skin-card__cta"
-                                          title={souffCtaLabel}
-                                          aria-label={souffCtaLabel}
-                                        >
-                                          <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/souff.svg" alt="" />
-                                          </span>
-                                          <span className="sr-only">{souffCtaLabel}</span>
-                                        </a>
-                                      ) : (
-                                        <span className="skin-card__cta skin-card__cta--disabled">
-                                          {souffUnavailableLabel}
-                                        </span>
-                                      )}
-                                      {canCopySkinImage ? (
-                                        <button
-                                          type="button"
-                                          className="skin-card__cta"
-                                          onClick={() => handleCopyPreview(proposal)}
-                                          title={copySkinCtaLabel}
-                                          aria-label={copySkinCtaLabel}
-                                          disabled={isCopyingPreview}
-                                          aria-busy={isCopyingPreview}
-                                        >
-                                          <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/copy.svg" alt="" />
-                                          </span>
-                                          <span className="sr-only">{copySkinCtaLabel}</span>
-                                        </button>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          className="skin-card__cta skin-card__cta--disabled"
-                                          disabled
-                                          title={copySkinUnavailableLabel}
-                                          aria-label={copySkinUnavailableLabel}
-                                        >
-                                          <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/copy.svg" alt="" />
-                                          </span>
-                                          <span className="sr-only">{copySkinUnavailableLabel}</span>
-                                        </button>
-                                      )}
-                                      {lookLoaded ? (
-                                        <button
-                                          type="button"
-                                          className="skin-card__cta"
-                                          onClick={() => handleExportRecap(proposal)}
-                                          title={recapCtaLabel}
-                                          aria-label={recapCtaLabel}
-                                          disabled={isExportingRecap}
-                                          aria-busy={isExportingRecap}
-                                        >
-                                          <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/download.svg" alt="" />
-                                          </span>
-                                          <span className="sr-only">{recapCtaLabel}</span>
-                                        </button>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          className="skin-card__cta skin-card__cta--disabled"
-                                          disabled
-                                          title={recapUnavailableLabel}
-                                          aria-label={recapUnavailableLabel}
-                                        >
-                                          <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/download.svg" alt="" />
-                                          </span>
-                                          <span className="sr-only">{recapUnavailableLabel}</span>
-                                        </button>
-                                      )}
-                                      {canShareSkin ? (
-                                        <button
-                                          type="button"
-                                          className="skin-card__cta"
-                                          onClick={() => handleShareSkin(proposal)}
-                                          title={shareCtaLabel}
-                                          aria-label={shareCtaLabel}
-                                        >
-                                          <span className="skin-card__cta-icon" aria-hidden="true">
-                                            <img src="/icons/share.svg" alt="" />
-                                          </span>
-                                          <span className="sr-only">{shareCtaLabel}</span>
-                                        </button>
-                                      ) : (
-                                        <span className="skin-card__cta skin-card__cta--disabled">
-                                          {t("suggestions.render.shareUnavailable")}
-                                        </span>
-                                      )}
+                                        )}
+                                      </div>
                                     </div>
-                                  </div>
+                                  ) : (
+                                    <div className="skin-card__details skin-card__details--compact">
+                                      <div className="skin-card__compact-meta">
+                                        <p className="skin-card__compact-label">{tapForDetailsLabel}</p>
+                                        <button
+                                          type="button"
+                                          className="skin-card__cta skin-card__cta--primary"
+                                          onClick={() => setModalProposalId(proposal.id)}
+                                        >
+                                          {openDetailsLabel}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               </article>
                             );
                           })}
                         </div>
                       </div>
-                      <div className="skin-carousel__pagination">
-                        <button
-                          type="button"
-                          className="skin-carousel__nav"
-                          onClick={handlePrevProposal}
-                          disabled={proposalCount <= 1}
-                          aria-label={t("aria.carouselPrevious")}
-                        >
-                          <img
-                            src="/icons/arrow-left.svg"
-                            alt=""
-                            className="skin-carousel__nav-icon"
-                            aria-hidden="true"
-                          />
-                        </button>
-                        <div className="skin-carousel__indicator">
-                          <div className="skin-carousel__dots" role="tablist" aria-label={t("aria.carouselDots")}>
-                            {proposals.map((proposal, index) => (
-                              <button
-                                key={`${proposal.id}-dot`}
-                                type="button"
-                                className={`skin-carousel__dot${index === safeActiveProposalIndex ? " is-active" : ""}`}
-                                onClick={() => handleSelectProposal(index)}
-                                aria-label={t("aria.carouselDotSelect", { index: index + 1 })}
-                                aria-pressed={index === safeActiveProposalIndex}
+                        {!isGridLayout ? (
+                          <div className="skin-carousel__pagination">
+                            <button
+                              type="button"
+                              className="skin-carousel__nav"
+                              onClick={handlePrevProposal}
+                              disabled={proposalCount <= 1}
+                              aria-label={t("aria.carouselPrevious")}
+                            >
+                              <img
+                                src="/icons/arrow-left.svg"
+                                alt=""
+                                className="skin-carousel__nav-icon"
+                                aria-hidden="true"
                               />
-                            ))}
-                          </div>
-                          {(activeProposalSubtitle || proposalCount > 0) ? (
-                            <div className="skin-carousel__legend" role="presentation">
-                              {activeProposalSubtitle ? (
-                                <span className="skin-carousel__subtitle">
-                                  {activeProposalClassIcon ? (
-                                    <span className="skin-carousel__class-icon" aria-hidden="true">
-                                      <img src={activeProposalClassIcon} alt="" loading="lazy" />
+                            </button>
+                            <div className="skin-carousel__indicator">
+                              <div className="skin-carousel__dots" role="tablist" aria-label={t("aria.carouselDots")}>
+                                {proposals.map((proposal, index) => (
+                                  <button
+                                    key={`${proposal.id}-dot`}
+                                    type="button"
+                                    className={`skin-carousel__dot${index === safeActiveProposalIndex ? " is-active" : ""}`}
+                                    onClick={() => handleSelectProposal(index)}
+                                    aria-label={t("aria.carouselDotSelect", { index: index + 1 })}
+                                    aria-pressed={index === safeActiveProposalIndex}
+                                  />
+                                ))}
+                              </div>
+                              {(activeProposalSubtitle || proposalCount > 0) ? (
+                                <div className="skin-carousel__legend" role="presentation">
+                                  {activeProposalSubtitle ? (
+                                    <span className="skin-carousel__subtitle">
+                                      {activeProposalClassIcon ? (
+                                        <span className="skin-carousel__class-icon" aria-hidden="true">
+                                          <img src={activeProposalClassIcon} alt="" loading="lazy" />
+                                        </span>
+                                      ) : null}
+                                      <span>{activeProposalSubtitle}</span>
                                     </span>
                                   ) : null}
-                                  <span>{activeProposalSubtitle}</span>
-                                </span>
-                              ) : null}
-                              {activeProposalSubtitle && proposalCount > 0 ? (
-                                <span className="skin-carousel__divider" aria-hidden="true" />
-                              ) : null}
-                              {proposalCount > 0 ? (
-                                <span className="skin-carousel__count">
-                                  {t("suggestions.carousel.skinCount", {
-                                    current: safeActiveProposalIndex + 1,
-                                    total: proposalCount,
-                                  })}
-                                </span>
+                                  {activeProposalSubtitle && proposalCount > 0 ? (
+                                    <span className="skin-carousel__divider" aria-hidden="true" />
+                                  ) : null}
+                                  {proposalCount > 0 ? (
+                                    <span className="skin-carousel__count">
+                                      {t("suggestions.carousel.skinCount", {
+                                        current: safeActiveProposalIndex + 1,
+                                        total: proposalCount,
+                                      })}
+                                    </span>
+                                  ) : null}
+                                </div>
                               ) : null}
                             </div>
-                          ) : null}
-                        </div>
-                        <button
-                          type="button"
-                          className="skin-carousel__nav"
-                          onClick={handleNextProposal}
-                          disabled={proposalCount <= 1}
-                          aria-label={t("aria.carouselNext")}
-                        >
-                          <img
-                            src="/icons/arrow-right.svg"
-                            alt=""
-                            className="skin-carousel__nav-icon"
-                            aria-hidden="true"
-                          />
-                        </button>
-                      </div>
+                            <button
+                              type="button"
+                              className="skin-carousel__nav"
+                              onClick={handleNextProposal}
+                              disabled={proposalCount <= 1}
+                              aria-label={t("aria.carouselNext")}
+                            >
+                              <img
+                                src="/icons/arrow-right.svg"
+                                alt=""
+                                className="skin-carousel__nav-icon"
+                                aria-hidden="true"
+                              />
+                            </button>
+                          </div>
+                        ) : null}
                     </div>
                     <button
                       type="button"
@@ -8954,6 +9253,16 @@ export default function Home({ initialBreeds = [], previewBackgrounds: initialPr
                     aria-label={t("aria.panelBackdrop")}
                   >
                     <span className="sr-only">{t("aria.panelBackdrop")}</span>
+                  </button>
+                ) : null}
+                {isInspirationLayout && modalProposalId ? (
+                  <button
+                    type="button"
+                    className="skin-modal__backdrop"
+                    onClick={() => setModalProposalId(null)}
+                    aria-label={typeof t("aria.close") === "string" ? t("aria.close") : "Fermer"}
+                  >
+                    <span className="sr-only">{typeof t("aria.close") === "string" ? t("aria.close") : "Fermer"}</span>
                   </button>
                 ) : null}
                 </div>
