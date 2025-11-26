@@ -38,7 +38,7 @@ export default function InspirationPage(props) {
         allowedInputModes={["color"]}
         identitySelectionMode="random"
         proposalLayout="grid"
-        proposalCount={36}
+        proposalCount={24}
         colorSuggestions={INSPIRATION_COLOR_SWATCHES}
         showModelPrediction={false}
         showIdentityHint={false}

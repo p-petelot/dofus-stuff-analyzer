@@ -5626,6 +5626,11 @@ export default function Home({
     [modalProposalId, proposals]
   );
 
+  const modalProposalIndex = useMemo(
+    () => (modalProposalId ? proposals.findIndex((proposal) => proposal.id === modalProposalId) : -1),
+    [modalProposalId, proposals]
+  );
+
   const lookPreviewDescriptors = useMemo(() => {
     if (!Array.isArray(proposals) || proposals.length === 0) {
       return [];
@@ -6175,6 +6180,25 @@ export default function Home({
     }
     setActiveProposal((previous) => (previous - 1 + proposalCount) % proposalCount);
   }, [proposalCount]);
+
+  const handleModalNavigate = useCallback(
+    (direction) => {
+      if (!isInspirationLayout || modalProposalIndex === -1 || proposals.length <= 1) {
+        return;
+      }
+
+      const nextIndex = (modalProposalIndex + direction + proposals.length) % proposals.length;
+      const nextProposal = proposals[nextIndex];
+      if (nextProposal?.id) {
+        setModalProposalId(nextProposal.id);
+      }
+    },
+    [isInspirationLayout, modalProposalIndex, proposals]
+  );
+
+  const handleModalPrev = useCallback(() => handleModalNavigate(-1), [handleModalNavigate]);
+
+  const handleModalNext = useCallback(() => handleModalNavigate(1), [handleModalNavigate]);
 
   const handleSelectProposal = useCallback(
     (index) => {
@@ -8424,27 +8448,53 @@ export default function Home({
                                 cardClasses.push("skin-card--modal");
                               }
 
-                              return (
-                                <article key={proposal.id} className={cardClasses.join(" ")}>
-                                  <div className="skin-card__header">
-                                    {isInspirationLayout ? (
-                                      <div className="skin-card__badge">#{proposal.index + 1}</div>
-                                    ) : null}
-                                    <h3 className="sr-only">{t("suggestions.carousel.proposalTitle", { index: proposal.index + 1 })}</h3>
-                                    {isActiveModal ? (
-                                      <button
-                                        type="button"
-                                        className="skin-card__close"
-                                        onClick={() => setModalProposalId(null)}
-                                        aria-label={closeLabel}
-                                      >
-                                        <span aria-hidden="true">×</span>
-                                      </button>
-                                    ) : null}
-                                  </div>
-                                  <div className="skin-card__body">
-                                    <div
-                                      className="skin-card__canvas"
+                                  return (
+                                    <article key={proposal.id} className={cardClasses.join(" ")}>
+                                      <div className="skin-card__header">
+                                        {isInspirationLayout ? (
+                                          <div className="skin-card__badge">#{proposal.index + 1}</div>
+                                        ) : null}
+                                        <h3 className="sr-only">{t("suggestions.carousel.proposalTitle", { index: proposal.index + 1 })}</h3>
+                                        {isActiveModal ? (
+                                          <div className="skin-card__modal-actions">
+                                            {proposalCount > 1 ? (
+                                              <div
+                                                className="skin-card__modal-nav"
+                                                role="group"
+                                                aria-label={t("aria.carouselDots")}
+                                              >
+                                                <button
+                                                  type="button"
+                                                  className="skin-card__modal-nav-button"
+                                                  onClick={handleModalPrev}
+                                                  aria-label={t("aria.carouselPrevious")}
+                                                >
+                                                  <span aria-hidden="true">←</span>
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  className="skin-card__modal-nav-button"
+                                                  onClick={handleModalNext}
+                                                  aria-label={t("aria.carouselNext")}
+                                                >
+                                                  <span aria-hidden="true">→</span>
+                                                </button>
+                                              </div>
+                                            ) : null}
+                                            <button
+                                              type="button"
+                                              className="skin-card__close"
+                                              onClick={() => setModalProposalId(null)}
+                                              aria-label={closeLabel}
+                                            >
+                                              <span aria-hidden="true">×</span>
+                                            </button>
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                      <div className="skin-card__body">
+                                        <div
+                                          className="skin-card__canvas"
                                       style={canvasStyle}
                                     >
                                       <div

@@ -4082,6 +4082,38 @@ a {
   outline: none;
 }
 
+.skin-card__modal-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.skin-card__modal-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.skin-card__modal-nav-button {
+  border: none;
+  background: rgba(var(--surface-4-rgb), 0.85);
+  color: var(--text-strong);
+  border-radius: var(--radius-full);
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 12px 30px rgba(var(--shadow-rgb), 0.35);
+}
+
+.skin-card__modal-nav-button:hover,
+.skin-card__modal-nav-button:focus-visible {
+  background: rgba(var(--accent-primary-rgb), 0.15);
+  outline: none;
+}
+
 .skin-card__body {
   display: grid;
   gap: 14px;
