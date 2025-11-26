@@ -4168,6 +4168,36 @@ a {
   padding: 18px;
 }
 
+.skin-card__modal-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: rgba(var(--surface-4-rgb), 0.92);
+  color: var(--text-strong);
+  border-radius: var(--radius-full);
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 18px 46px rgba(var(--shadow-rgb), 0.45);
+}
+
+.skin-card__modal-arrow:hover,
+.skin-card__modal-arrow:focus-visible {
+  background: rgba(var(--accent-primary-rgb), 0.2);
+  outline: none;
+}
+
+.skin-card__modal-arrow--prev {
+  left: -18px;
+}
+
+.skin-card__modal-arrow--next {
+  right: -18px;
+}
+
 .skin-card--modal .skin-card__body {
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
 }

@@ -5141,6 +5141,10 @@ export default function Home({
   }, [colorsCount, imageSrc, isProcessing]);
 
   const recommendations = useMemo(() => {
+    const recommendationCap = isInspirationLayout
+      ? Math.max(MAX_RECOMMENDATIONS, proposalLimit)
+      : MAX_RECOMMENDATIONS;
+
     if (!colors.length || !Number.isFinite(activeClassId)) {
       return null;
     }
@@ -5269,7 +5273,7 @@ export default function Home({
           }
           return true;
         })
-        .slice(0, MAX_RECOMMENDATIONS);
+        .slice(0, recommendationCap);
       return accumulator;
     }, {});
   }, [
@@ -5285,6 +5289,8 @@ export default function Home({
     itemFlagFilters,
     itemSlotFilters,
     selectedItemsBySlot,
+    isInspirationLayout,
+    proposalLimit,
   ]);
 
   useEffect(() => {
@@ -8450,6 +8456,26 @@ export default function Home({
 
                                   return (
                                     <article key={proposal.id} className={cardClasses.join(" ")}>
+                                      {isActiveModal && isInspirationLayout && proposalCount > 1 ? (
+                                        <>
+                                          <button
+                                            type="button"
+                                            className="skin-card__modal-arrow skin-card__modal-arrow--prev"
+                                            onClick={handleModalPrev}
+                                            aria-label={t("aria.carouselPrevious")}
+                                          >
+                                            <span aria-hidden="true">←</span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="skin-card__modal-arrow skin-card__modal-arrow--next"
+                                            onClick={handleModalNext}
+                                            aria-label={t("aria.carouselNext")}
+                                          >
+                                            <span aria-hidden="true">→</span>
+                                          </button>
+                                        </>
+                                      ) : null}
                                       <div className="skin-card__header">
                                         {isInspirationLayout ? (
                                           <div className="skin-card__badge">#{proposal.index + 1}</div>
