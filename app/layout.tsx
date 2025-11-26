@@ -20,9 +20,9 @@ const links: NavLink[] = [
     href: "/collections",
     children: [
       {
-        label: "Galerie IA",
-        href: "/collections/galerie",
-        desc: "Skins générés automatiquement",
+        label: "Collection Thèmes",
+        href: "/collections/themes",
+        desc: "Choisissez une couleur et explorez des skins variés",
       },
     ],
   },

@@ -3,16 +3,10 @@ import Link from "next/link";
 
 const COLLECTION_SECTIONS = [
   {
-    href: "/collections/galerie",
-    title: "Galerie générée par l'IA",
-    description:
-      "Accédez aux skins concoctés automatiquement : classes aléatoires, palettes harmonisées et équipements assortis.",
-  },
-  {
     href: "/collections/themes",
     title: "Collection Thèmes",
     description:
-      "Sélectionnez une couleur et découvrez une grille étendue de propositions avec classes et sexes aléatoires, prêtes à être exportées.",
+      "Sélectionnez une couleur comme sur la page principale et découvrez une grille étendue de propositions avec classes et sexes aléatoires, prêtes à être exportées.",
   },
 ];
 
