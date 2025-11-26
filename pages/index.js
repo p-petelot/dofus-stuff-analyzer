@@ -1447,7 +1447,16 @@ const HASH_STRONG_THRESHOLD = 0.12;
 const EDGE_CONFIDENCE_DISTANCE = 0.26;
 const EDGE_CONFIDENCE_WEIGHT = 0.12;
 const EDGE_STRONG_THRESHOLD = 0.1;
-const CURATED_COLOR_SWATCHES = ["#8B5CF6", "#F97316", "#10B981", "#38BDF8", "#F43F5E", "#FACC15", "#f368e0", "#cc8e35"];
+const CURATED_COLOR_SWATCHES = [
+  "#8B5CF6",
+  "#F97316",
+  "#10B981",
+  "#38BDF8",
+  "#F43F5E",
+  "#FACC15",
+  "#F368E0",
+  "#CC8E35",
+];
 
 const ITEM_TYPE_LABEL_KEYS = {
   coiffe: "itemTypes.coiffe",
@@ -3801,6 +3810,9 @@ export default function Home({
   identitySelectionMode = "manual",
   proposalLayout = "carousel",
   proposalCount: requestedProposalCount = DEFAULT_PROPOSAL_COUNT,
+  colorSuggestions = CURATED_COLOR_SWATCHES,
+  showModelPrediction = true,
+  showIdentityHint = true,
 }) {
   const router = useRouter();
   const routerLang = router?.query?.lang;
@@ -4013,6 +4025,24 @@ export default function Home({
 
   const [inputMode, setInputMode] = useState(normalizedDefaultInputMode);
   const [selectedColor, setSelectedColor] = useState(null);
+  const curatedColorSuggestions = useMemo(() => {
+    if (!Array.isArray(colorSuggestions)) {
+      return CURATED_COLOR_SWATCHES;
+    }
+    const cleaned = colorSuggestions
+      .map((value) => (typeof value === "string" ? value.trim().toUpperCase() : ""))
+      .filter(Boolean);
+    if (!cleaned.length) {
+      return CURATED_COLOR_SWATCHES;
+    }
+    const unique = [];
+    cleaned.forEach((value) => {
+      if (!unique.includes(value)) {
+        unique.push(value);
+      }
+    });
+    return unique;
+  }, [colorSuggestions]);
 
   useEffect(() => {
     setInputMode((previous) => sanitizeInputMode(previous, normalizedInputModes));
@@ -7795,7 +7825,7 @@ export default function Home({
                     </button>
                   </div>
                   <div className="color-picker__swatch-tray" role="list" aria-label={t("aria.colorSuggestions")}>
-                    {CURATED_COLOR_SWATCHES.map((hex) => {
+                    {curatedColorSuggestions.map((hex) => {
                       const isActive = selectedColor === hex.toUpperCase();
                       return (
                         <button
@@ -8067,13 +8097,15 @@ export default function Home({
             )}
           </div>
 
-          <ModelPredictionSection
-            result={modelResult}
-            isLoading={isPredicting}
-            error={modelError}
-            placeholder={predictionLabels.placeholder}
-            labels={predictionLabels}
-          />
+          {showModelPrediction ? (
+            <ModelPredictionSection
+              result={modelResult}
+              isLoading={isPredicting}
+              error={modelError}
+              placeholder={predictionLabels.placeholder}
+              labels={predictionLabels}
+            />
+          ) : null}
 
           <div className="suggestions" style={suggestionsAccentStyle}>
             {directionAnnouncement ? (
@@ -8089,7 +8121,9 @@ export default function Home({
               >
                 <div className="identity-card__summary">
                   <h3>Inspiration aléatoire</h3>
-                  <p>Classe et sexe sont choisis automatiquement pour chaque skin proposé.</p>
+                  {showIdentityHint ? (
+                    <p>Classe et sexe sont choisis automatiquement pour chaque skin proposé.</p>
+                  ) : null}
                   {activeBreed ? (
                     <p className="identity-card__summary-active">
                       {activeBreed.name} · {activeGenderLabel}
