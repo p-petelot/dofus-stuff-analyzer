@@ -3839,14 +3839,6 @@ export default function Home({
   }, [language]);
 
   useEffect(() => {
-    setInputMode((previous) => sanitizeInputMode(previous, normalizedInputModes));
-  }, [normalizedInputModes]);
-
-  useEffect(() => {
-    setInputMode(normalizedDefaultInputMode);
-  }, [normalizedDefaultInputMode]);
-
-  useEffect(() => {
     languageRef.current = language;
   }, [language]);
 
@@ -4021,6 +4013,14 @@ export default function Home({
 
   const [inputMode, setInputMode] = useState(normalizedDefaultInputMode);
   const [selectedColor, setSelectedColor] = useState(null);
+
+  useEffect(() => {
+    setInputMode((previous) => sanitizeInputMode(previous, normalizedInputModes));
+  }, [normalizedInputModes]);
+
+  useEffect(() => {
+    setInputMode(normalizedDefaultInputMode);
+  }, [normalizedDefaultInputMode]);
   const [activeProposal, setActiveProposal] = useState(0);
   const [lookPreviews, setLookPreviews] = useState({});
   const lookPreviewsRef = useRef({});
