@@ -7,17 +7,6 @@ import { Navbar } from "../app/components/Navbar";
 const NAV_LINKS = [
   { label: "Accueil", href: "/" },
   { label: "Vision", href: "/vision" },
-  {
-    label: "Collections",
-    href: "/collections",
-    children: [
-      {
-        label: "Collection Thèmes",
-        href: "/collections/themes",
-        desc: "Choisissez une couleur et explorez des skins variés",
-      },
-    ],
-  },
 ];
 
 export default function App({ Component, pageProps }) {

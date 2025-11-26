@@ -15,17 +15,7 @@ export const metadata: Metadata = {
 
 const links: NavLink[] = [
   { label: "Accueil", href: "/" },
-  {
-    label: "Collections",
-    href: "/collections",
-    children: [
-      {
-        label: "Collection Thèmes",
-        href: "/collections/themes",
-        desc: "Choisissez une couleur et explorez des skins variés",
-      },
-    ],
-  },
+  { label: "Vision", href: "/vision" },
 ];
 
 export default function RootLayout({
