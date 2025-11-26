@@ -19,7 +19,7 @@ export default function InspirationPage(props) {
         allowedInputModes={["color"]}
         identitySelectionMode="random"
         proposalLayout="grid"
-        proposalCount={12}
+        proposalCount={18}
       />
     </>
   );

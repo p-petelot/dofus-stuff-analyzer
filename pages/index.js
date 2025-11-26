@@ -4504,6 +4504,8 @@ export default function Home({
     [normalizedInputModes]
   );
 
+  const hasMultipleAnalysisModes = analysisModes.length > 1;
+
   const handleFamilierFilterToggle = useCallback((key) => {
     if (!FAMILIER_FILTERS.some((filter) => filter.key === key)) {
       return;
@@ -7706,27 +7708,29 @@ export default function Home({
               <div className="reference__title">
                 <h2>{t("workspace.referenceTitle")}</h2>
               </div>
-              <div
-                className="input-switch"
-                role="radiogroup"
-                aria-label={t("aria.analysisMode")}
-              >
-                {analysisModes.map((mode) => {
-                  const isActive = inputMode === mode.key;
-                  return (
-                    <button
-                      key={mode.key}
-                      type="button"
-                      className={`input-switch__option${isActive ? " is-active" : ""}`}
-                      onClick={() => setInputMode(mode.key)}
-                      role="radio"
-                      aria-checked={isActive}
-                    >
-                      {t(mode.labelKey)}
-                    </button>
-                  );
-                })}
-              </div>
+              {hasMultipleAnalysisModes ? (
+                <div
+                  className="input-switch"
+                  role="radiogroup"
+                  aria-label={t("aria.analysisMode")}
+                >
+                  {analysisModes.map((mode) => {
+                    const isActive = inputMode === mode.key;
+                    return (
+                      <button
+                        key={mode.key}
+                        type="button"
+                        className={`input-switch__option${isActive ? " is-active" : ""}`}
+                        onClick={() => setInputMode(mode.key)}
+                        role="radio"
+                        aria-checked={isActive}
+                      >
+                        {t(mode.labelKey)}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
             {isImageMode ? (
               <div
