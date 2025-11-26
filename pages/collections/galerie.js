@@ -18,6 +18,20 @@ const SLOT_LABELS = {
   familier: "Familier & montures",
 };
 
+const PALETTE_LOADER_COLORS = ["#1bdd8d", "#22d3ee", "#facc15", "#fb923c", "#a855f7"];
+
+const CREATIVE_COLOR_PRESETS = [
+  "#8B5CF6",
+  "#7C3AED",
+  "#0EA5A6",
+  "#06B6D4",
+  "#F97316",
+  "#FACC15",
+  "#3B82F6",
+  "#EC4899",
+  "#22C55E",
+];
+
 function slotSortValue(slot) {
   const index = SLOT_ORDER.indexOf(slot);
   return index === -1 ? SLOT_ORDER.length + 1 : index;
@@ -192,13 +206,37 @@ async function copyColorToClipboard(value) {
   }
 }
 
+function PaletteLoader({ label }) {
+  return (
+    <div className="palette-loader" role="presentation" aria-hidden="true">
+      <span className="palette-loader__aurora">
+        <span className="palette-loader__halo" />
+        <span className="palette-loader__spectrum">
+          <span className="palette-loader__ring palette-loader__ring--outer" />
+          <span className="palette-loader__ring palette-loader__ring--inner" />
+          {PALETTE_LOADER_COLORS.map((color, index) => (
+            <span
+              key={`${color}-${index}`}
+              className={`palette-loader__pulse palette-loader__pulse--${index}`}
+              style={{
+                "--palette-loader-color": color,
+                "--palette-loader-index": String(index),
+              }}
+            />
+          ))}
+        </span>
+        <span className="palette-loader__core" />
+      </span>
+      <span className="sr-only">{label}</span>
+    </div>
+  );
+}
+
 function GalleryLoader({ message }) {
   return (
     <div className="gallery-loader" role="status" aria-live="polite">
-      <span className="gallery-loader__icon" aria-hidden="true">
-        <img src="/logo.svg" alt="" />
-      </span>
-      <span>{message}</span>
+      <PaletteLoader label={message ?? "Chargement"} />
+      {message ? <span className="gallery-loader__message">{message}</span> : null}
     </div>
   );
 }
@@ -247,6 +285,7 @@ function GalleryCard({ skin, language, onSelect }) {
   const [status, setStatus] = useState("loading");
   const [preview, setPreview] = useState(null);
   const abortRef = useRef(null);
+  const mainColor = normalizeHex(skin?.primaryColor ?? skin?.palette?.hex?.[0]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -324,7 +363,10 @@ function GalleryCard({ skin, language, onSelect }) {
         )}
       </div>
       <div className="gallery-card__meta">
-        <span className="gallery-card__number">#{(skin.displayNumber ?? skin.number).toString().padStart(2, "0")}</span>
+        <div className="gallery-card__meta-left">
+          {mainColor ? <span className="gallery-card__swatch" style={{ backgroundColor: mainColor }} /> : null}
+          <span className="gallery-card__number">#{(skin.displayNumber ?? skin.number).toString().padStart(2, "0")}</span>
+        </div>
         <div className="gallery-card__identity">
           {skin.classIcon ? (
             <img
@@ -554,6 +596,7 @@ export default function GalleryCollectionsPage() {
   const [error, setError] = useState(null);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const [selection, setSelection] = useState(null);
+  const [referenceColor, setReferenceColor] = useState(null);
   const loadMoreRef = useRef(null);
   const totalCountRef = useRef(0);
   const inFlightRef = useRef(false);
@@ -572,9 +615,14 @@ export default function GalleryCollectionsPage() {
       }
       setError(null);
       try {
+        const startIndex = append ? totalCountRef.current : 0;
         const params = new URLSearchParams();
         params.set("lang", language);
         params.set("count", String(DEFAULT_COUNT));
+        params.set("offset", String(startIndex));
+        if (referenceColor) {
+          params.set("color", referenceColor);
+        }
         const response = await fetch(`/api/gallery?${params.toString()}`);
         if (!response.ok) {
           const payload = await response.json().catch(() => null);
@@ -584,7 +632,6 @@ export default function GalleryCollectionsPage() {
         const dataset = Array.isArray(payload?.skins) ? payload.skins : [];
         setSkins((prev) => {
           const base = append ? prev : [];
-          const startIndex = append ? totalCountRef.current : 0;
           const mapped = dataset.map((skin, index) => ({
             ...skin,
             displayNumber: startIndex + index + 1,
@@ -609,16 +656,32 @@ export default function GalleryCollectionsPage() {
         inFlightRef.current = false;
       }
     },
-    [language],
+    [language, referenceColor],
   );
 
   useEffect(() => {
     fetchGallery();
   }, [fetchGallery, refreshIndex]);
 
+  const handleColorChange = useCallback((value) => {
+    const normalized = normalizeHex(value);
+    if (!normalized) {
+      setReferenceColor(null);
+      setRefreshIndex((current) => current + 1);
+      return;
+    }
+    setReferenceColor(normalized);
+    setRefreshIndex((current) => current + 1);
+  }, []);
+
   const handleRefresh = useCallback(() => {
     setRefreshIndex((value) => value + 1);
   }, []);
+
+  const handleRandomColor = useCallback(() => {
+    const choice = CREATIVE_COLOR_PRESETS[Math.floor(Math.random() * CREATIVE_COLOR_PRESETS.length)];
+    handleColorChange(choice);
+  }, [handleColorChange]);
 
   const handleSelect = useCallback((entry) => {
     setSelection(entry);
@@ -748,6 +811,45 @@ export default function GalleryCollectionsPage() {
               palette harmonieuse. Cliquez sur un skin pour découvrir les détails de sa composition.
             </p>
             <div className="gallery-actions">
+              <div className="gallery-color-picker" role="group" aria-label="Référence couleur">
+                <div className="gallery-color-picker__header">
+                  <span className="gallery-color-picker__label">Référence créative</span>
+                  <span className="gallery-color-picker__hint">Couleur</span>
+                </div>
+                <div className="gallery-color-picker__controls">
+                  <label className="gallery-color-picker__input">
+                    <span
+                      className="gallery-color-picker__preview"
+                      style={{ backgroundImage: buildGradientFromHex(referenceColor || "#7C3AED") }}
+                    />
+                    <input
+                      type="color"
+                      value={referenceColor || "#7C3AED"}
+                      aria-label="Choisir une couleur de référence"
+                      onChange={(event) => handleColorChange(event.target.value)}
+                    />
+                  </label>
+                  <button type="button" className="gallery-random" onClick={handleRandomColor}>
+                    Nuance aléatoire
+                  </button>
+                  <div className="gallery-color-picker__swatches" role="listbox" aria-label="Nuances suggérées">
+                    {CREATIVE_COLOR_PRESETS.map((hex) => {
+                      const active = referenceColor === hex;
+                      return (
+                        <button
+                          key={hex}
+                          type="button"
+                          className={classNames("gallery-color-picker__swatch", active && "is-active")}
+                          style={{ backgroundColor: hex }}
+                          aria-label={`Sélectionner la teinte ${hex}`}
+                          aria-pressed={active}
+                          onClick={() => handleColorChange(hex)}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
               <button type="button" onClick={handleRefresh} className="gallery-refresh" disabled={loading}>
                 {loading ? "Génération en cours..." : "Régénérer la galerie"}
               </button>
