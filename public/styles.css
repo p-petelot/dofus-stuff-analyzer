@@ -1634,6 +1634,31 @@ a {
   }
 }
 
+.workspace--inspiration {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "reference"
+    "palette"
+    "suggestions"
+    "filters";
+}
+
+@media (min-width: 960px) {
+  .workspace--inspiration {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "reference palette"
+      "suggestions suggestions"
+      "filters filters";
+  }
+}
+
+@media (min-width: 1440px) {
+  .workspace--inspiration {
+    grid-template-columns: minmax(520px, 1.1fr) minmax(640px, 1.1fr);
+  }
+}
+
 @media (min-width: 1440px) {
   .workspace {
     grid-template-columns: minmax(440px, 1.2fr) minmax(780px, 2.1fr);

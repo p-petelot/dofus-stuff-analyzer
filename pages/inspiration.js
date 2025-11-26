@@ -42,6 +42,7 @@ export default function InspirationPage(props) {
         colorSuggestions={INSPIRATION_COLOR_SWATCHES}
         showModelPrediction={false}
         showIdentityHint={false}
+        layoutVariant="inspiration"
       />
     </>
   );

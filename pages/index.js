@@ -3813,6 +3813,7 @@ export default function Home({
   colorSuggestions = CURATED_COLOR_SWATCHES,
   showModelPrediction = true,
   showIdentityHint = true,
+  layoutVariant = "default",
 }) {
   const router = useRouter();
   const routerLang = router?.query?.lang;
@@ -7732,7 +7733,9 @@ export default function Home({
           <h1 className="sr-only">{BRAND_NAME}</h1>
         </header>
         <div className="workspace-layout">
-          <section className="workspace">
+          <section
+            className={`workspace${layoutVariant === "inspiration" ? " workspace--inspiration" : ""}`}
+          >
           <div className={referenceClassName}>
             <div className="reference__header">
               <div className="reference__title">
