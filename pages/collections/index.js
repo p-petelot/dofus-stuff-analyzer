@@ -8,6 +8,12 @@ const COLLECTION_SECTIONS = [
     description:
       "Accédez aux skins concoctés automatiquement : classes aléatoires, palettes harmonisées et équipements assortis.",
   },
+  {
+    href: "/collections/themes",
+    title: "Collection Thèmes",
+    description:
+      "Sélectionnez une couleur et découvrez une grille étendue de propositions avec classes et sexes aléatoires, prêtes à être exportées.",
+  },
 ];
 
 export default function CollectionsLanding() {

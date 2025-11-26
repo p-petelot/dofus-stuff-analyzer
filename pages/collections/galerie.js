@@ -6,6 +6,19 @@ import { useLockBody } from "../../app/components/hooks/useLockBody";
 
 const DEFAULT_COUNT = 12;
 
+const BARBOFUS_BASE_URL = "https://barbofus.com/skinator";
+const BARBOFUS_EQUIPMENT_SLOTS = ["6", "7", "8", "9", "10", "11", "12"];
+const BARBOFUS_SLOT_BY_SLOT = {
+  coiffe: "6",
+  cape: "7",
+  familier: "8",
+  bouclier: "9",
+  ailes: "10",
+  epauliere: "11",
+  costume: "12",
+};
+const BARBOFUS_GENDER_VALUES = { male: 0, female: 1 };
+
 const SLOT_ORDER = ["coiffe", "cape", "bouclier", "costume", "epauliere", "ailes", "familier"];
 
 const SLOT_LABELS = {
@@ -88,8 +101,166 @@ function hexToRgb(hex) {
   };
 }
 
+function hexToNumeric(hex) {
+  const normalized = normalizeHex(hex);
+  if (!normalized) {
+    return null;
+  }
+  const value = parseInt(normalized.slice(1), 16);
+  return Number.isFinite(value) ? value : null;
+}
+
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
+}
+
+const LZ_KEY_STR_URI_SAFE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-$";
+const LZ_BASE_REVERSE_DICTIONARY = Object.create(null);
+
+function getUriSafeCharFromInt(value) {
+  return LZ_KEY_STR_URI_SAFE.charAt(value);
+}
+
+function getUriSafeValueFromChar(character) {
+  if (!character) {
+    return 0;
+  }
+  const cacheKey = LZ_KEY_STR_URI_SAFE;
+  if (!Object.prototype.hasOwnProperty.call(LZ_BASE_REVERSE_DICTIONARY, cacheKey)) {
+    const map = Object.create(null);
+    for (let index = 0; index < LZ_KEY_STR_URI_SAFE.length; index += 1) {
+      map[LZ_KEY_STR_URI_SAFE.charAt(index)] = index;
+    }
+    LZ_BASE_REVERSE_DICTIONARY[cacheKey] = map;
+  }
+  const dictionary = LZ_BASE_REVERSE_DICTIONARY[cacheKey];
+  if (!Object.prototype.hasOwnProperty.call(dictionary, character)) {
+    return 0;
+  }
+  return dictionary[character];
+}
+
+function _compress(uncompressed, bitsPerChar, getCharFromInt) {
+  if (uncompressed == null) {
+    return "";
+  }
+
+  let i;
+  const dictionary = Object.create(null);
+  const dictionaryToCreate = Object.create(null);
+  let c = "";
+  let wc = "";
+  let w = "";
+  let enlargeIn = 2;
+  let dictSize = 3;
+  let numBits = 2;
+  const data = [];
+  let data_val = 0;
+  let data_position = 0;
+
+  const pushBits = (value, bits) => {
+    for (i = 0; i < bits; i += 1) {
+      data_val = (data_val << 1) | (value & 1);
+      if (data_position === bitsPerChar - 1) {
+        data_position = 0;
+        data.push(getCharFromInt(data_val));
+        data_val = 0;
+      } else {
+        data_position += 1;
+      }
+      value >>= 1;
+    }
+  };
+
+  for (let ii = 0; ii < uncompressed.length; ii += 1) {
+    c = uncompressed.charAt(ii);
+    if (!Object.prototype.hasOwnProperty.call(dictionary, c)) {
+      dictionary[c] = dictSize;
+      dictSize += 1;
+      dictionaryToCreate[c] = true;
+    }
+
+    wc = w + c;
+    if (Object.prototype.hasOwnProperty.call(dictionary, wc)) {
+      w = wc;
+    } else {
+      if (Object.prototype.hasOwnProperty.call(dictionaryToCreate, w)) {
+        const code = w.charCodeAt(0);
+        if (code < 256) {
+          pushBits(0, numBits);
+          pushBits(code, 8);
+        } else {
+          pushBits(1, numBits);
+          pushBits(code, 16);
+        }
+        enlargeIn -= 1;
+        if (enlargeIn === 0) {
+          enlargeIn = 1 << numBits;
+          numBits += 1;
+        }
+        delete dictionaryToCreate[w];
+      } else {
+        pushBits(dictionary[w], numBits);
+      }
+
+      enlargeIn -= 1;
+      if (enlargeIn === 0) {
+        enlargeIn = 1 << numBits;
+        numBits += 1;
+      }
+
+      dictionary[wc] = dictSize;
+      dictSize += 1;
+      w = String(c);
+    }
+  }
+
+  if (w !== "") {
+    if (Object.prototype.hasOwnProperty.call(dictionaryToCreate, w)) {
+      const code = w.charCodeAt(0);
+      if (code < 256) {
+        pushBits(0, numBits);
+        pushBits(code, 8);
+      } else {
+        pushBits(1, numBits);
+        pushBits(code, 16);
+      }
+      enlargeIn -= 1;
+      if (enlargeIn === 0) {
+        enlargeIn = 1 << numBits;
+        numBits += 1;
+      }
+      delete dictionaryToCreate[w];
+    } else {
+      pushBits(dictionary[w], numBits);
+    }
+
+    enlargeIn -= 1;
+    if (enlargeIn === 0) {
+      enlargeIn = 1 << numBits;
+      numBits += 1;
+    }
+  }
+
+  pushBits(2, numBits);
+
+  while (true) {
+    data_val <<= 1;
+    if (data_position === bitsPerChar - 1) {
+      data.push(getCharFromInt(data_val));
+      break;
+    }
+    data_position += 1;
+  }
+
+  return data.join("");
+}
+
+function compressToEncodedURIComponent(input) {
+  if (input == null) {
+    return "";
+  }
+  return _compress(input, 6, getUriSafeCharFromInt);
 }
 
 function rgbToHsl({ r, g, b }) {
@@ -254,6 +425,47 @@ function genderLabel(gender) {
 
 function genderSymbol(gender) {
   return gender === "f" ? "♀" : "♂";
+}
+
+function buildBarbofusLinkFromSkin(skin) {
+  const paletteHexes = Array.isArray(skin?.palette?.hex) ? skin.palette.hex.slice(0, 6) : [];
+  const paletteValues = paletteHexes.map((hex) => hexToNumeric(hex)).filter((value) => Number.isFinite(value));
+
+  const equipment = BARBOFUS_EQUIPMENT_SLOTS.reduce((accumulator, slot) => {
+    accumulator[slot] = null;
+    return accumulator;
+  }, {});
+
+  let hasEquipment = false;
+  const items = Array.isArray(skin?.items) ? skin.items : [];
+  items.forEach((item) => {
+    const slot = BARBOFUS_SLOT_BY_SLOT[item?.slot];
+    const ankamaId = Number(item?.ankamaId);
+    if (slot && Number.isFinite(ankamaId)) {
+      equipment[slot] = ankamaId;
+      hasEquipment = true;
+    }
+  });
+
+  if (!hasEquipment || !Number.isFinite(skin?.classId)) {
+    return null;
+  }
+
+  const gender = skin.gender === "f" ? BARBOFUS_GENDER_VALUES.female : BARBOFUS_GENDER_VALUES.male;
+  const payload = {
+    1: gender,
+    2: Math.trunc(skin.classId),
+    4: paletteValues,
+    5: equipment,
+  };
+
+  const faceId = Number(skin?.faceId);
+  if (Number.isFinite(faceId)) {
+    payload[3] = faceId;
+  }
+
+  const encoded = compressToEncodedURIComponent(JSON.stringify(payload));
+  return encoded ? `${BARBOFUS_BASE_URL}?s=${encoded}` : null;
 }
 
 function buildPreviewParams(skin, language) {
@@ -446,6 +658,8 @@ function GalleryModal({ selection, onClose }) {
     return [...items].sort((a, b) => slotSortValue(a.slot) - slotSortValue(b.slot));
   }, [selection]);
 
+  const barbofusLink = useMemo(() => buildBarbofusLinkFromSkin(selection?.skin), [selection]);
+
   const handleCopyColor = useCallback(
     async (value) => {
       const normalized = normalizeHex(value);
@@ -575,6 +789,25 @@ function GalleryModal({ selection, onClose }) {
                   <p className="gallery-modal__empty">Aucun équipement n'a pu être synchronisé.</p>
                 )}
               </div>
+
+              <div className="gallery-modal__actions">
+                {barbofusLink ? (
+                  <a
+                    className="skin-card__cta"
+                    href={barbofusLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Ouvrir dans Barbofus"
+                  >
+                    <span className="skin-card__cta-icon" aria-hidden="true">
+                      <img src="/icons/barbofus.svg" alt="" />
+                    </span>
+                    <span className="sr-only">Ouvrir dans Barbofus</span>
+                  </a>
+                ) : (
+                  <span className="skin-card__cta skin-card__cta--disabled">Barbofus indisponible</span>
+                )}
+              </div>
             </section>
           </div>
           {announcement ? (
@@ -588,7 +821,20 @@ function GalleryModal({ selection, onClose }) {
   );
 }
 
-export default function GalleryCollectionsPage() {
+const DEFAULT_PAGE_CONFIG = {
+  pageTitle: "Galerie IA | KrosPalette",
+  pageDescription:
+    "Découvrez une sélection de skins générés automatiquement grâce aux palettes harmonisées de KrosPalette.",
+  eyebrow: "Galerie IA",
+  heroTitle: "Inspirations colorées générées automatiquement",
+  heroDescription:
+    "Laissez l'algorithme imaginer pour vous des associations d'équipements et de palettes. Cliquez pour explorer les détails et récupérer vos palettes préférées.",
+  colorLabel: "Couleur",
+  defaultCount: DEFAULT_COUNT,
+};
+
+export function GalleryCollectionsView({ config = {} }) {
+  const pageConfig = { ...DEFAULT_PAGE_CONFIG, ...config };
   const { language } = useLanguage();
   const [skins, setSkins] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -618,7 +864,7 @@ export default function GalleryCollectionsPage() {
         const startIndex = append ? totalCountRef.current : 0;
         const params = new URLSearchParams();
         params.set("lang", language);
-        params.set("count", String(DEFAULT_COUNT));
+        params.set("count", String(pageConfig.defaultCount ?? DEFAULT_COUNT));
         params.set("offset", String(startIndex));
         if (referenceColor) {
           params.set("color", referenceColor);
@@ -656,7 +902,7 @@ export default function GalleryCollectionsPage() {
         inFlightRef.current = false;
       }
     },
-    [language, referenceColor],
+    [language, referenceColor, pageConfig.defaultCount],
   );
 
   useEffect(() => {
@@ -793,11 +1039,8 @@ export default function GalleryCollectionsPage() {
   return (
     <>
       <Head>
-        <title>Galerie IA | KrosPalette</title>
-        <meta
-          name="description"
-          content="Découvrez une sélection de skins générés automatiquement grâce aux palettes harmonisées de KrosPalette."
-        />
+        <title>{pageConfig.pageTitle}</title>
+        <meta name="description" content={pageConfig.pageDescription} />
       </Head>
       <main className="page gallery-page">
         <div className="gallery-shell">
@@ -805,16 +1048,13 @@ export default function GalleryCollectionsPage() {
             <Link href="/collections" className="gallery-breadcrumb">
               ← Collections
             </Link>
-            <h1>Galerie</h1>
-            <p>
-              Explorez des combinaisons de couleurs et d'équipements sélectionnés automatiquement pour correspondre à une
-              palette harmonieuse. Cliquez sur un skin pour découvrir les détails de sa composition.
-            </p>
+            <h1>{pageConfig.heroTitle}</h1>
+            <p>{pageConfig.heroDescription}</p>
             <div className="gallery-actions">
               <div className="gallery-color-picker" role="group" aria-label="Référence couleur">
                 <div className="gallery-color-picker__header">
                   <span className="gallery-color-picker__label">Référence créative</span>
-                  <span className="gallery-color-picker__hint">Couleur</span>
+                  <span className="gallery-color-picker__hint">{pageConfig.colorLabel}</span>
                 </div>
                 <div className="gallery-color-picker__controls">
                   <label className="gallery-color-picker__input">
@@ -862,4 +1102,8 @@ export default function GalleryCollectionsPage() {
       <GalleryModal selection={selection} onClose={handleCloseModal} />
     </>
   );
+}
+
+export default function GalleryCollectionsPage() {
+  return <GalleryCollectionsView />;
 }
