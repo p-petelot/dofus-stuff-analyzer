@@ -13,7 +13,14 @@ export default function InspirationPage(props) {
           content="Trouve de nouvelles inspirations de skins à partir d'une couleur."
         />
       </Head>
-      <Home {...props} defaultInputMode="color" />
+      <Home
+        {...props}
+        defaultInputMode="color"
+        allowedInputModes={["color"]}
+        identitySelectionMode="random"
+        proposalLayout="grid"
+        proposalCount={12}
+      />
     </>
   );
 }

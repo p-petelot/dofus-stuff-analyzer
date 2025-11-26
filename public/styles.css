@@ -2018,6 +2018,52 @@ a {
   align-self: start;
 }
 
+.identity-card--summary {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.identity-card__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.identity-card__summary h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.identity-card__summary-active {
+  font-weight: 700;
+  color: var(--accent-contrast);
+}
+
+.identity-card__reroll {
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.9), rgba(74, 222, 128, 0.9));
+  border: none;
+  color: #0b1324;
+  font-weight: 700;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 24px -16px rgba(34, 197, 94, 0.8);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.identity-card__reroll:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.identity-card__reroll:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 32px -18px rgba(34, 197, 94, 0.9);
+}
+
 @media (min-width: 960px) {
   .identity-card {
     min-width: 400px;
@@ -2972,6 +3018,26 @@ a {
 .skin-carousel__track {
   display: flex;
   transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.skin-carousel__viewport--grid {
+  overflow: visible;
+}
+
+.skin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 18px;
+  width: 100%;
+}
+
+.skin-grid .skin-card {
+  flex: initial;
+  height: 100%;
+}
+
+.skin-grid .skin-card__body {
+  height: 100%;
 }
 
 .skin-card {

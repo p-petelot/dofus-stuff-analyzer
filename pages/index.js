@@ -1434,7 +1434,13 @@ const TONE_CONFIDENCE_WEIGHT = 0.18;
 const MIN_ALPHA_WEIGHT = 0.05;
 const MAX_RECOMMENDATIONS = 12;
 const PANEL_ITEMS_LIMIT = 5;
-const PROPOSAL_COUNT = 5;
+const DEFAULT_PROPOSAL_COUNT = 5;
+const MAX_PROPOSAL_COUNT = 24;
+const INPUT_MODE_LABEL_KEYS = {
+  image: "workspace.mode.image",
+  color: "workspace.mode.color",
+  items: "workspace.mode.items",
+};
 const HASH_CONFIDENCE_DISTANCE = 0.32;
 const HASH_CONFIDENCE_WEIGHT = 0.18;
 const HASH_STRONG_THRESHOLD = 0.12;
@@ -3774,17 +3780,27 @@ async function enrichItemsWithPalettes(items, shouldCancel) {
   return enriched;
 }
 
-function sanitizeInputMode(value) {
-  if (value === "color" || value === "items" || value === "image") {
+function sanitizeInputMode(value, allowedModes = Object.keys(INPUT_MODE_LABEL_KEYS)) {
+  const allowed = Array.isArray(allowedModes)
+    ? allowedModes.filter((mode) => mode in INPUT_MODE_LABEL_KEYS)
+    : Object.keys(INPUT_MODE_LABEL_KEYS);
+  if (allowed.length === 0) {
+    return "image";
+  }
+  if (allowed.includes(value)) {
     return value;
   }
-  return "image";
+  return allowed[0];
 }
 
 export default function Home({
   initialBreeds = [],
   previewBackgrounds: initialPreviewBackgrounds = [],
   defaultInputMode = "image",
+  allowedInputModes = Object.keys(INPUT_MODE_LABEL_KEYS),
+  identitySelectionMode = "manual",
+  proposalLayout = "carousel",
+  proposalCount: requestedProposalCount = DEFAULT_PROPOSAL_COUNT,
 }) {
   const router = useRouter();
   const routerLang = router?.query?.lang;
@@ -3821,6 +3837,14 @@ export default function Home({
   useEffect(() => {
     setActiveLocalizationPriority(language);
   }, [language]);
+
+  useEffect(() => {
+    setInputMode((previous) => sanitizeInputMode(previous, normalizedInputModes));
+  }, [normalizedInputModes]);
+
+  useEffect(() => {
+    setInputMode(normalizedDefaultInputMode);
+  }, [normalizedDefaultInputMode]);
 
   useEffect(() => {
     languageRef.current = language;
@@ -3983,7 +4007,19 @@ export default function Home({
   const [activeItemSlot, setActiveItemSlot] = useState(null);
   const [itemSearchQuery, setItemSearchQuery] = useState("");
   const [analysisProgress, setAnalysisProgress] = useState(0);
-  const [inputMode, setInputMode] = useState(sanitizeInputMode(defaultInputMode));
+  const normalizedInputModes = useMemo(() => {
+    const options = Array.isArray(allowedInputModes)
+      ? allowedInputModes.filter((mode) => mode in INPUT_MODE_LABEL_KEYS)
+      : Object.keys(INPUT_MODE_LABEL_KEYS);
+    return options.length ? options : Object.keys(INPUT_MODE_LABEL_KEYS);
+  }, [allowedInputModes]);
+
+  const normalizedDefaultInputMode = useMemo(
+    () => sanitizeInputMode(defaultInputMode, normalizedInputModes),
+    [defaultInputMode, normalizedInputModes]
+  );
+
+  const [inputMode, setInputMode] = useState(normalizedDefaultInputMode);
   const [selectedColor, setSelectedColor] = useState(null);
   const [activeProposal, setActiveProposal] = useState(0);
   const [lookPreviews, setLookPreviews] = useState({});
@@ -4041,6 +4077,15 @@ export default function Home({
   const [breedsError, setBreedsError] = useState(null);
   const [selectedBreedId, setSelectedBreedId] = useState(null);
   const [selectedGender, setSelectedGender] = useState(BARBOFUS_DEFAULT_GENDER_KEY);
+  const isIdentityRandom = identitySelectionMode === "random";
+  const isGridLayout = proposalLayout === "grid";
+  const proposalLimit = Math.max(
+    1,
+    Math.min(
+      MAX_PROPOSAL_COUNT,
+      Math.round(requestedProposalCount || DEFAULT_PROPOSAL_COUNT)
+    )
+  );
 
   useEffect(() => {
     if (!modelResult || !modelResult.prediction) {
@@ -4451,12 +4496,12 @@ export default function Home({
   );
 
   const analysisModes = useMemo(
-    () => [
-      { key: "image", labelKey: "workspace.mode.image" },
-      { key: "color", labelKey: "workspace.mode.color" },
-      { key: "items", labelKey: "workspace.mode.items" },
-    ],
-    []
+    () =>
+      normalizedInputModes.map((mode) => ({
+        key: mode,
+        labelKey: INPUT_MODE_LABEL_KEYS[mode],
+      })),
+    [normalizedInputModes]
   );
 
   const handleFamilierFilterToggle = useCallback((key) => {
@@ -4553,6 +4598,40 @@ export default function Home({
     const value = event?.target?.value ?? "";
     setItemSearchQuery(value);
   }, []);
+
+  const rerollIdentity = useCallback(() => {
+    if (!isIdentityRandom || !Array.isArray(breeds) || breeds.length === 0) {
+      return;
+    }
+
+    const randomBreed = breeds[Math.floor(Math.random() * breeds.length)];
+    const randomGender = Math.random() > 0.5 ? "male" : "female";
+
+    if (Number.isFinite(randomBreed?.id)) {
+      setSelectedBreedId(randomBreed.id);
+    }
+    setSelectedGender(randomGender);
+  }, [breeds, isIdentityRandom]);
+
+  useEffect(() => {
+    if (!isIdentityRandom) {
+      return;
+    }
+    if (!Array.isArray(breeds) || breeds.length === 0) {
+      return;
+    }
+    if (Number.isFinite(selectedBreedId)) {
+      return;
+    }
+    rerollIdentity();
+  }, [breeds, isIdentityRandom, rerollIdentity, selectedBreedId]);
+
+  useEffect(() => {
+    if (!isIdentityRandom || !colors.length) {
+      return;
+    }
+    rerollIdentity();
+  }, [colors, isIdentityRandom, rerollIdentity]);
 
   const activeBreed = useMemo(() => {
     if (!Array.isArray(breeds) || breeds.length === 0) {
@@ -5233,7 +5312,7 @@ export default function Home({
           return;
         }
 
-        const limit = Math.min(PROPOSAL_COUNT, pool.length);
+        const limit = Math.min(proposalLimit, pool.length);
         const { indexes, changed: normalizedChanged } = normalizeSelection(previous?.[type], limit, pool.length);
         next[type] = indexes;
         if (normalizedChanged) {
@@ -5269,7 +5348,7 @@ export default function Home({
       ...ITEM_TYPES.map((type) => (recommendations[type]?.length ?? 0))
     );
 
-    const total = Math.min(PROPOSAL_COUNT, maxLength || 0);
+    const total = Math.min(proposalLimit, maxLength || 0);
     const combos = [];
     const subtitleParts = [];
     if (activeBreed?.name) {
@@ -5715,6 +5794,14 @@ export default function Home({
       outline: `2px solid rgba(${r}, ${g}, ${b}, 0.38)`,
     };
   }, [activeProposalPalette, colors]);
+
+  const viewportClasses = `skin-carousel__viewport${
+    isGridLayout ? " skin-carousel__viewport--grid" : ""
+  }`;
+  const trackClasses = `skin-carousel__track${isGridLayout ? " skin-grid" : ""}`;
+  const trackStyle = isGridLayout
+    ? undefined
+    : { transform: `translateX(-${safeActiveProposalIndex * 100}%)` };
 
   useEffect(() => {
     if (theme === THEME_KEYS.INTELLIGENT) {
@@ -6944,7 +7031,7 @@ export default function Home({
       let nextSelection = null;
 
       if (Number.isFinite(proposalIndex)) {
-        const limit = Math.min(PROPOSAL_COUNT, pool.length);
+        const limit = Math.min(proposalLimit, pool.length);
         if (proposalIndex >= 0 && proposalIndex < limit) {
           setProposalItemIndexes((previous = {}) => {
             const prevIndexes = Array.isArray(previous[type]) ? previous[type] : [];
@@ -7985,128 +8072,154 @@ export default function Home({
           />
 
           <div className="suggestions" style={suggestionsAccentStyle}>
-            <div
-              className="identity-card suggestions__identity-card"
-              role="group"
-              aria-label={t("aria.identityCard")}
-            >
-              {directionAnnouncement ? (
-                <span className="sr-only" aria-live="polite">
-                  {directionAnnouncement}
-                </span>
-              ) : null}
-              <div className="identity-card__selectors">
-                <div
-                  className="identity-card__gender-wrapper"
-                  role="group"
-                  aria-label={t("aria.genderSection")}
+            {directionAnnouncement ? (
+              <span className="sr-only" aria-live="polite">
+                {directionAnnouncement}
+              </span>
+            ) : null}
+            {isIdentityRandom ? (
+              <div
+                className="identity-card suggestions__identity-card identity-card--summary"
+                role="status"
+                aria-live="polite"
+              >
+                <div className="identity-card__summary">
+                  <h3>Inspiration aléatoire</h3>
+                  <p>Classe et sexe sont choisis automatiquement pour chaque skin proposé.</p>
+                  {activeBreed ? (
+                    <p className="identity-card__summary-active">
+                      {activeBreed.name} · {activeGenderLabel}
+                    </p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  className="identity-card__reroll"
+                  onClick={rerollIdentity}
+                  disabled={breedsLoading || !breeds.length}
                 >
+                  Relancer l'identité
+                </button>
+              </div>
+            ) : (
+              <div
+                className="identity-card suggestions__identity-card"
+                role="group"
+                aria-label={t("aria.identityCard")}
+              >
+                <div className="identity-card__selectors">
                   <div
-                    className={`identity-card__gender${selectedGender === "female" ? " is-female" : ""}`}
-                    role="radiogroup"
-                    aria-label={t("aria.genderGroup")}
+                    className="identity-card__gender-wrapper"
+                    role="group"
+                    aria-label={t("aria.genderSection")}
                   >
-                    <button
-                      type="button"
-                      className={`identity-card__gender-option${selectedGender === "male" ? " is-active" : ""}`}
-                      onClick={() => setSelectedGender("male")}
-                      role="radio"
-                      aria-checked={selectedGender === "male"}
+                    <div
+                      className={`identity-card__gender${selectedGender === "female" ? " is-female" : ""}`}
+                      role="radiogroup"
+                      aria-label={t("aria.genderGroup")}
                     >
-                      <span className="identity-card__gender-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path
-                            d="M15 3h6v6m0-6-7.5 7.5m1.5-1.5a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"
-                            stroke="currentColor"
-                            strokeWidth="1.6"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </span>
-                      <span className="identity-card__gender-text">{t("identity.gender.male")}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`identity-card__gender-option${selectedGender === "female" ? " is-active" : ""}`}
-                      onClick={() => setSelectedGender("female")}
-                      role="radio"
-                      aria-checked={selectedGender === "female"}
-                    >
-                      <span className="identity-card__gender-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path
-                            d="M12 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm0 12v8m-4-4h8"
-                            stroke="currentColor"
-                            strokeWidth="1.6"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </span>
-                      <span className="identity-card__gender-text">{t("identity.gender.female")}</span>
-                    </button>
+                      <button
+                        type="button"
+                        className={`identity-card__gender-option${selectedGender === "male" ? " is-active" : ""}`}
+                        onClick={() => setSelectedGender("male")}
+                        role="radio"
+                        aria-checked={selectedGender === "male"}
+                      >
+                        <span className="identity-card__gender-icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                              d="M15 3h6v6m0-6-7.5 7.5m1.5-1.5a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"
+                              stroke="currentColor"
+                              strokeWidth="1.6"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </span>
+                        <span className="identity-card__gender-text">{t("identity.gender.male")}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`identity-card__gender-option${selectedGender === "female" ? " is-active" : ""}`}
+                        onClick={() => setSelectedGender("female")}
+                        role="radio"
+                        aria-checked={selectedGender === "female"}
+                      >
+                        <span className="identity-card__gender-icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                              d="M12 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm0 12v8m-4-4h8"
+                              stroke="currentColor"
+                              strokeWidth="1.6"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </span>
+                        <span className="identity-card__gender-text">{t("identity.gender.female")}</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div
+                    className="identity-card__class-wrapper"
+                    role="group"
+                    aria-label={t("aria.classSection")}
+                  >
+                    {breedsError ? (
+                      <div className="identity-card__status identity-card__status--error" role="alert">
+                        <span>{breedsError}</span>
+                        <button
+                          type="button"
+                          className="identity-card__retry"
+                          onClick={handleRetryBreeds}
+                          disabled={breedsLoading}
+                        >
+                          {t("actions.retry")}
+                        </button>
+                      </div>
+                    ) : null}
+                    {breedsLoading ? (
+                      <div className="identity-card__status" role="status" aria-live="polite">
+                        {t("identity.class.loading")}
+                      </div>
+                    ) : null}
+                    <div className="identity-card__grid" role="radiogroup" aria-label={t("aria.classGroup")}>
+                    {breeds.map((breed) => {
+                      if (!Number.isFinite(breed.id)) {
+                        return null;
+                      }
+                      const isActive = breed.id === selectedBreedId;
+                      const fallbackLetter = breed.name?.charAt(0)?.toUpperCase() ?? "?";
+                      const breedLabel = breed.name ?? t("identity.class.fallback", { id: breed.id });
+
+                      return (
+                        <button
+                          key={breed.slug ?? `breed-${breed.id}`}
+                          type="button"
+                          className={`identity-card__chip${isActive ? " is-active" : ""}`}
+                          onClick={() => setSelectedBreedId(breed.id)}
+                          role="radio"
+                          aria-checked={isActive}
+                          aria-label={t("identity.class.choose", { name: breedLabel })}
+                          title={breedLabel}
+                        >
+                          <span className="identity-card__chip-icon">
+                            {breed.icon ? (
+                              <img src={breed.icon} alt="" loading="lazy" />
+                            ) : (
+                              <span className="identity-card__chip-letter" aria-hidden="true">
+                                {fallbackLetter}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      );
+                    })}
+                    </div>
                   </div>
                 </div>
-                <div
-                  className="identity-card__class-wrapper"
-                  role="group"
-                  aria-label={t("aria.classSection")}
-                >
-                  {breedsError ? (
-                    <div className="identity-card__status identity-card__status--error" role="alert">
-                      <span>{breedsError}</span>
-                      <button
-                        type="button"
-                        className="identity-card__retry"
-                        onClick={handleRetryBreeds}
-                        disabled={breedsLoading}
-                      >
-                        {t("actions.retry")}
-                      </button>
-                    </div>
-                  ) : null}
-                  {breedsLoading ? (
-                    <div className="identity-card__status" role="status" aria-live="polite">
-                      {t("identity.class.loading")}
-                    </div>
-                  ) : null}
-                  <div className="identity-card__grid" role="radiogroup" aria-label={t("aria.classGroup")}>
-                  {breeds.map((breed) => {
-                    if (!Number.isFinite(breed.id)) {
-                      return null;
-                    }
-                    const isActive = breed.id === selectedBreedId;
-                    const fallbackLetter = breed.name?.charAt(0)?.toUpperCase() ?? "?";
-                    const breedLabel = breed.name ?? t("identity.class.fallback", { id: breed.id });
-
-                    return (
-                      <button
-                        key={breed.slug ?? `breed-${breed.id}`}
-                        type="button"
-                        className={`identity-card__chip${isActive ? " is-active" : ""}`}
-                        onClick={() => setSelectedBreedId(breed.id)}
-                        role="radio"
-                        aria-checked={isActive}
-                        aria-label={t("identity.class.choose", { name: breedLabel })}
-                        title={breedLabel}
-                      >
-                        <span className="identity-card__chip-icon">
-                          {breed.icon ? (
-                            <img src={breed.icon} alt="" loading="lazy" />
-                          ) : (
-                            <span className="identity-card__chip-letter" aria-hidden="true">
-                              {fallbackLetter}
-                            </span>
-                          )}
-                        </span>
-                      </button>
-                    );
-                  })}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
+              </div>
+            )}
           {itemsLoading || (itemsError && !showDetailedMatches) ? (
             <div className="suggestions__header">
               {itemsLoading ? (
@@ -8152,11 +8265,8 @@ export default function Home({
                   <div className="suggestions__main" aria-live="polite">
                     <div className="skin-carousel__shell">
                       <div className="skin-carousel">
-                        <div className="skin-carousel__viewport">
-                          <div
-                            className="skin-carousel__track"
-                            style={{ transform: `translateX(-${safeActiveProposalIndex * 100}%)` }}
-                          >
+                        <div className={viewportClasses}>
+                          <div className={trackClasses} style={trackStyle}>
                             {proposals.map((proposal) => {
                               const primaryColor = proposal.palette[0] ?? "#1f2937";
                               const canvasBackground = buildGradientFromHex(primaryColor);
@@ -8714,75 +8824,77 @@ export default function Home({
                           })}
                         </div>
                       </div>
-                      <div className="skin-carousel__pagination">
-                        <button
-                          type="button"
-                          className="skin-carousel__nav"
-                          onClick={handlePrevProposal}
-                          disabled={proposalCount <= 1}
-                          aria-label={t("aria.carouselPrevious")}
-                        >
-                          <img
-                            src="/icons/arrow-left.svg"
-                            alt=""
-                            className="skin-carousel__nav-icon"
-                            aria-hidden="true"
-                          />
-                        </button>
-                        <div className="skin-carousel__indicator">
-                          <div className="skin-carousel__dots" role="tablist" aria-label={t("aria.carouselDots")}>
-                            {proposals.map((proposal, index) => (
-                              <button
-                                key={`${proposal.id}-dot`}
-                                type="button"
-                                className={`skin-carousel__dot${index === safeActiveProposalIndex ? " is-active" : ""}`}
-                                onClick={() => handleSelectProposal(index)}
-                                aria-label={t("aria.carouselDotSelect", { index: index + 1 })}
-                                aria-pressed={index === safeActiveProposalIndex}
+                        {!isGridLayout ? (
+                          <div className="skin-carousel__pagination">
+                            <button
+                              type="button"
+                              className="skin-carousel__nav"
+                              onClick={handlePrevProposal}
+                              disabled={proposalCount <= 1}
+                              aria-label={t("aria.carouselPrevious")}
+                            >
+                              <img
+                                src="/icons/arrow-left.svg"
+                                alt=""
+                                className="skin-carousel__nav-icon"
+                                aria-hidden="true"
                               />
-                            ))}
-                          </div>
-                          {(activeProposalSubtitle || proposalCount > 0) ? (
-                            <div className="skin-carousel__legend" role="presentation">
-                              {activeProposalSubtitle ? (
-                                <span className="skin-carousel__subtitle">
-                                  {activeProposalClassIcon ? (
-                                    <span className="skin-carousel__class-icon" aria-hidden="true">
-                                      <img src={activeProposalClassIcon} alt="" loading="lazy" />
+                            </button>
+                            <div className="skin-carousel__indicator">
+                              <div className="skin-carousel__dots" role="tablist" aria-label={t("aria.carouselDots")}>
+                                {proposals.map((proposal, index) => (
+                                  <button
+                                    key={`${proposal.id}-dot`}
+                                    type="button"
+                                    className={`skin-carousel__dot${index === safeActiveProposalIndex ? " is-active" : ""}`}
+                                    onClick={() => handleSelectProposal(index)}
+                                    aria-label={t("aria.carouselDotSelect", { index: index + 1 })}
+                                    aria-pressed={index === safeActiveProposalIndex}
+                                  />
+                                ))}
+                              </div>
+                              {(activeProposalSubtitle || proposalCount > 0) ? (
+                                <div className="skin-carousel__legend" role="presentation">
+                                  {activeProposalSubtitle ? (
+                                    <span className="skin-carousel__subtitle">
+                                      {activeProposalClassIcon ? (
+                                        <span className="skin-carousel__class-icon" aria-hidden="true">
+                                          <img src={activeProposalClassIcon} alt="" loading="lazy" />
+                                        </span>
+                                      ) : null}
+                                      <span>{activeProposalSubtitle}</span>
                                     </span>
                                   ) : null}
-                                  <span>{activeProposalSubtitle}</span>
-                                </span>
-                              ) : null}
-                              {activeProposalSubtitle && proposalCount > 0 ? (
-                                <span className="skin-carousel__divider" aria-hidden="true" />
-                              ) : null}
-                              {proposalCount > 0 ? (
-                                <span className="skin-carousel__count">
-                                  {t("suggestions.carousel.skinCount", {
-                                    current: safeActiveProposalIndex + 1,
-                                    total: proposalCount,
-                                  })}
-                                </span>
+                                  {activeProposalSubtitle && proposalCount > 0 ? (
+                                    <span className="skin-carousel__divider" aria-hidden="true" />
+                                  ) : null}
+                                  {proposalCount > 0 ? (
+                                    <span className="skin-carousel__count">
+                                      {t("suggestions.carousel.skinCount", {
+                                        current: safeActiveProposalIndex + 1,
+                                        total: proposalCount,
+                                      })}
+                                    </span>
+                                  ) : null}
+                                </div>
                               ) : null}
                             </div>
-                          ) : null}
-                        </div>
-                        <button
-                          type="button"
-                          className="skin-carousel__nav"
-                          onClick={handleNextProposal}
-                          disabled={proposalCount <= 1}
-                          aria-label={t("aria.carouselNext")}
-                        >
-                          <img
-                            src="/icons/arrow-right.svg"
-                            alt=""
-                            className="skin-carousel__nav-icon"
-                            aria-hidden="true"
-                          />
-                        </button>
-                      </div>
+                            <button
+                              type="button"
+                              className="skin-carousel__nav"
+                              onClick={handleNextProposal}
+                              disabled={proposalCount <= 1}
+                              aria-label={t("aria.carouselNext")}
+                            >
+                              <img
+                                src="/icons/arrow-right.svg"
+                                alt=""
+                                className="skin-carousel__nav-icon"
+                                aria-hidden="true"
+                              />
+                            </button>
+                          </div>
+                        ) : null}
                     </div>
                     <button
                       type="button"
