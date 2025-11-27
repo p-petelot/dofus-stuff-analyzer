@@ -7873,7 +7873,7 @@ export default function Home({
   const itemFiltersSection = (
     <div className="filters-panel__section" role="group" aria-label={t("aria.itemFlagSection")}>
       <span className="filters-panel__section-title">{t("identity.filters.sectionTitle")}</span>
-      <div className="companion-toggle companion-toggle--item-flags" role="group" aria-label={t("aria.itemFlagFilter")}>\
+      <div className="companion-toggle companion-toggle--item-flags" role="group" aria-label={t("aria.itemFlagFilter")}>
         {ITEM_FLAG_FILTERS.map((filter) => {
           const isActive = itemFlagFilters[filter.key] !== false;
           const label = t(filter.labelKey);
@@ -7916,7 +7916,7 @@ export default function Home({
   const optionalItemsSection = (
     <div className="filters-panel__section" role="group" aria-label={t("aria.itemSlotSection")}>
       <span className="filters-panel__section-title">{t("identity.filters.optionalTitle")}</span>
-      <div className="item-slot-toggle" role="group" aria-label={t("aria.itemSlotFilter")}>\
+      <div className="item-slot-toggle" role="group" aria-label={t("aria.itemSlotFilter")}>
         {OPTIONAL_ITEM_FILTERS.map((filter) => {
           const label = filter.labelKey ? t(filter.labelKey) : filter.key;
           const isActive = itemSlotFilters[filter.key] !== false;
