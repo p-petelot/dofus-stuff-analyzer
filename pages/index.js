@@ -8557,7 +8557,7 @@ export default function Home({
             )}
           </div>
 
-          {renderPaletteSection()}
+          {!isInspirationLayout ? renderPaletteSection() : null}
 
           {isInspirationLayout ? <section className="inspiration-filters-shell">{inspirationFiltersPanel}</section> : null}
 
