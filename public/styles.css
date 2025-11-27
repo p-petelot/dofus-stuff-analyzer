@@ -1645,7 +1645,7 @@ a {
 
 @media (min-width: 960px) {
   .workspace--inspiration {
-    grid-template-columns: minmax(340px, 1.05fr) minmax(260px, 0.85fr) minmax(420px, 1.2fr);
+    grid-template-columns: minmax(400px, 1.2fr) minmax(200px, 0.6fr) minmax(480px, 1.35fr);
     grid-template-rows: auto 1fr;
     grid-template-areas:
       "reference palette filters"
@@ -1657,8 +1657,8 @@ a {
 
 @media (min-width: 1280px) {
   .workspace--inspiration {
-    grid-template-columns: minmax(380px, 1.05fr) minmax(300px, 0.85fr) minmax(480px, 1.25fr);
-    column-gap: 20px;
+    grid-template-columns: minmax(440px, 1.25fr) minmax(220px, 0.55fr) minmax(540px, 1.35fr);
+    column-gap: 22px;
   }
 }
 
@@ -1673,8 +1673,28 @@ a {
   align-items: start;
 }
 
+@media (min-width: 960px) {
+  .inspiration-top-panels__filters-grid {
+    grid-template-columns: minmax(320px, 0.9fr) minmax(460px, 1.1fr);
+  }
+}
+
 .inspiration-filters {
   max-height: none;
+}
+
+.inspiration-filters__row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  align-items: stretch;
+}
+
+@media (min-width: 960px) {
+  .inspiration-filters__row {
+    grid-template-columns: minmax(340px, 1.1fr) minmax(260px, 0.9fr);
+    align-items: start;
+  }
 }
 
 .inspiration-companion {

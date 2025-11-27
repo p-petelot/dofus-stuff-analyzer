@@ -8141,8 +8141,10 @@ export default function Home({
         role="group"
         aria-label={t("aria.filtersCard")}
       >
-        {renderFiltersGroup(false)}
-        {renderPreviewGroup()}
+        <div className="inspiration-filters__row">
+          {renderFiltersGroup(false)}
+          {renderPreviewGroup()}
+        </div>
       </div>
     </div>
   );
