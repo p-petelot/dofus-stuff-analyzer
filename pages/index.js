@@ -5381,6 +5381,28 @@ export default function Home({
     });
   }, [recommendations]);
 
+  const inspirationIdentities = useMemo(() => {
+    if (!isInspirationLayout || !Array.isArray(breeds) || breeds.length === 0) {
+      return null;
+    }
+
+    const availableBreeds = breeds.filter((breed) => Number.isFinite(breed?.id));
+
+    if (!availableBreeds.length) {
+      return null;
+    }
+
+    return Array.from({ length: proposalLimit }, () => {
+      const randomBreed = availableBreeds[Math.floor(Math.random() * availableBreeds.length)];
+      const randomGender = Math.random() > 0.5 ? "female" : "male";
+
+      return {
+        breedId: randomBreed.id,
+        gender: randomGender,
+      };
+    });
+  }, [breeds, colors, isInspirationLayout, proposalLimit]);
+
   const proposals = useMemo(() => {
     if (!recommendations || !Number.isFinite(activeClassId)) {
       return [];
@@ -5674,28 +5696,6 @@ export default function Home({
     () => (modalProposalId ? proposals.findIndex((proposal) => proposal.id === modalProposalId) : -1),
     [modalProposalId, proposals]
   );
-
-  const inspirationIdentities = useMemo(() => {
-    if (!isInspirationLayout || !Array.isArray(breeds) || breeds.length === 0) {
-      return null;
-    }
-
-    const availableBreeds = breeds.filter((breed) => Number.isFinite(breed?.id));
-
-    if (!availableBreeds.length) {
-      return null;
-    }
-
-    return Array.from({ length: proposalLimit }, () => {
-      const randomBreed = availableBreeds[Math.floor(Math.random() * availableBreeds.length)];
-      const randomGender = Math.random() > 0.5 ? "female" : "male";
-
-      return {
-        breedId: randomBreed.id,
-        gender: randomGender,
-      };
-    });
-  }, [breeds, colors, isInspirationLayout, proposalLimit]);
 
   useEffect(() => {
     if (!modalProposalId) {
