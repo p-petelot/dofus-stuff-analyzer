@@ -10,14 +10,13 @@ const INSPIRATION_COLOR_SWATCHES = [
   "#FACC15",
   "#F368E0",
   "#CC8E35",
-  "#2563EB",
   "#0EA5E9",
-  "#D946EF",
-  "#14B8A6",
-  "#FBBF24",
-  "#A855F7",
-  "#22C55E",
-  "#F472B6",
+  "#EC4899",
+  "#78350F",
+  "#64748B",
+  "#0F766E",
+  "#4C1D95",
+  "#A16207",
 ];
 
 export { getStaticProps };
@@ -38,7 +37,7 @@ export default function InspirationPage(props) {
         allowedInputModes={["color"]}
         identitySelectionMode="random"
         proposalLayout="grid"
-        proposalCount={24}
+        proposalCount={48}
         colorSuggestions={INSPIRATION_COLOR_SWATCHES}
         showModelPrediction={false}
         showIdentityHint={false}

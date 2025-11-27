@@ -4065,6 +4065,7 @@ export default function Home({
     remainder: 0,
   });
   const isUnmountedRef = useRef(false);
+  const modalTransitionTimerRef = useRef(null);
   const [lookAnimation, setLookAnimation] = useState(DEFAULT_LOOK_ANIMATION);
   const [lookDirection, setLookDirection] = useState(DEFAULT_LOOK_DIRECTION);
   const [downloadingPreviewId, setDownloadingPreviewId] = useState(null);
@@ -4112,6 +4113,7 @@ export default function Home({
   const isGridLayout = proposalLayout === "grid";
   const isInspirationLayout = layoutVariant === "inspiration";
   const [modalProposalId, setModalProposalId] = useState(null);
+  const [modalTransitionDirection, setModalTransitionDirection] = useState(null);
   const proposalLimit = Math.max(
     1,
     Math.min(
@@ -5379,6 +5381,28 @@ export default function Home({
     });
   }, [recommendations]);
 
+  const inspirationIdentities = useMemo(() => {
+    if (!isInspirationLayout || !Array.isArray(breeds) || breeds.length === 0) {
+      return null;
+    }
+
+    const availableBreeds = breeds.filter((breed) => Number.isFinite(breed?.id));
+
+    if (!availableBreeds.length) {
+      return null;
+    }
+
+    return Array.from({ length: proposalLimit }, () => {
+      const randomBreed = availableBreeds[Math.floor(Math.random() * availableBreeds.length)];
+      const randomGender = Math.random() > 0.5 ? "female" : "male";
+
+      return {
+        breedId: randomBreed.id,
+        gender: randomGender,
+      };
+    });
+  }, [breeds, colors, isInspirationLayout, proposalLimit]);
+
   const proposals = useMemo(() => {
     if (!recommendations || !Number.isFinite(activeClassId)) {
       return [];
@@ -5391,14 +5415,6 @@ export default function Home({
 
     const total = Math.min(proposalLimit, maxLength || 0);
     const combos = [];
-    const subtitleParts = [];
-    if (activeBreed?.name) {
-      subtitleParts.push(activeBreed.name);
-    }
-    if (activeGenderLabel) {
-      subtitleParts.push(activeGenderLabel);
-    }
-    const sharedSubtitle = subtitleParts.join(" · ");
 
     for (let index = 0; index < total; index += 1) {
       const items = ITEM_TYPES.map((type) => {
@@ -5471,6 +5487,49 @@ export default function Home({
         continue;
       }
 
+      const inspirationIdentity = inspirationIdentities?.[index] ?? null;
+      const inspirationBreed = inspirationIdentity
+        ? breeds.find((breed) => Number.isFinite(breed?.id) && breed.id === inspirationIdentity.breedId)
+        : null;
+      const proposalBreed = isInspirationLayout ? inspirationBreed ?? activeBreed : activeBreed;
+      const proposalGender =
+        isInspirationLayout && inspirationIdentity?.gender ? inspirationIdentity.gender : selectedGender;
+      const proposalGenderLabel =
+        proposalGender === "female" ? t("identity.gender.female") : t("identity.gender.male");
+      const proposalGenderFallback =
+        proposalGender === "male" ? BARBOFUS_DEFAULT_BREED.male : BARBOFUS_DEFAULT_BREED.female;
+      const proposalGenderConfig = (() => {
+        if (proposalBreed) {
+          return proposalGender === "male"
+            ? proposalBreed.male ?? proposalGenderFallback
+            : proposalBreed.female ?? proposalGenderFallback;
+        }
+
+        if (activeGenderConfig) {
+          return activeGenderConfig;
+        }
+
+        return proposalGenderFallback;
+      })();
+      const proposalClassId = Number.isFinite(proposalBreed?.id) ? proposalBreed.id : activeClassId;
+      const proposalClassDefaults = proposalGenderConfig?.colors?.numeric ?? activeClassDefaults ?? [];
+      const proposalFallbackFaceId = Number.isFinite(proposalGenderConfig?.faceId)
+        ? proposalGenderConfig.faceId
+        : Number.isFinite(proposalGenderConfig?.lookId)
+        ? proposalGenderConfig.lookId
+        : BARBOFUS_DEFAULTS.faceId;
+      const lookFaceId = getBarbofusFaceId(proposalClassId, proposalGender, proposalFallbackFaceId);
+      const lookGenderValue = BARBOFUS_GENDER_VALUES[proposalGender] ?? BARBOFUS_DEFAULTS.gender;
+      const lookGenderCode = lookGenderValue === BARBOFUS_GENDER_VALUES.female ? "f" : "m";
+      const proposalSubtitleParts = [];
+      if (proposalBreed?.name) {
+        proposalSubtitleParts.push(proposalBreed.name);
+      }
+      if (proposalGenderLabel) {
+        proposalSubtitleParts.push(proposalGenderLabel);
+      }
+      const sharedSubtitle = proposalSubtitleParts.join(" · ");
+
       const palette = [];
       const seen = new Set();
 
@@ -5492,14 +5551,12 @@ export default function Home({
         )
       ).sort((a, b) => a - b);
 
-      const lookGenderCode =
-        activeGenderValue === BARBOFUS_GENDER_VALUES.female ? "f" : "m";
       const barbofusLink = buildBarbofusLink(items, paletteSample, fallbackColorValues, {
         useCustomSkinTone,
-        classId: activeClassId,
-        gender: activeGenderValue,
-        faceId: activeClassFaceId,
-        classDefaults: activeClassDefaults,
+        classId: proposalClassId,
+        gender: lookGenderValue,
+        faceId: lookFaceId,
+        classDefaults: proposalClassDefaults,
       });
 
       const lookColors = (() => {
@@ -5518,8 +5575,8 @@ export default function Home({
           values.push(normalized);
         };
 
-        if (!useCustomSkinTone && Array.isArray(activeClassDefaults) && activeClassDefaults.length) {
-          const defaultSkin = activeClassDefaults.find((entry) => Number.isFinite(entry));
+        if (!useCustomSkinTone && Array.isArray(proposalClassDefaults) && proposalClassDefaults.length) {
+          const defaultSkin = proposalClassDefaults.find((entry) => Number.isFinite(entry));
           if (defaultSkin !== undefined) {
             register(defaultSkin);
           }
@@ -5534,8 +5591,8 @@ export default function Home({
 
         fallbackColorValues.forEach(register);
 
-        if (!useCustomSkinTone && Array.isArray(activeClassDefaults) && activeClassDefaults.length) {
-          activeClassDefaults.forEach((value, index) => {
+        if (!useCustomSkinTone && Array.isArray(proposalClassDefaults) && proposalClassDefaults.length) {
+          proposalClassDefaults.forEach((value, index) => {
             if (index === 0) {
               return;
             }
@@ -5547,12 +5604,12 @@ export default function Home({
       })();
 
       const baseKeyParts = [];
-      if (Number.isFinite(activeClassId)) {
-        baseKeyParts.push(activeClassId);
+      if (Number.isFinite(proposalClassId)) {
+        baseKeyParts.push(proposalClassId);
       }
-      const lookFaceId = Number.isFinite(activeClassFaceId) ? activeClassFaceId : null;
-      if (lookFaceId) {
-        baseKeyParts.push(`head${lookFaceId}`);
+      const baseLookFaceId = Number.isFinite(lookFaceId) ? lookFaceId : null;
+      if (baseLookFaceId) {
+        baseKeyParts.push(`head${baseLookFaceId}`);
       }
       baseKeyParts.push(lookGenderCode);
       const itemKeyParts = lookItemIds.map((value) => String(value));
@@ -5575,8 +5632,8 @@ export default function Home({
       const lookKey = lookBaseKey ? `${lookBaseKey}-d${directionCode}` : null;
       const lookKeyNoStuff = lookBaseKeyNoStuff ? `${lookBaseKeyNoStuff}-d${directionCode}` : null;
       const souffLink = buildSouffLink({
-        classId: activeClassId,
-        faceId: activeClassFaceId,
+        classId: proposalClassId,
+        faceId: baseLookFaceId,
         gender: lookGenderCode,
         itemIds: lookItemIds,
         colors: lookColors,
@@ -5592,10 +5649,10 @@ export default function Home({
         heroImage: items.find((item) => item.imageUrl)?.imageUrl ?? null,
         barbofusLink,
         souffLink,
-        className: activeBreed?.name ?? null,
-        classId: Number.isFinite(activeClassId) ? activeClassId : null,
-        genderLabel: activeGenderLabel,
-        classIcon: activeBreed?.icon ?? null,
+        className: proposalBreed?.name ?? null,
+        classId: Number.isFinite(proposalClassId) ? proposalClassId : null,
+        genderLabel: proposalGenderLabel,
+        classIcon: proposalBreed?.icon ?? null,
         subtitle: sharedSubtitle,
         lookGender: lookGenderCode,
         lookFaceId,
@@ -5614,14 +5671,17 @@ export default function Home({
   }, [
     activeBreed,
     activeClassDefaults,
-    activeClassFaceId,
     activeClassId,
-    activeGenderLabel,
-    activeGenderValue,
+    activeGenderConfig,
     fallbackColorValues,
+    inspirationIdentities,
+    isInspirationLayout,
+    breeds,
     proposalItemIndexes,
     recommendations,
+    selectedGender,
     selectedItemsBySlot,
+    t,
     useCustomSkinTone,
     lookAnimation,
     lookDirection,
@@ -5636,6 +5696,16 @@ export default function Home({
     () => (modalProposalId ? proposals.findIndex((proposal) => proposal.id === modalProposalId) : -1),
     [modalProposalId, proposals]
   );
+
+  useEffect(() => {
+    if (!modalProposalId) {
+      setModalTransitionDirection(null);
+      if (modalTransitionTimerRef.current) {
+        clearTimeout(modalTransitionTimerRef.current);
+        modalTransitionTimerRef.current = null;
+      }
+    }
+  }, [modalProposalId]);
 
   const lookPreviewDescriptors = useMemo(() => {
     if (!Array.isArray(proposals) || proposals.length === 0) {
@@ -6196,10 +6266,20 @@ export default function Home({
       const nextIndex = (modalProposalIndex + direction + proposals.length) % proposals.length;
       const nextProposal = proposals[nextIndex];
       if (nextProposal?.id) {
+        if (modalTransitionTimerRef.current) {
+          clearTimeout(modalTransitionTimerRef.current);
+          modalTransitionTimerRef.current = null;
+        }
+
+        setModalTransitionDirection(direction > 0 ? "next" : "prev");
+        modalTransitionTimerRef.current = window.setTimeout(() => {
+          setModalTransitionDirection(null);
+          modalTransitionTimerRef.current = null;
+        }, 320);
         setModalProposalId(nextProposal.id);
       }
     },
-    [isInspirationLayout, modalProposalIndex, proposals]
+    [isInspirationLayout, modalProposalIndex, modalTransitionTimerRef, proposals]
   );
 
   const handleModalPrev = useCallback(() => handleModalNavigate(-1), [handleModalNavigate]);
@@ -7621,6 +7701,15 @@ export default function Home({
     return () => clearTimeout(timeout);
   }, [toast]);
 
+  useEffect(() => {
+    return () => {
+      if (modalTransitionTimerRef.current) {
+        clearTimeout(modalTransitionTimerRef.current);
+        modalTransitionTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const onDrop = useCallback(
     (event) => {
       event.preventDefault();
@@ -7726,6 +7815,401 @@ export default function Home({
   }, [t]);
 
   const pageTitle = tagline ? `${BRAND_NAME} · ${tagline}` : BRAND_NAME;
+
+  const companionFiltersContent = (
+    <>
+      <span className="filters-panel__section-title">{t("identity.companion.sectionTitle")}</span>
+      <div className="companion-toggle" role="group" aria-label={t("aria.companionFilter")}>
+        {FAMILIER_FILTERS.map((filter) => {
+          const isActive = familierFilters[filter.key] !== false;
+          const label = t(filter.labelKey);
+          const title = isActive
+            ? t("companions.toggle.hide", { label: label.toLowerCase() })
+            : t("companions.toggle.show", { label: label.toLowerCase() });
+
+          return (
+            <button
+              key={filter.key}
+              type="button"
+              className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
+              onClick={() => handleFamilierFilterToggle(filter.key)}
+              aria-pressed={isActive}
+              title={title}
+            >
+              <span className="companion-toggle__indicator" aria-hidden="true">
+                {isActive ? (
+                  <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path
+                      d="M5 10.5 8.2 13.7 15 6.5"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                ) : (
+                  <span className="companion-toggle__dot" />
+                )}
+              </span>
+              <span className="companion-toggle__label">{label}</span>
+            </button>
+          );
+        })}
+      </div>
+      {areAllFamilierFiltersDisabled ? (
+        <p className="companion-toggle__empty" role="status">{t("identity.companion.empty")}</p>
+      ) : null}
+    </>
+  );
+
+  const companionFiltersPanel = (
+    <div className="filters-panel inspiration-companion" role="group" aria-label={t("aria.companionSection")}>
+      <div className="filters-panel__section" role="group" aria-label={t("aria.companionSection")}>
+        {companionFiltersContent}
+      </div>
+    </div>
+  );
+
+  const itemFiltersSection = (
+    <div className="filters-panel__section" role="group" aria-label={t("aria.itemFlagSection")}>
+      <span className="filters-panel__section-title">{t("identity.filters.sectionTitle")}</span>
+      <div className="companion-toggle companion-toggle--item-flags" role="group" aria-label={t("aria.itemFlagFilter")}>
+        {ITEM_FLAG_FILTERS.map((filter) => {
+          const isActive = itemFlagFilters[filter.key] !== false;
+          const label = t(filter.labelKey);
+          const title = isActive
+            ? t("companions.toggle.hide", { label: label.toLowerCase() })
+            : t("companions.toggle.show", { label: label.toLowerCase() });
+
+          return (
+            <button
+              key={filter.key}
+              type="button"
+              className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
+              onClick={() => handleItemFlagFilterToggle(filter.key)}
+              aria-pressed={isActive}
+              title={title}
+            >
+              <span className="companion-toggle__indicator" aria-hidden="true">
+                {isActive ? (
+                  <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path
+                      d="M5 10.5 8.2 13.7 15 6.5"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                ) : (
+                  <span className="companion-toggle__dot" />
+                )}
+              </span>
+              <span className="companion-toggle__label">{label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const optionalItemsSection = (
+    <div className="filters-panel__section" role="group" aria-label={t("aria.itemSlotSection")}>
+      <span className="filters-panel__section-title">{t("identity.filters.optionalTitle")}</span>
+      <div className="item-slot-toggle" role="group" aria-label={t("aria.itemSlotFilter")}>
+        {OPTIONAL_ITEM_FILTERS.map((filter) => {
+          const label = filter.labelKey ? t(filter.labelKey) : filter.key;
+          const isActive = itemSlotFilters[filter.key] !== false;
+          const title = isActive
+            ? t("companions.toggle.hide", { label: label.toLowerCase() })
+            : t("companions.toggle.show", { label: label.toLowerCase() });
+
+          return (
+            <button
+              key={filter.key}
+              type="button"
+              className={`item-slot-toggle__chip${isActive ? " is-active" : ""}`}
+              onClick={() => handleItemSlotFilterToggle(filter.key)}
+              aria-pressed={isActive}
+              title={title}
+            >
+              <span className="item-slot-toggle__indicator" aria-hidden="true">
+                {isActive ? (
+                  <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path
+                      d="M5 10.5 8.2 13.7 15 6.5"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                ) : (
+                  <span className="item-slot-toggle__dot" />
+                )}
+              </span>
+              <span className="item-slot-toggle__label">{label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const previewBackgroundSection = (
+    <div
+      className="filters-panel__section"
+      role="group"
+      aria-label={t("aria.previewBackgroundSection")}
+    >
+      <span className="filters-panel__section-title">{t("identity.previewBackground.sectionTitle")}</span>
+      <div
+        className="companion-toggle companion-toggle--preview-animation"
+        role="group"
+        aria-label={t("aria.combatPoseToggle")}
+      >
+        <button
+          type="button"
+          className={`companion-toggle__chip${lookAnimation === 2 ? " is-active" : ""}`}
+          onClick={() => {
+            setLookDirection(DEFAULT_LOOK_DIRECTION);
+            setLookAnimation((previous) => (previous === 2 ? DEFAULT_LOOK_ANIMATION : 2));
+          }}
+          aria-pressed={lookAnimation === 2}
+          title={t("identity.preview.combatPose")}
+        >
+          <span className="companion-toggle__indicator" aria-hidden="true">
+            {lookAnimation === 2 ? (
+              <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M5 10.5 8.2 13.7 15 6.5"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            ) : (
+              <span className="companion-toggle__dot" />
+            )}
+          </span>
+          <span className="companion-toggle__label">{t("identity.preview.combatPose")}</span>
+        </button>
+      </div>
+      <div
+        className="companion-toggle companion-toggle--preview-background"
+        role="group"
+        aria-label={t("aria.previewBackgroundToggle")}
+      >
+        <button
+          type="button"
+          className={`companion-toggle__chip${isPreviewBackgroundEnabled ? " is-active" : ""}`}
+          onClick={() => {
+            if (!hasPreviewBackgroundOptions) {
+              return;
+            }
+            setPreviewBackgroundEnabled((previous) => !previous);
+          }}
+          aria-pressed={isPreviewBackgroundEnabled}
+          title={
+            isPreviewBackgroundEnabled
+              ? t("identity.previewBackground.disable")
+              : t("identity.previewBackground.enable")
+          }
+          disabled={!hasPreviewBackgroundOptions}
+        >
+          <span className="companion-toggle__indicator" aria-hidden="true">
+            {isPreviewBackgroundEnabled ? (
+              <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M5 10.5 8.2 13.7 15 6.5"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            ) : (
+              <span className="companion-toggle__dot" />
+            )}
+          </span>
+          <span className="companion-toggle__label">{t("identity.previewBackground.toggleLabel")}</span>
+        </button>
+      </div>
+      {!hasPreviewBackgroundOptions ? (
+        <p className="preview-background-picker__empty">{t("identity.previewBackground.empty")}</p>
+      ) : null}
+      {hasPreviewBackgroundOptions && isPreviewBackgroundEnabled ? (
+        <div
+          className="preview-background-picker"
+          role="radiogroup"
+          aria-label={t("aria.previewBackgroundPicker")}
+        >
+          <button
+            type="button"
+            className={`preview-background-picker__option${
+              previewBackgroundMode === PREVIEW_BACKGROUND_MODES.AUTO ? " is-active" : ""
+            } preview-background-picker__option--auto`}
+            onClick={() => setPreviewBackgroundMode(PREVIEW_BACKGROUND_MODES.AUTO)}
+            role="radio"
+            aria-checked={previewBackgroundMode === PREVIEW_BACKGROUND_MODES.AUTO}
+            aria-label={t("identity.previewBackground.chooseAuto")}
+            style={{
+              backgroundImage:
+                "linear-gradient(135deg, rgba(99, 102, 241, 0.72), rgba(14, 165, 233, 0.72))",
+            }}
+          >
+            <span className="preview-background-picker__label">{t("identity.previewBackground.auto")}</span>
+          </button>
+          <button
+            type="button"
+            className={`preview-background-picker__option${
+              previewBackgroundMode === PREVIEW_BACKGROUND_MODES.RANDOM ? " is-active" : ""
+            } preview-background-picker__option--random`}
+            onClick={() => setPreviewBackgroundMode(PREVIEW_BACKGROUND_MODES.RANDOM)}
+            role="radio"
+            aria-checked={previewBackgroundMode === PREVIEW_BACKGROUND_MODES.RANDOM}
+            aria-label={t("identity.previewBackground.chooseRandom")}
+            style={{
+              backgroundImage:
+                "linear-gradient(135deg, rgba(236, 72, 153, 0.72), rgba(59, 130, 246, 0.72))",
+            }}
+          >
+            <span className="preview-background-picker__label">{t("identity.previewBackground.random")}</span>
+          </button>
+          {previewBackgroundOptions.map((background) => {
+            const isActive =
+              previewBackgroundMode === PREVIEW_BACKGROUND_MODES.MANUAL &&
+              selectedPreviewBackgroundId === background.id;
+            const ariaLabel = t("identity.previewBackground.choose", { label: background.label });
+            return (
+              <button
+                key={background.id}
+                type="button"
+                className={`preview-background-picker__option${isActive ? " is-active" : ""}`}
+                onClick={() => {
+                  setPreviewBackgroundMode(PREVIEW_BACKGROUND_MODES.MANUAL);
+                  setSelectedPreviewBackgroundId(background.id);
+                }}
+                role="radio"
+                aria-checked={isActive}
+                aria-label={ariaLabel}
+                style={{ backgroundImage: `url(${background.src})` }}
+              >
+                <span className="preview-background-picker__label">{background.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+
+  const renderFiltersGroup = (includeCompanion = true) => (
+    <div
+      className={`filters-panel__group${hasCustomFilters ? " is-active" : ""}`}
+      role="group"
+      aria-label={t("aria.filtersCard")}
+    >
+      {includeCompanion ? (
+        <div className="filters-panel__section" role="group" aria-label={t("aria.companionSection")}>
+          {companionFiltersContent}
+        </div>
+      ) : null}
+      {itemFiltersSection}
+      {optionalItemsSection}
+    </div>
+  );
+
+  const renderPreviewGroup = () => (
+    <div
+      className={`filters-panel__group filters-panel__group--preview${
+        hasCustomPreviewSettings ? " is-active" : ""
+      }`}
+      role="group"
+      aria-label={t("aria.previewBackgroundCard")}
+    >
+      {previewBackgroundSection}
+    </div>
+  );
+
+  const inspirationFiltersPanel = (
+    <div className="inspiration-top-panels__filters-grid">
+      {companionFiltersPanel}
+      <div
+        className={`${filtersPanelClassName} inspiration-filters`}
+        role="group"
+        aria-label={t("aria.filtersCard")}
+      >
+        <div className="inspiration-filters__row">
+          {renderFiltersGroup(false)}
+          {renderPreviewGroup()}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderPaletteSection = () => (
+    <div className="palette">
+      <div className="palette__header">
+        <div className="palette__title">
+          <h2>{t("palette.title")}</h2>
+        </div>
+        <div className="palette__actions">
+          {isProcessing ? <span className="badge badge--pulse">{t("palette.badge.analyzing")}</span> : null}
+          {colors.length > 0 ? (
+            <div className="palette__skin-options" role="radiogroup" aria-label={t("palette.skin.groupLabel")}>
+              <button
+                type="button"
+                className={`palette__skin-option${!useCustomSkinTone ? " is-active" : ""}`}
+                onClick={() => setUseCustomSkinTone(false)}
+                role="radio"
+                aria-checked={!useCustomSkinTone}
+              >
+                {t("palette.skin.default")}
+              </button>
+              <button
+                type="button"
+                className={`palette__skin-option${useCustomSkinTone ? " is-active" : ""}`}
+                onClick={() => setUseCustomSkinTone(true)}
+                role="radio"
+                aria-checked={useCustomSkinTone}
+              >
+                {t("palette.skin.custom")}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+      {error ? <p className="palette__error">{error}</p> : null}
+      {colors.length > 0 ? (
+        <ul className="palette__list">
+          {colors.map((color, index) => {
+            const value = color.hex;
+            const isCopied = copiedCode === value;
+            const textColor = getTextColor(color);
+            return (
+              <li key={`${color.hex}-${index}`} className="palette__item">
+                <button
+                  type="button"
+                  className={`palette__chip${isCopied ? " is-copied" : ""}`}
+                  onClick={() => handleCopy(value, { swatch: color.hex })}
+                  style={{ backgroundImage: buildGradientFromHex(color.hex), color: textColor }}
+                >
+                  <span className="palette__chip-index">#{String(index + 1).padStart(2, "0")}</span>
+                  <span className="palette__chip-value">{value}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <div className="palette__empty">
+          <p>{t("palette.empty")}</p>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -8073,69 +8557,9 @@ export default function Home({
             )}
           </div>
 
-          <div className="palette">
-            <div className="palette__header">
-              <div className="palette__title">
-                <h2>{t("palette.title")}</h2>
-              </div>
-              <div className="palette__actions">
-                {isProcessing ? <span className="badge badge--pulse">{t("palette.badge.analyzing")}</span> : null}
-                {colors.length > 0 ? (
-                  <div
-                    className="palette__skin-options"
-                    role="radiogroup"
-                    aria-label={t("palette.skin.groupLabel")}
-                  >
-                    <button
-                      type="button"
-                      className={`palette__skin-option${!useCustomSkinTone ? " is-active" : ""}`}
-                      onClick={() => setUseCustomSkinTone(false)}
-                      role="radio"
-                      aria-checked={!useCustomSkinTone}
-                    >
-                      {t("palette.skin.default")}
-                    </button>
-                    <button
-                      type="button"
-                      className={`palette__skin-option${useCustomSkinTone ? " is-active" : ""}`}
-                      onClick={() => setUseCustomSkinTone(true)}
-                      role="radio"
-                      aria-checked={useCustomSkinTone}
-                    >
-                      {t("palette.skin.custom")}
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-            {error ? <p className="palette__error">{error}</p> : null}
-            {colors.length > 0 ? (
-              <ul className="palette__list">
-                {colors.map((color, index) => {
-                  const value = color.hex;
-                  const isCopied = copiedCode === value;
-                  const textColor = getTextColor(color);
-                  return (
-                    <li key={`${color.hex}-${index}`} className="palette__item">
-                      <button
-                        type="button"
-                        className={`palette__chip${isCopied ? " is-copied" : ""}`}
-                        onClick={() => handleCopy(value, { swatch: color.hex })}
-                        style={{ backgroundImage: buildGradientFromHex(color.hex), color: textColor }}
-                      >
-                        <span className="palette__chip-index">#{String(index + 1).padStart(2, "0")}</span>
-                        <span className="palette__chip-value">{value}</span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <div className="palette__empty">
-                <p>{t("palette.empty")}</p>
-              </div>
-            )}
-          </div>
+          {!isInspirationLayout ? renderPaletteSection() : null}
+
+          {isInspirationLayout ? <section className="inspiration-filters-shell">{inspirationFiltersPanel}</section> : null}
 
           {showModelPrediction ? (
             <ModelPredictionSection
@@ -8153,7 +8577,8 @@ export default function Home({
                 {directionAnnouncement}
               </span>
             ) : null}
-            {isIdentityRandom ? (
+          {isIdentityRandom ? (
+            !isInspirationLayout ? (
               <div
                 className="identity-card suggestions__identity-card identity-card--summary"
                 role="status"
@@ -8179,12 +8604,13 @@ export default function Home({
                   Relancer l'identité
                 </button>
               </div>
-            ) : (
-              <div
-                className="identity-card suggestions__identity-card"
-                role="group"
-                aria-label={t("aria.identityCard")}
-              >
+            ) : null
+          ) : (
+            <div
+              className="identity-card suggestions__identity-card"
+              role="group"
+              aria-label={t("aria.identityCard")}
+            >
                 <div className="identity-card__selectors">
                   <div
                     className="identity-card__gender-wrapper"
@@ -8365,6 +8791,20 @@ export default function Home({
                                   : null;
                               const heroSrc = !lookLoaded ? proposal.heroImage ?? null : null;
                               const previewAlt = t("suggestions.render.alt", { index: proposal.index + 1 });
+                              const proposalGender = proposal.lookGender === "f" ? "female" : "male";
+                              const proposalGenderLabel = proposal.genderLabel;
+                              const proposalClassId = Number.isFinite(proposal.classId)
+                                ? proposal.classId
+                                : null;
+                              const proposalClassName =
+                                proposal.className ||
+                                (proposalClassId
+                                  ? t("identity.class.fallback", { id: proposalClassId })
+                                  : null);
+                              const proposalClassInitial = proposalClassName
+                                ? proposalClassName.charAt(0).toUpperCase()
+                                : "?";
+                              const proposalClassIcon = proposal.classIcon ?? null;
                               const baseLookPreviewGroup = proposal.lookBaseKeyNoStuff
                                 ? lookPreviews?.[proposal.lookBaseKeyNoStuff]
                                 : null;
@@ -8437,21 +8877,23 @@ export default function Home({
                               const isActiveModal = modalProposalId === proposal.id;
                               const showDetails = !isInspirationLayout || isActiveModal;
                               const cardClasses = ["skin-card"];
-                              const tapForDetailsLabel =
-                                typeof t("suggestions.render.tapForDetails") === "string"
-                                  ? t("suggestions.render.tapForDetails")
-                                  : "Voir le détail complet";
                               const openDetailsLabel =
                                 typeof t("suggestions.render.openDetails") === "string"
                                   ? t("suggestions.render.openDetails")
                                   : "Voir le détail";
                               const closeLabel =
                                 typeof t("aria.close") === "string" ? t("aria.close") : "Fermer";
+                              const inspirationIdentityLabel = isInspirationLayout
+                                ? [proposalClassName, proposalGenderLabel].filter(Boolean).join(" · ")
+                                : "";
                               if (!showDetails) {
                                 cardClasses.push("skin-card--compact");
                               }
                               if (isActiveModal && isInspirationLayout) {
                                 cardClasses.push("skin-card--modal");
+                                if (modalTransitionDirection) {
+                                  cardClasses.push(`skin-card--slide-${modalTransitionDirection}`);
+                                }
                               }
 
                                   return (
@@ -8478,8 +8920,59 @@ export default function Home({
                                       ) : null}
                                       <div className="skin-card__header">
                                         {isInspirationLayout ? (
+                                          <div
+                                            className="skin-card__identity-badges"
+                                            aria-label={inspirationIdentityLabel || undefined}
+                                          >
+                                            <div className="skin-card__badge">#{proposal.index + 1}</div>
+                                            <span className="skin-card__identity-chip">
+                                              {proposalClassIcon ? (
+                                                <img src={proposalClassIcon} alt="" />
+                                              ) : (
+                                                <span
+                                                  className="skin-card__identity-initial"
+                                                  aria-hidden="true"
+                                                >
+                                                  {proposalClassInitial}
+                                                </span>
+                                              )}
+                                              {proposalClassName ? (
+                                                <span className="sr-only">{proposalClassName}</span>
+                                              ) : null}
+                                            </span>
+                                            <span
+                                              className={`skin-card__gender-icon skin-card__gender-icon--${proposalGender}`}
+                                              aria-hidden="true"
+                                            >
+                                              {proposalGender === "female" ? (
+                                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                  <path
+                                                    d="M12 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm0 12v8m-4-4h8"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.6"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                  />
+                                                </svg>
+                                              ) : (
+                                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                  <path
+                                                    d="M14 3h7v7m-7 0 3.25-3.25M11 6a6 6 0 1 0 0 12 6 6 0 0 0 0-12Z"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.6"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                  />
+                                                </svg>
+                                              )}
+                                              {proposalGenderLabel ? (
+                                                <span className="sr-only">{proposalGenderLabel}</span>
+                                              ) : null}
+                                            </span>
+                                          </div>
+                                        ) : (
                                           <div className="skin-card__badge">#{proposal.index + 1}</div>
-                                        ) : null}
+                                        )}
                                         <h3 className="sr-only">{t("suggestions.carousel.proposalTitle", { index: proposal.index + 1 })}</h3>
                                         {isActiveModal ? (
                                           <div className="skin-card__modal-actions">
@@ -8979,25 +9472,24 @@ export default function Home({
                                           </span>
                                         )}
                                       </div>
-                                    </div>
-                                  ) : (
-                                    <div className="skin-card__details skin-card__details--compact">
-                                      <div className="skin-card__compact-meta">
-                                        <p className="skin-card__compact-label">{tapForDetailsLabel}</p>
-                                        <button
-                                          type="button"
-                                          className="skin-card__cta skin-card__cta--primary"
-                                          onClick={() => setModalProposalId(proposal.id)}
-                                        >
+                                </div>
+                                ) : (
+                                  <div className="skin-card__details skin-card__details--compact">
+                                    <div className="skin-card__compact-meta">
+                                      <button
+                                        type="button"
+                                        className="skin-card__cta skin-card__cta--primary"
+                                        onClick={() => setModalProposalId(proposal.id)}
+                                      >
                                           {openDetailsLabel}
                                         </button>
-                                      </div>
                                     </div>
-                                  )}
+                                  </div>
+                                )}
                                 </div>
-                              </article>
-                            );
-                          })}
+                                    </article>
+                                  );
+                                })}
                         </div>
                       </div>
                         {!isGridLayout ? (
@@ -9274,329 +9766,12 @@ export default function Home({
             </>
           )}
           </div>
-          <section className={filtersPanelClassName}>
-            <div
-              className={`filters-panel__group${hasCustomFilters ? " is-active" : ""}`}
-              role="group"
-              aria-label={t("aria.filtersCard")}
-            >
-              <div
-                className="filters-panel__section"
-                role="group"
-                aria-label={t("aria.companionSection")}
-              >
-                <span className="filters-panel__section-title">{t("identity.companion.sectionTitle")}</span>
-                <div className="companion-toggle" role="group" aria-label={t("aria.companionFilter")}>
-                  {FAMILIER_FILTERS.map((filter) => {
-                    const isActive = familierFilters[filter.key] !== false;
-                    const label = t(filter.labelKey);
-                    const title = isActive
-                      ? t("companions.toggle.hide", { label: label.toLowerCase() })
-                      : t("companions.toggle.show", { label: label.toLowerCase() });
-
-                    return (
-                      <button
-                        key={filter.key}
-                        type="button"
-                        className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
-                        onClick={() => handleFamilierFilterToggle(filter.key)}
-                        aria-pressed={isActive}
-                        title={title}
-                      >
-                        <span className="companion-toggle__indicator" aria-hidden="true">
-                          {isActive ? (
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path
-                                d="M5 10.5 8.2 13.7 15 6.5"
-                                stroke="currentColor"
-                                strokeWidth="1.8"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                          ) : (
-                            <span className="companion-toggle__dot" />
-                          )}
-                        </span>
-                        <span className="companion-toggle__label">{label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                {areAllFamilierFiltersDisabled ? (
-                  <p className="companion-toggle__empty" role="status">{t("identity.companion.empty")}</p>
-                ) : null}
-              </div>
-              <div
-                className="filters-panel__section"
-                role="group"
-                aria-label={t("aria.itemFlagSection")}
-              >
-                <span className="filters-panel__section-title">{t("identity.filters.sectionTitle")}</span>
-                <div
-                  className="companion-toggle companion-toggle--item-flags"
-                  role="group"
-                  aria-label={t("aria.itemFlagFilter")}
-                >
-                  {ITEM_FLAG_FILTERS.map((filter) => {
-                    const isActive = itemFlagFilters[filter.key] !== false;
-                    const label = t(filter.labelKey);
-                    const title = isActive
-                      ? t("companions.toggle.hide", { label: label.toLowerCase() })
-                      : t("companions.toggle.show", { label: label.toLowerCase() });
-
-                    return (
-                      <button
-                        key={filter.key}
-                        type="button"
-                        className={`companion-toggle__chip${isActive ? " is-active" : ""}`}
-                        onClick={() => handleItemFlagFilterToggle(filter.key)}
-                        aria-pressed={isActive}
-                        title={title}
-                      >
-                        <span className="companion-toggle__indicator" aria-hidden="true">
-                          {isActive ? (
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path
-                                d="M5 10.5 8.2 13.7 15 6.5"
-                                stroke="currentColor"
-                                strokeWidth="1.8"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                          ) : (
-                            <span className="companion-toggle__dot" />
-                          )}
-                        </span>
-                        <span className="companion-toggle__label">{label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div
-                className="filters-panel__section"
-                role="group"
-                aria-label={t("aria.itemSlotSection")}
-              >
-                <span className="filters-panel__section-title">{t("identity.filters.optionalTitle")}</span>
-                <div className="item-slot-toggle" role="group" aria-label={t("aria.itemSlotFilter")}> 
-                  {OPTIONAL_ITEM_FILTERS.map((filter) => {
-                    const label = filter.labelKey ? t(filter.labelKey) : filter.key;
-                    const isActive = itemSlotFilters[filter.key] !== false;
-                    const title = isActive
-                      ? t("companions.toggle.hide", { label: label.toLowerCase() })
-                      : t("companions.toggle.show", { label: label.toLowerCase() });
-
-                    return (
-                      <button
-                        key={filter.key}
-                        type="button"
-                        className={`item-slot-toggle__chip${isActive ? " is-active" : ""}`}
-                        onClick={() => handleItemSlotFilterToggle(filter.key)}
-                        aria-pressed={isActive}
-                        title={title}
-                      >
-                        <span className="item-slot-toggle__indicator" aria-hidden="true">
-                          {isActive ? (
-                            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path
-                                d="M5 10.5 8.2 13.7 15 6.5"
-                                stroke="currentColor"
-                                strokeWidth="1.8"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                          ) : (
-                            <span className="item-slot-toggle__dot" />
-                          )}
-                        </span>
-                        <span className="item-slot-toggle__label">{label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-            <div
-              className={`filters-panel__group filters-panel__group--preview${
-                hasCustomPreviewSettings ? " is-active" : ""
-              }`}
-              role="group"
-              aria-label={t("aria.previewBackgroundCard")}
-            >
-              <div
-                className="filters-panel__section"
-                role="group"
-                aria-label={t("aria.previewBackgroundSection")}
-              >
-                <span className="filters-panel__section-title">
-                  {t("identity.previewBackground.sectionTitle")}
-                </span>
-                <div
-                  className="companion-toggle companion-toggle--preview-animation"
-                  role="group"
-                  aria-label={t("aria.combatPoseToggle")}
-                >
-                  <button
-                    type="button"
-                    className={`companion-toggle__chip${
-                      lookAnimation === 2 ? " is-active" : ""
-                    }`}
-                    onClick={() => {
-                      setLookDirection(DEFAULT_LOOK_DIRECTION);
-                      setLookAnimation((previous) =>
-                        previous === 2 ? DEFAULT_LOOK_ANIMATION : 2
-                      );
-                    }}
-                    aria-pressed={lookAnimation === 2}
-                    title={t("identity.preview.combatPose")}
-                  >
-                    <span className="companion-toggle__indicator" aria-hidden="true">
-                      {lookAnimation === 2 ? (
-                        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path
-                            d="M5 10.5 8.2 13.7 15 6.5"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      ) : (
-                        <span className="companion-toggle__dot" />
-                      )}
-                    </span>
-                    <span className="companion-toggle__label">
-                      {t("identity.preview.combatPose")}
-                    </span>
-                  </button>
-                </div>
-                <div
-                  className="companion-toggle companion-toggle--preview-background"
-                  role="group"
-                  aria-label={t("aria.previewBackgroundToggle")}
-                >
-                  <button
-                    type="button"
-                    className={`companion-toggle__chip${
-                      isPreviewBackgroundEnabled ? " is-active" : ""
-                    }`}
-                    onClick={() => {
-                      if (!hasPreviewBackgroundOptions) {
-                        return;
-                      }
-                      setPreviewBackgroundEnabled((previous) => !previous);
-                    }}
-                    aria-pressed={isPreviewBackgroundEnabled}
-                    title={
-                      isPreviewBackgroundEnabled
-                        ? t("identity.previewBackground.disable")
-                        : t("identity.previewBackground.enable")
-                    }
-                    disabled={!hasPreviewBackgroundOptions}
-                  >
-                    <span className="companion-toggle__indicator" aria-hidden="true">
-                      {isPreviewBackgroundEnabled ? (
-                        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path
-                            d="M5 10.5 8.2 13.7 15 6.5"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      ) : (
-                        <span className="companion-toggle__dot" />
-                      )}
-                    </span>
-                    <span className="companion-toggle__label">
-                      {t("identity.previewBackground.toggleLabel")}
-                    </span>
-                  </button>
-                </div>
-                {!hasPreviewBackgroundOptions ? (
-                  <p className="preview-background-picker__empty">
-                    {t("identity.previewBackground.empty")}
-                  </p>
-                ) : null}
-                {hasPreviewBackgroundOptions && isPreviewBackgroundEnabled ? (
-                  <div
-                    className="preview-background-picker"
-                    role="radiogroup"
-                    aria-label={t("aria.previewBackgroundPicker")}
-                  >
-                    <button
-                      type="button"
-                      className={`preview-background-picker__option${
-                        previewBackgroundMode === PREVIEW_BACKGROUND_MODES.AUTO ? " is-active" : ""
-                      } preview-background-picker__option--auto`}
-                      onClick={() => setPreviewBackgroundMode(PREVIEW_BACKGROUND_MODES.AUTO)}
-                      role="radio"
-                      aria-checked={previewBackgroundMode === PREVIEW_BACKGROUND_MODES.AUTO}
-                      aria-label={t("identity.previewBackground.chooseAuto")}
-                      style={{
-                        backgroundImage:
-                          "linear-gradient(135deg, rgba(99, 102, 241, 0.72), rgba(14, 165, 233, 0.72))",
-                      }}
-                    >
-                      <span className="preview-background-picker__label">
-                        {t("identity.previewBackground.auto")}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`preview-background-picker__option${
-                        previewBackgroundMode === PREVIEW_BACKGROUND_MODES.RANDOM ? " is-active" : ""
-                      } preview-background-picker__option--random`}
-                      onClick={() => setPreviewBackgroundMode(PREVIEW_BACKGROUND_MODES.RANDOM)}
-                      role="radio"
-                      aria-checked={previewBackgroundMode === PREVIEW_BACKGROUND_MODES.RANDOM}
-                      aria-label={t("identity.previewBackground.chooseRandom")}
-                      style={{
-                        backgroundImage:
-                          "linear-gradient(135deg, rgba(236, 72, 153, 0.72), rgba(59, 130, 246, 0.72))",
-                      }}
-                    >
-                      <span className="preview-background-picker__label">
-                        {t("identity.previewBackground.random")}
-                      </span>
-                    </button>
-                    {previewBackgroundOptions.map((background) => {
-                      const isActive =
-                        previewBackgroundMode === PREVIEW_BACKGROUND_MODES.MANUAL &&
-                        selectedPreviewBackgroundId === background.id;
-                      const ariaLabel = t("identity.previewBackground.choose", {
-                        label: background.label,
-                      });
-                      return (
-                        <button
-                          key={background.id}
-                          type="button"
-                          className={`preview-background-picker__option${
-                            isActive ? " is-active" : ""
-                          }`}
-                          onClick={() => {
-                            setPreviewBackgroundMode(PREVIEW_BACKGROUND_MODES.MANUAL);
-                            setSelectedPreviewBackgroundId(background.id);
-                          }}
-                          role="radio"
-                          aria-checked={isActive}
-                          aria-label={ariaLabel}
-                          style={{ backgroundImage: `url(${background.src})` }}
-                        >
-                          <span className="preview-background-picker__label">{background.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </section>
+          {!isInspirationLayout ? (
+            <section className={filtersPanelClassName}>
+              {renderFiltersGroup()}
+              {renderPreviewGroup()}
+            </section>
+          ) : null}
         </section>
 
           
