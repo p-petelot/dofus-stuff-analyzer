@@ -1645,7 +1645,7 @@ a {
 
 @media (min-width: 960px) {
   .workspace--inspiration {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(340px, 1.05fr) minmax(260px, 0.85fr) minmax(420px, 1.2fr);
     grid-template-rows: auto 1fr;
     grid-template-areas:
       "reference palette filters"
@@ -1657,7 +1657,7 @@ a {
 
 @media (min-width: 1280px) {
   .workspace--inspiration {
-    grid-template-columns: minmax(360px, 1.05fr) minmax(360px, 1.05fr) minmax(360px, 0.9fr);
+    grid-template-columns: minmax(380px, 1.05fr) minmax(300px, 0.85fr) minmax(480px, 1.25fr);
     column-gap: 20px;
   }
 }
@@ -1669,7 +1669,7 @@ a {
 .inspiration-top-panels__filters-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   align-items: start;
 }
 
@@ -4283,11 +4283,11 @@ a {
 }
 
 .skin-card--modal.skin-card--slide-next {
-  animation: skin-modal-slide-next 300ms cubic-bezier(0.24, 0.82, 0.33, 1) both;
+  animation: skin-modal-shift-next 360ms cubic-bezier(0.18, 0.9, 0.28, 1) both;
 }
 
 .skin-card--modal.skin-card--slide-prev {
-  animation: skin-modal-slide-prev 300ms cubic-bezier(0.24, 0.82, 0.33, 1) both;
+  animation: skin-modal-shift-prev 360ms cubic-bezier(0.18, 0.9, 0.28, 1) both;
 }
 
 .skin-card--modal .skin-card__body {
@@ -4389,27 +4389,43 @@ a {
   cursor: grabbing;
 }
 
-@keyframes skin-modal-slide-next {
+@keyframes skin-modal-shift-next {
   0% {
-    transform: translate3d(42px, 0, 0) scale(0.99);
-    opacity: 0.25;
+    transform: translate3d(52px, 0, 0) scale(0.985);
+    opacity: 0.18;
+    filter: blur(5px);
+  }
+
+  46% {
+    transform: translate3d(-10px, 0, 0) scale(1.01);
+    opacity: 1;
+    filter: blur(0);
   }
 
   100% {
     transform: translate3d(0, 0, 0) scale(1);
     opacity: 1;
+    filter: blur(0);
   }
 }
 
-@keyframes skin-modal-slide-prev {
+@keyframes skin-modal-shift-prev {
   0% {
-    transform: translate3d(-42px, 0, 0) scale(0.99);
-    opacity: 0.25;
+    transform: translate3d(-52px, 0, 0) scale(0.985);
+    opacity: 0.18;
+    filter: blur(5px);
+  }
+
+  46% {
+    transform: translate3d(10px, 0, 0) scale(1.01);
+    opacity: 1;
+    filter: blur(0);
   }
 
   100% {
     transform: translate3d(0, 0, 0) scale(1);
     opacity: 1;
+    filter: blur(0);
   }
 }
 

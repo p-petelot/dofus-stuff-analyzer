@@ -9474,9 +9474,6 @@ export default function Home({
                                 ) : (
                                   <div className="skin-card__details skin-card__details--compact">
                                     <div className="skin-card__compact-meta">
-                                      {isInspirationLayout && inspirationIdentityLabel ? (
-                                        <p className="skin-card__identity-summary">{inspirationIdentityLabel}</p>
-                                      ) : null}
                                       <button
                                         type="button"
                                         className="skin-card__cta skin-card__cta--primary"
