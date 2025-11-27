@@ -1638,18 +1638,17 @@ a {
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
     "reference"
-    "palette"
     "filters"
     "suggestions";
 }
 
 @media (min-width: 960px) {
   .workspace--inspiration {
-    grid-template-columns: minmax(440px, 1.35fr) minmax(150px, 0.32fr) minmax(520px, 1.45fr);
+    grid-template-columns: minmax(520px, 1.1fr) minmax(720px, 1.9fr);
     grid-template-rows: auto 1fr;
     grid-template-areas:
-      "reference palette filters"
-      "suggestions suggestions suggestions";
+      "reference filters"
+      "suggestions suggestions";
     column-gap: 16px;
     row-gap: 16px;
   }
@@ -1657,8 +1656,8 @@ a {
 
 @media (min-width: 1280px) {
   .workspace--inspiration {
-    grid-template-columns: minmax(520px, 1.4fr) minmax(180px, 0.28fr) minmax(640px, 1.46fr);
-    column-gap: 22px;
+    grid-template-columns: minmax(560px, 1.05fr) minmax(820px, 1.95fr);
+    column-gap: 24px;
   }
 }
 
