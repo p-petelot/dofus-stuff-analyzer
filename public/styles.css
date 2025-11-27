@@ -1639,35 +1639,30 @@ a {
   grid-template-areas:
     "reference"
     "palette"
-    "suggestions"
-    "filters";
+    "filters"
+    "suggestions";
 }
 
 @media (min-width: 960px) {
   .workspace--inspiration {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
-      "reference palette"
-      "suggestions suggestions"
-      "filters filters";
+      "reference"
+      "palette"
+      "filters"
+      "suggestions";
   }
 }
 
-.inspiration-top-panels {
-  grid-area: palette;
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
-  gap: 16px;
-  align-items: start;
-}
-
-.inspiration-top-panels__filters {
-  width: 100%;
+.inspiration-filters-shell {
+  grid-area: filters;
 }
 
 .inspiration-top-panels__filters-grid {
   display: grid;
   gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-items: start;
 }
 
 .inspiration-filters {
@@ -1676,18 +1671,6 @@ a {
 
 .inspiration-companion {
   max-height: none;
-}
-
-@media (max-width: 1100px) {
-  .inspiration-top-panels {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-@media (min-width: 1440px) {
-  .workspace--inspiration {
-    grid-template-columns: minmax(520px, 1.1fr) minmax(640px, 1.1fr);
-  }
 }
 
 @media (min-width: 1440px) {
@@ -4285,11 +4268,11 @@ a {
 }
 
 .skin-card--modal.skin-card--slide-next {
-  animation: skin-modal-slide-next 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: skin-modal-slide-next 360ms cubic-bezier(0.33, 1, 0.68, 1) both;
 }
 
 .skin-card--modal.skin-card--slide-prev {
-  animation: skin-modal-slide-prev 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: skin-modal-slide-prev 360ms cubic-bezier(0.33, 1, 0.68, 1) both;
 }
 
 .skin-card--modal .skin-card__body {
@@ -4393,12 +4376,12 @@ a {
 
 @keyframes skin-modal-slide-next {
   0% {
-    transform: translateX(32px) scale(0.98);
-    opacity: 0.35;
+    transform: translateX(24px) scale(0.985);
+    opacity: 0.45;
   }
 
   60% {
-    transform: translateX(-6px) scale(1);
+    transform: translateX(-4px) scale(1);
     opacity: 1;
   }
 
@@ -4410,12 +4393,12 @@ a {
 
 @keyframes skin-modal-slide-prev {
   0% {
-    transform: translateX(-32px) scale(0.98);
-    opacity: 0.35;
+    transform: translateX(-24px) scale(0.985);
+    opacity: 0.45;
   }
 
   60% {
-    transform: translateX(6px) scale(1);
+    transform: translateX(4px) scale(1);
     opacity: 1;
   }
 

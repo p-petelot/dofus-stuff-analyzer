@@ -8555,14 +8555,9 @@ export default function Home({
             )}
           </div>
 
-          {isInspirationLayout ? (
-            <div className="inspiration-top-panels">
-              {renderPaletteSection()}
-              <div className="inspiration-top-panels__filters">{inspirationFiltersPanel}</div>
-            </div>
-          ) : (
-            renderPaletteSection()
-          )}
+          {renderPaletteSection()}
+
+          {isInspirationLayout ? <section className="inspiration-filters-shell">{inspirationFiltersPanel}</section> : null}
 
           {showModelPrediction ? (
             <ModelPredictionSection
@@ -8794,6 +8789,20 @@ export default function Home({
                                   : null;
                               const heroSrc = !lookLoaded ? proposal.heroImage ?? null : null;
                               const previewAlt = t("suggestions.render.alt", { index: proposal.index + 1 });
+                              const proposalGender = proposal.lookGender === "f" ? "female" : "male";
+                              const proposalGenderLabel = proposal.genderLabel;
+                              const proposalClassId = Number.isFinite(proposal.classId)
+                                ? proposal.classId
+                                : null;
+                              const proposalClassName =
+                                proposal.className ||
+                                (proposalClassId
+                                  ? t("identity.class.fallback", { id: proposalClassId })
+                                  : null);
+                              const proposalClassInitial = proposalClassName
+                                ? proposalClassName.charAt(0).toUpperCase()
+                                : "?";
+                              const proposalClassIcon = proposal.classIcon ?? null;
                               const baseLookPreviewGroup = proposal.lookBaseKeyNoStuff
                                 ? lookPreviews?.[proposal.lookBaseKeyNoStuff]
                                 : null;
@@ -8872,17 +8881,9 @@ export default function Home({
                                   : "Voir le détail";
                               const closeLabel =
                                 typeof t("aria.close") === "string" ? t("aria.close") : "Fermer";
-                              const proposalClassName =
-                                proposalBreed?.name ||
-                                (Number.isFinite(proposalClassId)
-                                  ? t("identity.class.fallback", { id: proposalClassId })
-                                  : null);
                               const inspirationIdentityLabel = isInspirationLayout
                                 ? [proposalClassName, proposalGenderLabel].filter(Boolean).join(" · ")
                                 : "";
-                              const proposalClassInitial = proposalClassName
-                                ? proposalClassName.charAt(0).toUpperCase()
-                                : "?";
                               if (!showDetails) {
                                 cardClasses.push("skin-card--compact");
                               }
@@ -8923,8 +8924,8 @@ export default function Home({
                                           >
                                             <div className="skin-card__badge">#{proposal.index + 1}</div>
                                             <span className="skin-card__identity-chip">
-                                              {proposalBreed?.icon ? (
-                                                <img src={proposalBreed.icon} alt="" />
+                                              {proposalClassIcon ? (
+                                                <img src={proposalClassIcon} alt="" />
                                               ) : (
                                                 <span
                                                   className="skin-card__identity-initial"
