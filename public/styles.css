@@ -1645,7 +1645,7 @@ a {
 
 @media (min-width: 960px) {
   .workspace--inspiration {
-    grid-template-columns: minmax(400px, 1.2fr) minmax(200px, 0.6fr) minmax(480px, 1.35fr);
+    grid-template-columns: minmax(440px, 1.35fr) minmax(150px, 0.32fr) minmax(520px, 1.45fr);
     grid-template-rows: auto 1fr;
     grid-template-areas:
       "reference palette filters"
@@ -1657,7 +1657,7 @@ a {
 
 @media (min-width: 1280px) {
   .workspace--inspiration {
-    grid-template-columns: minmax(440px, 1.25fr) minmax(220px, 0.55fr) minmax(540px, 1.35fr);
+    grid-template-columns: minmax(520px, 1.4fr) minmax(180px, 0.28fr) minmax(640px, 1.46fr);
     column-gap: 22px;
   }
 }
