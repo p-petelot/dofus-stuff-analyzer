@@ -6757,48 +6757,36 @@ export default function Home({
             const dx = x + Math.round((size - w) / 2);
             const dy = y + Math.round((size - h) / 2);
             context.drawImage(classIcon, dx, dy, w, h);
+
+            const genderBadgeSize = Math.round(size * 0.42);
+            const genderX = x + size - genderBadgeSize + 4;
+            const genderY = y + size - genderBadgeSize + 4;
+
+            context.beginPath();
+            context.arc(
+              genderX + genderBadgeSize / 2,
+              genderY + genderBadgeSize / 2,
+              genderBadgeSize / 2,
+              0,
+              Math.PI * 2
+            );
+            context.fillStyle = "rgba(11, 17, 26, 0.86)";
+            context.fill();
+            context.strokeStyle = "rgba(255, 255, 255, 0.95)";
+            context.lineWidth = 2;
+            context.stroke();
+
+            context.save();
+            context.translate(genderX + genderBadgeSize / 2, genderY + genderBadgeSize / 2);
+            const glyphScale = (genderBadgeSize * 0.58) / 24;
+            context.scale(glyphScale, glyphScale);
+            context.strokeStyle = "rgba(255, 255, 255, 0.96)";
+            context.lineWidth = 2;
+            context.lineCap = "round";
+            context.lineJoin = "round";
+            context.stroke(genderPath);
+            context.restore();
           });
-        }
-
-        const classTagHeight = 38;
-        const classTagRadius = 14;
-        const classTagPaddingX = 14;
-        const classIconSize = 22;
-        const classTagGap = 12;
-        context.font = "700 18px 'Inter', system-ui, -apple-system, sans-serif";
-        const genderGlyph = genderSymbol === "f" ? "♀" : "♂";
-        const genderWidth = context.measureText(genderGlyph).width;
-        const classLabel = proposal.className ?? "";
-        const classLabelWidth = classIcon ? 0 : context.measureText(classLabel).width;
-        const classContentWidth = classIcon ? classIconSize : classLabelWidth;
-        const classTagWidth = Math.round(
-          classTagPaddingX * 2 + genderWidth + (classContentWidth ? classContentWidth + classTagGap : 0)
-        );
-        const classTagX = badgeX + badgeSize + 12;
-        const classTagY = badgeY + Math.round((badgeSize - classTagHeight) / 2);
-
-        drawRoundedRect(context, classTagX, classTagY, classTagWidth, classTagHeight, classTagRadius);
-        context.fillStyle = "rgba(255, 255, 255, 0.1)";
-        context.fill();
-        context.strokeStyle = "rgba(255, 255, 255, 0.25)";
-        context.lineWidth = 1.2;
-        context.stroke();
-
-        const tagBaseline = classTagY + Math.round(classTagHeight / 2) + 6;
-        context.fillStyle = "rgba(255, 255, 255, 0.94)";
-        context.fillText(genderGlyph, classTagX + classTagPaddingX, tagBaseline);
-
-        const classIconX = classTagX + classTagPaddingX + genderWidth + (classContentWidth ? classTagGap : 0);
-        const classIconY = classTagY + Math.round((classTagHeight - classIconSize) / 2);
-        if (classIcon) {
-          const iconRatio = Math.min(classIconSize / classIcon.width, classIconSize / classIcon.height, 1);
-          const iconW = Math.round(classIcon.width * iconRatio);
-          const iconH = Math.round(classIcon.height * iconRatio);
-          const iconDX = classIconX + Math.round((classIconSize - iconW) / 2);
-          const iconDY = classIconY + Math.round((classIconSize - iconH) / 2);
-          context.drawImage(classIcon, iconDX, iconDY, iconW, iconH);
-        } else if (classLabel) {
-          context.fillText(classLabel, classIconX, tagBaseline);
         }
 
         let blockY = badgeY + badgeSize + 26;
