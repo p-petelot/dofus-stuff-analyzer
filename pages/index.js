@@ -6759,21 +6759,47 @@ export default function Home({
             context.drawImage(classIcon, dx, dy, w, h);
           });
         }
-        
-        /*
-        drawBadge(badgeX + badgeSize, badgeY + 2, 44, (x, y, size) => {
-          context.save();
-          context.translate(x + size / 2, y + size / 2);
-          const scale = (size * 1) / 24;
-          context.scale(scale, scale);
-          context.strokeStyle = "rgba(255, 255, 255, 0.92)";
-          context.lineWidth = 1.6;
-          context.lineCap = "round";
-          context.lineJoin = "round";
-          //context.stroke(genderPath);
-          context.restore();
-        });
-        */
+
+        const classTagHeight = 38;
+        const classTagRadius = 14;
+        const classTagPaddingX = 14;
+        const classIconSize = 22;
+        const classTagGap = 12;
+        context.font = "700 18px 'Inter', system-ui, -apple-system, sans-serif";
+        const genderGlyph = genderSymbol === "f" ? "♀" : "♂";
+        const genderWidth = context.measureText(genderGlyph).width;
+        const classLabel = proposal.className ?? "";
+        const classLabelWidth = classIcon ? 0 : context.measureText(classLabel).width;
+        const classContentWidth = classIcon ? classIconSize : classLabelWidth;
+        const classTagWidth = Math.round(
+          classTagPaddingX * 2 + genderWidth + (classContentWidth ? classContentWidth + classTagGap : 0)
+        );
+        const classTagX = badgeX + badgeSize + 12;
+        const classTagY = badgeY + Math.round((badgeSize - classTagHeight) / 2);
+
+        drawRoundedRect(context, classTagX, classTagY, classTagWidth, classTagHeight, classTagRadius);
+        context.fillStyle = "rgba(255, 255, 255, 0.1)";
+        context.fill();
+        context.strokeStyle = "rgba(255, 255, 255, 0.25)";
+        context.lineWidth = 1.2;
+        context.stroke();
+
+        const tagBaseline = classTagY + Math.round(classTagHeight / 2) + 6;
+        context.fillStyle = "rgba(255, 255, 255, 0.94)";
+        context.fillText(genderGlyph, classTagX + classTagPaddingX, tagBaseline);
+
+        const classIconX = classTagX + classTagPaddingX + genderWidth + (classContentWidth ? classTagGap : 0);
+        const classIconY = classTagY + Math.round((classTagHeight - classIconSize) / 2);
+        if (classIcon) {
+          const iconRatio = Math.min(classIconSize / classIcon.width, classIconSize / classIcon.height, 1);
+          const iconW = Math.round(classIcon.width * iconRatio);
+          const iconH = Math.round(classIcon.height * iconRatio);
+          const iconDX = classIconX + Math.round((classIconSize - iconW) / 2);
+          const iconDY = classIconY + Math.round((classIconSize - iconH) / 2);
+          context.drawImage(classIcon, iconDX, iconDY, iconW, iconH);
+        } else if (classLabel) {
+          context.fillText(classLabel, classIconX, tagBaseline);
+        }
 
         let blockY = badgeY + badgeSize + 26;
 
@@ -8970,9 +8996,7 @@ export default function Home({
                                               ) : null}
                                             </span>
                                           </div>
-                                        ) : (
-                                          <div className="skin-card__badge">#{proposal.index + 1}</div>
-                                        )}
+                                        ) : null}
                                         <h3 className="sr-only">{t("suggestions.carousel.proposalTitle", { index: proposal.index + 1 })}</h3>
                                         {isActiveModal ? (
                                           <div className="skin-card__modal-actions">
