@@ -1,0 +1,17 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">KROSKIN favicon</title>
+  <desc id="desc">Stylised K with neon gradient on dark background.</desc>
+  <defs>
+    <linearGradient id="fav-gradient" x1="10%" y1="0%" x2="90%" y2="100%">
+      <stop offset="0%" stop-color="#8D4EFF" />
+      <stop offset="52%" stop-color="#6C5CE7" />
+      <stop offset="100%" stop-color="#3ACBDA" />
+    </linearGradient>
+    <filter id="fav-glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#3ACBDA" flood-opacity="0.35" />
+    </filter>
+  </defs>
+  <rect width="128" height="128" rx="30" fill="#0E0E14" />
+  <circle cx="64" cy="64" r="54" stroke="url(#fav-gradient)" stroke-width="3" fill="none" opacity="0.9" />
+  <path d="M58 20c-6.6 14.7-9.6 32.4-9.6 50.5 0 5-.2 9.7-.7 14.4-0.9 8.7-2.8 16.8-6.2 24.4l13.8 10.6c6.1-7.8 10.3-17.6 12.8-29.4 1.7-7.7 2.4-16.4 2.4-26 9.4 9.9 17.2 21 23.6 33.3l14.5-9.8c-7-12-16.7-23.1-29.3-33.3 7.2-6.6 13.2-14.2 18-22.8l-15.5-10.3c-3.7 7.7-8.9 14.1-15.8 19.6C63.1 32.4 61.1 25.5 58 20z" fill="url(#fav-gradient)" filter="url(#fav-glow)" />
+</svg>

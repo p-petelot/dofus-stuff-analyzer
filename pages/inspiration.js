@@ -25,10 +25,10 @@ export default function InspirationPage(props) {
   return (
     <>
       <Head>
-        <title>Inspiration | KrosPalette</title>
+        <title>Inspiration | KROSKIN</title>
         <meta
           name="description"
-          content="Trouve de nouvelles inspirations de skins à partir d'une couleur."
+          content="Trouve de nouvelles inspirations de skins KROSKIN à partir d'une couleur signature."
         />
       </Head>
       <Home

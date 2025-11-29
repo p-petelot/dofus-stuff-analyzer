@@ -1,0 +1,16 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">KROSKIN dark favicon</title>
+  <desc id="desc">Monoline K mark with neon stroke on graphite base.</desc>
+  <defs>
+    <linearGradient id="fav-dark-gradient" x1="15%" y1="10%" x2="85%" y2="90%">
+      <stop offset="0%" stop-color="#3ACBDA" />
+      <stop offset="60%" stop-color="#8D4EFF" />
+      <stop offset="100%" stop-color="#B48CFF" />
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="26" fill="#1B1C22" />
+  <path
+    d="M48 20v88l14.4-18.4c6.4-8.2 12.4-17.2 18.2-27 5.4 9.4 11.6 18.2 18.7 26.3l10.7-9.5c-8.8-10.8-17.2-22.9-25.4-36.6 5.9-9.5 11.1-19.6 15.6-30.5l-13.7-6.2c-3.8 10.4-8.3 20.3-13.6 29.5-5.2-10.1-11.4-19.5-18.6-28.2z"
+    fill="url(#fav-dark-gradient)"
+  />
+</svg>
