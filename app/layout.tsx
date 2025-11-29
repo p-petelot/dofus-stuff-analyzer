@@ -8,15 +8,19 @@ import type { NavLink } from "./components/types";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "PrismForge",
-  description: "Générateur de skins Dofus premium",
-  icons: [{ rel: "icon", url: "/logo.svg" }],
+  title: "KROSKIN",
+  description: "Crée ton style. Maîtrise ton skin.",
+  icons: [
+    { rel: "icon", url: "/favicon.svg" },
+    { rel: "alternate icon", url: "/favicon-dark.svg" },
+  ],
 };
 
 const links: NavLink[] = [
-  { label: "Accueil", href: "/" },
+  { label: "Générateur", href: "/" },
   { label: "Inspiration", href: "/inspiration" },
-  { label: "Vision", href: "/vision" },
+  { label: "Export", href: "/vision" },
+  { label: "À propos", href: "/#kroskin-about" },
 ];
 
 export default function RootLayout({
@@ -28,7 +32,7 @@ export default function RootLayout({
     <html lang="fr" className={inter.variable}>
       <body>
         <Navbar
-          brand={{ label: "[[NomDuSite]]", href: "/" }}
+          brand={{ label: "KROSKIN", href: "/" }}
           links={links}
           enableSearch
           enableThemeToggle

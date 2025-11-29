@@ -155,7 +155,7 @@ const THEME_KEYS = Object.freeze({
   INTELLIGENT: "intelligent",
 });
 
-const THEME_STORAGE_KEY = "krospalette.theme";
+const THEME_STORAGE_KEY = "kroskin.theme";
 const DEFAULT_THEME_KEY = THEME_KEYS.DARK;
 
 const THEME_OPTIONS = [
@@ -1400,7 +1400,7 @@ function normalizeDofusItem(rawItem, type, options = {}) {
   };
 }
 
-const BRAND_NAME = "KrosPalette";
+const BRAND_NAME = "KROSKIN";
 const MAX_COLORS = 6;
 const MAX_DIMENSION = 280;
 const BUCKET_SIZE = 24;
@@ -8250,10 +8250,30 @@ export default function Home({
             </div>
           ) : null}
         </div>
-        <header className="hero" aria-hidden="true">
-          <h1 className="sr-only">{BRAND_NAME}</h1>
-        </header>
-        <div className="workspace-layout">
+        <section className="kroskin-hero" id="kroskin-about">
+          <div className="kroskin-hero__halo" aria-hidden="true" />
+          <div className="kroskin-hero__content">
+            <div className="kroskin-hero__pill">Le générateur de skins du Krosmoz.</div>
+            <h1 className="kroskin-hero__title">KROSKIN</h1>
+            <p className="kroskin-hero__subtitle">Crée ton style. Maîtrise ton skin.</p>
+            <p className="kroskin-hero__description">
+              KROSKIN assemble tes palettes, projette tes looks et exporte des vitrines HD sans quitter l'atelier.
+              Dépose un visuel, choisis une ambiance et laisse l'IA équilibrer chaque teinte.
+            </p>
+            <div className="kroskin-hero__actions">
+              <a className="kroskin-button kroskin-button--primary" href="#atelier">
+                Commencer
+              </a>
+              <a className="kroskin-button kroskin-button--ghost" href="/inspiration">
+                Explorer les skins
+              </a>
+            </div>
+          </div>
+          <div className="kroskin-hero__badge" aria-hidden="true">
+            Le générateur de skins du Krosmoz. Le générateur de skins du Krosmoz.
+          </div>
+        </section>
+        <div className="workspace-layout" id="atelier">
           <section
             className={`workspace${layoutVariant === "inspiration" ? " workspace--inspiration" : ""}`}
           >

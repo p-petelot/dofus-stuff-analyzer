@@ -1,6 +1,6 @@
-# KrosPalette
+# KROSKIN
 
-KrosPalette est un studio de palettes pour les créateurs de skins Dofus. Dépose, colle ou importe une image de référence et l'application extrait instantanément les couleurs dominantes pour guider tes compositions.
+KROSKIN est un générateur premium pour imaginer, harmoniser et exporter tes skins du Krosmoz. Dépose, colle ou importe une image de référence et l'application extrait instantanément les couleurs dominantes pour guider tes compositions.
 
 ## Lancer le projet
 
