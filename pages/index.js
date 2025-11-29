@@ -8970,9 +8970,7 @@ export default function Home({
                                               ) : null}
                                             </span>
                                           </div>
-                                        ) : (
-                                          <div className="skin-card__badge">#{proposal.index + 1}</div>
-                                        )}
+                                        ) : null}
                                         <h3 className="sr-only">{t("suggestions.carousel.proposalTitle", { index: proposal.index + 1 })}</h3>
                                         {isActiveModal ? (
                                           <div className="skin-card__modal-actions">
