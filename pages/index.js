@@ -16,6 +16,12 @@ const DOFUS_API_HOST = "https://api.dofusdb.fr";
 const DOFUS_API_BASE_URL = `${DOFUS_API_HOST}/items`;
 const DEFAULT_LIMIT = 1200;
 
+const BREEDS_CACHE = new Map();
+const BREEDS_REQUESTS = new Map();
+
+const ITEMS_CATALOG_CACHE = new Map();
+const ITEMS_REQUESTS = new Map();
+
 let activeLocalizationPriority = getLanguagePriority();
 
 function setActiveLocalizationPriority(language) {
@@ -47,6 +53,18 @@ function buildBreedsUrl(language = DEFAULT_LANGUAGE) {
   params.set("$limit", "20");
   params.set("lang", normalized);
   return `${DOFUS_API_HOST}/breeds?${params.toString()}`;
+}
+
+function buildLanguageKey(language) {
+  return normalizeLanguage(language) ?? DEFAULT_LANGUAGE;
+}
+
+function buildItemsCacheKey(language, languagePriority) {
+  const normalizedPriority =
+    Array.isArray(languagePriority) && languagePriority.length
+      ? languagePriority.join("|")
+      : "default";
+  return `${buildLanguageKey(language)}::${normalizedPriority}`;
 }
 
 const FAMILIER_FILTERS = Object.freeze([
@@ -4845,12 +4863,48 @@ export default function Home({
       return;
     }
 
-    if (breedsRequestRef.current && typeof breedsRequestRef.current.abort === "function") {
+    const cacheKey = buildLanguageKey(language);
+    const cachedBreeds = BREEDS_CACHE.get(cacheKey);
+    if (cachedBreeds) {
+      setBreeds(cachedBreeds);
+      setBreedsError(null);
+      setBreedsLoading(false);
+      setSelectedBreedId((previous) => {
+        if (previous != null && cachedBreeds.some((entry) => entry.id === previous)) {
+          return previous;
+        }
+        return null;
+      });
+      return;
+    }
+
+    const ongoingRequest = BREEDS_REQUESTS.get(cacheKey);
+    if (ongoingRequest) {
+      setBreedsLoading(true);
+      setBreedsError(null);
       try {
-        breedsRequestRef.current.abort();
+        const dataset = await ongoingRequest;
+        setBreeds(dataset);
+        setSelectedBreedId((previous) => {
+          if (previous != null && dataset.some((entry) => entry.id === previous)) {
+            return previous;
+          }
+          return null;
+        });
       } catch (err) {
+        if (err?.name === "AbortError") {
+          return;
+        }
         console.error(err);
+        setBreedsError(t("errors.breeds"));
+        setBreeds([BARBOFUS_DEFAULT_BREED]);
+        setSelectedBreedId((previous) =>
+          Number.isFinite(previous) && previous === BARBOFUS_DEFAULT_BREED.id ? previous : null
+        );
+      } finally {
+        setBreedsLoading(false);
       }
+      return;
     }
 
     const supportsAbort = typeof AbortController !== "undefined";
@@ -4863,7 +4917,7 @@ export default function Home({
     setBreedsLoading(true);
     setBreedsError(null);
 
-    try {
+    const requestPromise = (async () => {
       const fetchOptions = {
         headers: { Accept: "application/json" },
       };
@@ -4879,16 +4933,23 @@ export default function Home({
 
       const payload = await response.json();
 
-      if (controller?.signal?.aborted) {
-        return;
-      }
-
       const normalized = normalizeBreedsDataset(payload, {
         language,
         languagePriority,
       });
-      const dataset = normalized.length ? normalized : [BARBOFUS_DEFAULT_BREED];
+      return normalized.length ? normalized : [BARBOFUS_DEFAULT_BREED];
+    })();
 
+    BREEDS_REQUESTS.set(cacheKey, requestPromise);
+
+    try {
+      const dataset = await requestPromise;
+
+      if (controller?.signal?.aborted) {
+        return;
+      }
+
+      BREEDS_CACHE.set(cacheKey, dataset);
       setBreeds(dataset);
       setSelectedBreedId((previous) => {
         if (previous != null && dataset.some((entry) => entry.id === previous)) {
@@ -4907,6 +4968,9 @@ export default function Home({
         Number.isFinite(previous) && previous === BARBOFUS_DEFAULT_BREED.id ? previous : null
       );
     } finally {
+      if (BREEDS_REQUESTS.get(cacheKey) === requestPromise) {
+        BREEDS_REQUESTS.delete(cacheKey);
+      }
       if (controller && breedsRequestRef.current === controller) {
         setBreedsLoading(false);
         breedsRequestRef.current = null;
@@ -7227,11 +7291,47 @@ export default function Home({
     const controllers = [];
 
     const loadItems = async () => {
+      const cacheKey = buildItemsCacheKey(language, languagePriority);
+      const cachedCatalog = ITEMS_CATALOG_CACHE.get(cacheKey);
+      if (cachedCatalog) {
+        setItemsCatalog(cachedCatalog.catalog);
+        setItemsError(cachedCatalog.error ?? null);
+        setItemsLoading(false);
+        return;
+      }
+
+      const ongoingRequest = ITEMS_REQUESTS.get(cacheKey);
+      if (ongoingRequest) {
+        setItemsLoading(true);
+        setItemsError(null);
+        try {
+          const result = await ongoingRequest;
+          if (isCancelled) {
+            return;
+          }
+          setItemsCatalog(result.catalog);
+          setItemsError(result.error ?? null);
+        } catch (err) {
+          if (isCancelled) {
+            return;
+          }
+          console.error(err);
+          setItemsCatalog({});
+          setItemsError(t("errors.itemsUnavailable"));
+        } finally {
+          if (!isCancelled) {
+            setItemsLoading(false);
+          }
+        }
+        return;
+      }
+
       setItemsLoading(true);
       setItemsError(null);
-      const errors = [];
 
-      try {
+      const requestPromise = (async () => {
+        const errors = [];
+
         const entries = await Promise.all(
           ITEM_TYPES.map(async (type) => {
             try {
@@ -7352,19 +7452,29 @@ export default function Home({
           })
         );
 
+        const catalog = Object.fromEntries(entries);
+        const errorMessage = errors.length
+          ? errors.length === ITEM_TYPES.length
+            ? t("errors.itemsUnavailable")
+            : t("errors.itemsPartial")
+          : null;
+
+        return { catalog, error: errorMessage };
+      })();
+
+      ITEMS_REQUESTS.set(cacheKey, requestPromise);
+
+      try {
+        const result = await requestPromise;
+
+        ITEMS_CATALOG_CACHE.set(cacheKey, result);
+
         if (isCancelled) {
           return;
         }
 
-        setItemsCatalog(Object.fromEntries(entries));
-
-        if (errors.length) {
-          const message =
-            errors.length === ITEM_TYPES.length
-              ? t("errors.itemsUnavailable")
-              : t("errors.itemsPartial");
-          setItemsError(message);
-        }
+        setItemsCatalog(result.catalog);
+        setItemsError(result.error);
       } catch (err) {
         if (isCancelled) {
           return;
@@ -7374,6 +7484,9 @@ export default function Home({
         setItemsCatalog({});
         setItemsError(t("errors.itemsUnavailable"));
       } finally {
+        if (ITEMS_REQUESTS.get(cacheKey) === requestPromise) {
+          ITEMS_REQUESTS.delete(cacheKey);
+        }
         if (!isCancelled) {
           setItemsLoading(false);
         }
