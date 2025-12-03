@@ -3943,6 +3943,10 @@ export default function Home({
   const selectionStorageKey = useMemo(() => getSelectionStorageKey(layoutVariant), [layoutVariant]);
 
   useEffect(() => {
+    selectionsHydratedRef.current = false;
+  }, [selectionStorageKey]);
+
+  useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
