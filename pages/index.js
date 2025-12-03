@@ -7516,7 +7516,6 @@ export default function Home({
 
   useEffect(() => {
     let isCancelled = false;
-    const controllers = [];
 
     const loadItems = async () => {
       const cacheKey = buildItemsCacheKey(language, languagePriority);
@@ -7579,12 +7578,8 @@ export default function Home({
                   }
                   pageUrl.searchParams.set("$skip", String(skip));
 
-                  const controller = new AbortController();
-                  controllers.push(controller);
-
                   try {
                     const response = await fetch(pageUrl.toString(), {
-                      signal: controller.signal,
                       headers: { Accept: "application/json" },
                     });
 
@@ -7632,10 +7627,6 @@ export default function Home({
                       break;
                     }
                   } catch (err) {
-                    if (err.name === "AbortError") {
-                      break;
-                    }
-
                     console.error(err);
                     errors.push({ type, error: err });
                     break;
@@ -7725,7 +7716,6 @@ export default function Home({
 
     return () => {
       isCancelled = true;
-      controllers.forEach((controller) => controller.abort());
     };
   }, [language, languagePriority, t]);
 
