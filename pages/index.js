@@ -174,6 +174,7 @@ const THEME_KEYS = Object.freeze({
 });
 
 const THEME_STORAGE_KEY = "krospalette.theme";
+const SELECTION_STORAGE_KEY = "krospalette.selections.v1";
 const DEFAULT_THEME_KEY = THEME_KEYS.DARK;
 
 const THEME_OPTIONS = [
@@ -3931,6 +3932,7 @@ export default function Home({
 
   const [theme, setTheme] = useState(DEFAULT_THEME_KEY);
   const themeHydratedRef = useRef(false);
+  const selectionsHydratedRef = useRef(false);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -4070,6 +4072,206 @@ export default function Home({
   useEffect(() => {
     setInputMode(normalizedDefaultInputMode);
   }, [normalizedDefaultInputMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || selectionsHydratedRef.current) {
+      return;
+    }
+
+    const stored = window.localStorage.getItem(SELECTION_STORAGE_KEY);
+    if (!stored) {
+      selectionsHydratedRef.current = true;
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(stored);
+      if (parsed && typeof parsed === "object") {
+        if (Array.isArray(parsed.colors)) {
+          const palette = parsed.colors
+            .map((value) => {
+              const hex = normalizeColorToHex(value);
+              if (!hex) {
+                return null;
+              }
+              const rgb = hexToRgb(hex);
+              if (!rgb) {
+                return null;
+              }
+              return {
+                hex,
+                rgb: `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`,
+                r: rgb.r,
+                g: rgb.g,
+                b: rgb.b,
+                weight: 1,
+              };
+            })
+            .filter(Boolean);
+
+          if (palette.length) {
+            setColors(palette);
+            const normalizedSelectedColor = normalizeColorToHex(parsed.selectedColor);
+            if (normalizedSelectedColor && palette.some((entry) => entry.hex === normalizedSelectedColor)) {
+              setSelectedColor(normalizedSelectedColor);
+            } else {
+              setSelectedColor((previous) => previous ?? palette[0].hex);
+            }
+          }
+        }
+
+        if (Number.isFinite(parsed.selectedBreedId)) {
+          setSelectedBreedId(parsed.selectedBreedId);
+        }
+
+        if (parsed.selectedGender === "female" || parsed.selectedGender === "male") {
+          setSelectedGender(parsed.selectedGender);
+        }
+
+        if (parsed.inputMode) {
+          const restoredInputMode = sanitizeInputMode(parsed.inputMode, normalizedInputModes);
+          if (restoredInputMode) {
+            setInputMode(restoredInputMode);
+          }
+        }
+
+        if (parsed.itemSlotFilters && typeof parsed.itemSlotFilters === "object") {
+          setItemSlotFilters((previous = {}) => ({ ...previous, ...parsed.itemSlotFilters }));
+        }
+
+        if (parsed.familierFilters && typeof parsed.familierFilters === "object") {
+          setFamilierFilters((previous = {}) => ({ ...previous, ...parsed.familierFilters }));
+        }
+
+        if (parsed.itemFlagFilters && typeof parsed.itemFlagFilters === "object") {
+          setItemFlagFilters((previous = {}) => ({ ...previous, ...parsed.itemFlagFilters }));
+        }
+
+        if (parsed.items && typeof parsed.items === "object") {
+          const sanitizedItems = {};
+
+          Object.entries(parsed.items).forEach(([slot, descriptor]) => {
+            if (!ITEM_TYPES.includes(slot) || !descriptor) {
+              return;
+            }
+
+            const ankamaId = Number(descriptor?.a);
+            const id = descriptor?.i ?? null;
+            const payload = {};
+
+            if (Number.isFinite(ankamaId)) {
+              payload.a = Math.trunc(ankamaId);
+            }
+
+            if (id !== undefined && id !== null) {
+              payload.i = id;
+            }
+
+            if (Object.keys(payload).length) {
+              sanitizedItems[slot] = payload;
+            }
+          });
+
+          if (Object.keys(sanitizedItems).length) {
+            const requiredOptionalSlots = {};
+            OPTIONAL_ITEM_TYPES.forEach((slot) => {
+              if (sanitizedItems[slot]) {
+                requiredOptionalSlots[slot] = true;
+              }
+            });
+
+            if (Object.keys(requiredOptionalSlots).length) {
+              setItemSlotFilters((previous = {}) => {
+                let changed = false;
+                const next = { ...previous };
+
+                Object.entries(requiredOptionalSlots).forEach(([slot]) => {
+                  if (next[slot] === false) {
+                    next[slot] = true;
+                    changed = true;
+                  }
+                });
+
+                return changed ? next : previous;
+              });
+            }
+
+            const existing = pendingSharedItemsRef.current ?? {};
+            pendingSharedItemsRef.current = { ...sanitizedItems, ...existing };
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Unable to restore selections", error);
+    } finally {
+      selectionsHydratedRef.current = true;
+    }
+  }, [normalizedInputModes]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !selectionsHydratedRef.current) {
+      return;
+    }
+
+    const storedColors = Array.isArray(colors)
+      ? colors
+          .map((entry) => normalizeColorToHex(entry?.hex ?? entry))
+          .filter(Boolean)
+          .slice(0, MAX_ITEM_PALETTE_COLORS)
+      : [];
+
+    const serializedItems = {};
+    ITEM_TYPES.forEach((slot) => {
+      const item = selectedItemsBySlot?.[slot];
+      if (!item) {
+        return;
+      }
+      const ankamaId = Number(item?.ankamaId);
+      const id = item?.id;
+      const descriptor = {};
+
+      if (Number.isFinite(ankamaId)) {
+        descriptor.a = Math.trunc(ankamaId);
+      }
+      if (id !== undefined && id !== null) {
+        descriptor.i = id;
+      }
+
+      if (Object.keys(descriptor).length) {
+        serializedItems[slot] = descriptor;
+      }
+    });
+
+    const payload = {
+      selectedBreedId: Number.isFinite(selectedBreedId) ? selectedBreedId : null,
+      selectedGender:
+        selectedGender === "male" || selectedGender === "female" ? selectedGender : null,
+      selectedColor: normalizeColorToHex(selectedColor),
+      colors: storedColors,
+      inputMode: sanitizeInputMode(inputMode, normalizedInputModes),
+      itemSlotFilters,
+      familierFilters,
+      itemFlagFilters,
+      items: serializedItems,
+    };
+
+    try {
+      window.localStorage.setItem(SELECTION_STORAGE_KEY, JSON.stringify(payload));
+    } catch (error) {
+      console.error("Unable to persist selections", error);
+    }
+  }, [
+    colors,
+    selectedColor,
+    selectedBreedId,
+    selectedGender,
+    inputMode,
+    itemSlotFilters,
+    familierFilters,
+    itemFlagFilters,
+    selectedItemsBySlot,
+    normalizedInputModes,
+  ]);
   const [activeProposal, setActiveProposal] = useState(0);
   const [lookPreviews, setLookPreviews] = useState({});
   const lookPreviewsRef = useRef({});
