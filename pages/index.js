@@ -4046,6 +4046,20 @@ export default function Home({
 
   const [inputMode, setInputMode] = useState(normalizedDefaultInputMode);
   const [selectedColor, setSelectedColor] = useState(null);
+  const [activeProposal, setActiveProposal] = useState(0);
+  const [lookPreviews, setLookPreviews] = useState({});
+  const lookPreviewsRef = useRef({});
+  const lookPreviewRequestsRef = useRef(new Map());
+  const appliedShareTokenRef = useRef(null);
+  const pendingSharedItemsRef = useRef(null);
+  const directionDragStateRef = useRef({
+    active: false,
+    pointerId: null,
+    lastX: 0,
+    remainder: 0,
+  });
+  const isUnmountedRef = useRef(false);
+  const modalTransitionTimerRef = useRef(null);
   const curatedColorSuggestions = useMemo(() => {
     if (!Array.isArray(colorSuggestions)) {
       return CURATED_COLOR_SWATCHES;
@@ -4272,20 +4286,6 @@ export default function Home({
     selectedItemsBySlot,
     normalizedInputModes,
   ]);
-  const [activeProposal, setActiveProposal] = useState(0);
-  const [lookPreviews, setLookPreviews] = useState({});
-  const lookPreviewsRef = useRef({});
-  const lookPreviewRequestsRef = useRef(new Map());
-  const appliedShareTokenRef = useRef(null);
-  const pendingSharedItemsRef = useRef(null);
-  const directionDragStateRef = useRef({
-    active: false,
-    pointerId: null,
-    lastX: 0,
-    remainder: 0,
-  });
-  const isUnmountedRef = useRef(false);
-  const modalTransitionTimerRef = useRef(null);
   const [lookAnimation, setLookAnimation] = useState(DEFAULT_LOOK_ANIMATION);
   const [lookDirection, setLookDirection] = useState(DEFAULT_LOOK_DIRECTION);
   const [downloadingPreviewId, setDownloadingPreviewId] = useState(null);
