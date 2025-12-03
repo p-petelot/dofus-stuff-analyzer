@@ -2595,7 +2595,11 @@ function adjustHsl(base, deltaH = 0, deltaS = 0, deltaL = 0) {
 }
 
 function generatePaletteFromSeed(seedHex) {
-  const baseRgb = hexToRgb(seedHex);
+  const baseHex = normalizeColorToHex(seedHex);
+  if (!baseHex) {
+    return [];
+  }
+  const baseRgb = hexToRgb(baseHex);
   if (!baseRgb) {
     return [];
   }
@@ -2612,8 +2616,16 @@ function generatePaletteFromSeed(seedHex) {
 
   const seen = new Set();
 
-  return variations
-    .map((entry, index) => {
+  return [
+    {
+      hex: baseHex,
+      rgb: `rgb(${baseRgb.r}, ${baseRgb.g}, ${baseRgb.b})`,
+      r: baseRgb.r,
+      g: baseRgb.g,
+      b: baseRgb.b,
+      weight: 1.6,
+    },
+    ...variations.map((entry, index) => {
       const { r, g, b } = hslToRgb(entry.h, entry.s, entry.l);
       const hex = rgbToHex(r, g, b);
       return {
@@ -2624,7 +2636,8 @@ function generatePaletteFromSeed(seedHex) {
         b,
         weight: index === 2 ? 1.4 : 1,
       };
-    })
+    }),
+  ]
     .filter((entry) => {
       if (seen.has(entry.hex)) {
         return false;
