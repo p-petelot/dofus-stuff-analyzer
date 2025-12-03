@@ -16,6 +16,12 @@ const DOFUS_API_HOST = "https://api.dofusdb.fr";
 const DOFUS_API_BASE_URL = `${DOFUS_API_HOST}/items`;
 const DEFAULT_LIMIT = 1200;
 
+const BREEDS_CACHE = new Map();
+const BREEDS_REQUESTS = new Map();
+
+const ITEMS_CATALOG_CACHE = new Map();
+const ITEMS_REQUESTS = new Map();
+
 let activeLocalizationPriority = getLanguagePriority();
 
 function setActiveLocalizationPriority(language) {
@@ -47,6 +53,18 @@ function buildBreedsUrl(language = DEFAULT_LANGUAGE) {
   params.set("$limit", "20");
   params.set("lang", normalized);
   return `${DOFUS_API_HOST}/breeds?${params.toString()}`;
+}
+
+function buildLanguageKey(language) {
+  return normalizeLanguage(language) ?? DEFAULT_LANGUAGE;
+}
+
+function buildItemsCacheKey(language, languagePriority) {
+  const normalizedPriority =
+    Array.isArray(languagePriority) && languagePriority.length
+      ? languagePriority.join("|")
+      : "default";
+  return `${buildLanguageKey(language)}::${normalizedPriority}`;
 }
 
 const FAMILIER_FILTERS = Object.freeze([
@@ -156,6 +174,8 @@ const THEME_KEYS = Object.freeze({
 });
 
 const THEME_STORAGE_KEY = "krospalette.theme";
+const SELECTION_STORAGE_KEY = "krospalette.selections.v1";
+const INSPIRATION_SELECTION_STORAGE_KEY = "krospalette.inspiration.selections.v1";
 const DEFAULT_THEME_KEY = THEME_KEYS.DARK;
 
 const THEME_OPTIONS = [
@@ -2575,7 +2595,11 @@ function adjustHsl(base, deltaH = 0, deltaS = 0, deltaL = 0) {
 }
 
 function generatePaletteFromSeed(seedHex) {
-  const baseRgb = hexToRgb(seedHex);
+  const baseHex = normalizeColorToHex(seedHex);
+  if (!baseHex) {
+    return [];
+  }
+  const baseRgb = hexToRgb(baseHex);
   if (!baseRgb) {
     return [];
   }
@@ -2592,8 +2616,16 @@ function generatePaletteFromSeed(seedHex) {
 
   const seen = new Set();
 
-  return variations
-    .map((entry, index) => {
+  return [
+    {
+      hex: baseHex,
+      rgb: `rgb(${baseRgb.r}, ${baseRgb.g}, ${baseRgb.b})`,
+      r: baseRgb.r,
+      g: baseRgb.g,
+      b: baseRgb.b,
+      weight: 1.6,
+    },
+    ...variations.map((entry, index) => {
       const { r, g, b } = hslToRgb(entry.h, entry.s, entry.l);
       const hex = rgbToHex(r, g, b);
       return {
@@ -2604,7 +2636,8 @@ function generatePaletteFromSeed(seedHex) {
         b,
         weight: index === 2 ? 1.4 : 1,
       };
-    })
+    }),
+  ]
     .filter((entry) => {
       if (seen.has(entry.hex)) {
         return false;
@@ -3802,6 +3835,12 @@ function sanitizeInputMode(value, allowedModes = Object.keys(INPUT_MODE_LABEL_KE
   return allowed[0];
 }
 
+function getSelectionStorageKey(layoutVariant = "default") {
+  return layoutVariant === "inspiration"
+    ? INSPIRATION_SELECTION_STORAGE_KEY
+    : SELECTION_STORAGE_KEY;
+}
+
 export default function Home({
   initialBreeds = [],
   previewBackgrounds: initialPreviewBackgrounds = [],
@@ -3913,6 +3952,12 @@ export default function Home({
 
   const [theme, setTheme] = useState(DEFAULT_THEME_KEY);
   const themeHydratedRef = useRef(false);
+  const selectionsHydratedRef = useRef(false);
+  const selectionStorageKey = useMemo(() => getSelectionStorageKey(layoutVariant), [layoutVariant]);
+
+  useEffect(() => {
+    selectionsHydratedRef.current = false;
+  }, [selectionStorageKey]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -4012,6 +4057,15 @@ export default function Home({
   const [activeItemSlot, setActiveItemSlot] = useState(null);
   const [itemSearchQuery, setItemSearchQuery] = useState("");
   const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [useCustomSkinTone, setUseCustomSkinTone] = useState(false);
+  const [showDetailedMatches, setShowDetailedMatches] = useState(false);
+  const [breeds, setBreeds] = useState(() =>
+    Array.isArray(initialBreeds) && initialBreeds.length ? initialBreeds : []
+  );
+  const [breedsLoading, setBreedsLoading] = useState(false);
+  const [breedsError, setBreedsError] = useState(null);
+  const [selectedBreedId, setSelectedBreedId] = useState(null);
+  const [selectedGender, setSelectedGender] = useState(BARBOFUS_DEFAULT_GENDER_KEY);
   const normalizedInputModes = useMemo(() => {
     const options = Array.isArray(allowedInputModes)
       ? allowedInputModes.filter((mode) => mode in INPUT_MODE_LABEL_KEYS)
@@ -4026,6 +4080,20 @@ export default function Home({
 
   const [inputMode, setInputMode] = useState(normalizedDefaultInputMode);
   const [selectedColor, setSelectedColor] = useState(null);
+  const [activeProposal, setActiveProposal] = useState(0);
+  const [lookPreviews, setLookPreviews] = useState({});
+  const lookPreviewsRef = useRef({});
+  const lookPreviewRequestsRef = useRef(new Map());
+  const appliedShareTokenRef = useRef(null);
+  const pendingSharedItemsRef = useRef(null);
+  const directionDragStateRef = useRef({
+    active: false,
+    pointerId: null,
+    lastX: 0,
+    remainder: 0,
+  });
+  const isUnmountedRef = useRef(false);
+  const modalTransitionTimerRef = useRef(null);
   const curatedColorSuggestions = useMemo(() => {
     if (!Array.isArray(colorSuggestions)) {
       return CURATED_COLOR_SWATCHES;
@@ -4052,20 +4120,207 @@ export default function Home({
   useEffect(() => {
     setInputMode(normalizedDefaultInputMode);
   }, [normalizedDefaultInputMode]);
-  const [activeProposal, setActiveProposal] = useState(0);
-  const [lookPreviews, setLookPreviews] = useState({});
-  const lookPreviewsRef = useRef({});
-  const lookPreviewRequestsRef = useRef(new Map());
-  const appliedShareTokenRef = useRef(null);
-  const pendingSharedItemsRef = useRef(null);
-  const directionDragStateRef = useRef({
-    active: false,
-    pointerId: null,
-    lastX: 0,
-    remainder: 0,
-  });
-  const isUnmountedRef = useRef(false);
-  const modalTransitionTimerRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || selectionsHydratedRef.current) {
+      return;
+    }
+
+    const stored = window.localStorage.getItem(selectionStorageKey);
+    if (!stored) {
+      selectionsHydratedRef.current = true;
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(stored);
+      if (parsed && typeof parsed === "object") {
+        if (Array.isArray(parsed.colors)) {
+          const palette = parsed.colors
+            .map((value) => {
+              const hex = normalizeColorToHex(value);
+              if (!hex) {
+                return null;
+              }
+              const rgb = hexToRgb(hex);
+              if (!rgb) {
+                return null;
+              }
+              return {
+                hex,
+                rgb: `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`,
+                r: rgb.r,
+                g: rgb.g,
+                b: rgb.b,
+                weight: 1,
+              };
+            })
+            .filter(Boolean);
+
+          if (palette.length) {
+            setColors(palette);
+            const normalizedSelectedColor = normalizeColorToHex(parsed.selectedColor);
+            if (normalizedSelectedColor && palette.some((entry) => entry.hex === normalizedSelectedColor)) {
+              setSelectedColor(normalizedSelectedColor);
+            } else {
+              setSelectedColor((previous) => previous ?? palette[0].hex);
+            }
+          }
+        }
+
+        if (Number.isFinite(parsed.selectedBreedId)) {
+          setSelectedBreedId(parsed.selectedBreedId);
+        }
+
+        if (parsed.selectedGender === "female" || parsed.selectedGender === "male") {
+          setSelectedGender(parsed.selectedGender);
+        }
+
+        if (parsed.inputMode) {
+          const restoredInputMode = sanitizeInputMode(parsed.inputMode, normalizedInputModes);
+          if (restoredInputMode) {
+            setInputMode(restoredInputMode);
+          }
+        }
+
+        if (parsed.itemSlotFilters && typeof parsed.itemSlotFilters === "object") {
+          setItemSlotFilters((previous = {}) => ({ ...previous, ...parsed.itemSlotFilters }));
+        }
+
+        if (parsed.familierFilters && typeof parsed.familierFilters === "object") {
+          setFamilierFilters((previous = {}) => ({ ...previous, ...parsed.familierFilters }));
+        }
+
+        if (parsed.itemFlagFilters && typeof parsed.itemFlagFilters === "object") {
+          setItemFlagFilters((previous = {}) => ({ ...previous, ...parsed.itemFlagFilters }));
+        }
+
+        if (parsed.items && typeof parsed.items === "object") {
+          const sanitizedItems = {};
+
+          Object.entries(parsed.items).forEach(([slot, descriptor]) => {
+            if (!ITEM_TYPES.includes(slot) || !descriptor) {
+              return;
+            }
+
+            const ankamaId = Number(descriptor?.a);
+            const id = descriptor?.i ?? null;
+            const payload = {};
+
+            if (Number.isFinite(ankamaId)) {
+              payload.a = Math.trunc(ankamaId);
+            }
+
+            if (id !== undefined && id !== null) {
+              payload.i = id;
+            }
+
+            if (Object.keys(payload).length) {
+              sanitizedItems[slot] = payload;
+            }
+          });
+
+          if (Object.keys(sanitizedItems).length) {
+            const requiredOptionalSlots = {};
+            OPTIONAL_ITEM_TYPES.forEach((slot) => {
+              if (sanitizedItems[slot]) {
+                requiredOptionalSlots[slot] = true;
+              }
+            });
+
+            if (Object.keys(requiredOptionalSlots).length) {
+              setItemSlotFilters((previous = {}) => {
+                let changed = false;
+                const next = { ...previous };
+
+                Object.entries(requiredOptionalSlots).forEach(([slot]) => {
+                  if (next[slot] === false) {
+                    next[slot] = true;
+                    changed = true;
+                  }
+                });
+
+                return changed ? next : previous;
+              });
+            }
+
+            const existing = pendingSharedItemsRef.current ?? {};
+            pendingSharedItemsRef.current = { ...sanitizedItems, ...existing };
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Unable to restore selections", error);
+    } finally {
+      selectionsHydratedRef.current = true;
+    }
+  }, [normalizedInputModes, selectionStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !selectionsHydratedRef.current) {
+      return;
+    }
+
+    const storedColors = Array.isArray(colors)
+      ? colors
+          .map((entry) => normalizeColorToHex(entry?.hex ?? entry))
+          .filter(Boolean)
+          .slice(0, MAX_ITEM_PALETTE_COLORS)
+      : [];
+
+    const serializedItems = {};
+    ITEM_TYPES.forEach((slot) => {
+      const item = selectedItemsBySlot?.[slot];
+      if (!item) {
+        return;
+      }
+      const ankamaId = Number(item?.ankamaId);
+      const id = item?.id;
+      const descriptor = {};
+
+      if (Number.isFinite(ankamaId)) {
+        descriptor.a = Math.trunc(ankamaId);
+      }
+      if (id !== undefined && id !== null) {
+        descriptor.i = id;
+      }
+
+      if (Object.keys(descriptor).length) {
+        serializedItems[slot] = descriptor;
+      }
+    });
+
+    const payload = {
+      selectedBreedId: Number.isFinite(selectedBreedId) ? selectedBreedId : null,
+      selectedGender:
+        selectedGender === "male" || selectedGender === "female" ? selectedGender : null,
+      selectedColor: normalizeColorToHex(selectedColor),
+      colors: storedColors,
+      inputMode: sanitizeInputMode(inputMode, normalizedInputModes),
+      itemSlotFilters,
+      familierFilters,
+      itemFlagFilters,
+      items: serializedItems,
+    };
+
+    try {
+      window.localStorage.setItem(selectionStorageKey, JSON.stringify(payload));
+    } catch (error) {
+      console.error("Unable to persist selections", error);
+    }
+  }, [
+    colors,
+    selectedColor,
+    selectedBreedId,
+    selectedGender,
+    inputMode,
+    itemSlotFilters,
+    familierFilters,
+    itemFlagFilters,
+    selectedItemsBySlot,
+    normalizedInputModes,
+    selectionStorageKey,
+  ]);
   const [lookAnimation, setLookAnimation] = useState(DEFAULT_LOOK_ANIMATION);
   const [lookDirection, setLookDirection] = useState(DEFAULT_LOOK_DIRECTION);
   const [downloadingPreviewId, setDownloadingPreviewId] = useState(null);
@@ -4100,15 +4355,6 @@ export default function Home({
       return previous;
     });
   }, [lookAnimation]);
-  const [useCustomSkinTone, setUseCustomSkinTone] = useState(false);
-  const [showDetailedMatches, setShowDetailedMatches] = useState(false);
-  const [breeds, setBreeds] = useState(() =>
-    Array.isArray(initialBreeds) && initialBreeds.length ? initialBreeds : []
-  );
-  const [breedsLoading, setBreedsLoading] = useState(false);
-  const [breedsError, setBreedsError] = useState(null);
-  const [selectedBreedId, setSelectedBreedId] = useState(null);
-  const [selectedGender, setSelectedGender] = useState(BARBOFUS_DEFAULT_GENDER_KEY);
   const isIdentityRandom = identitySelectionMode === "random";
   const isGridLayout = proposalLayout === "grid";
   const isInspirationLayout = layoutVariant === "inspiration";
@@ -4845,12 +5091,48 @@ export default function Home({
       return;
     }
 
-    if (breedsRequestRef.current && typeof breedsRequestRef.current.abort === "function") {
+    const cacheKey = buildLanguageKey(language);
+    const cachedBreeds = BREEDS_CACHE.get(cacheKey);
+    if (cachedBreeds) {
+      setBreeds(cachedBreeds);
+      setBreedsError(null);
+      setBreedsLoading(false);
+      setSelectedBreedId((previous) => {
+        if (previous != null && cachedBreeds.some((entry) => entry.id === previous)) {
+          return previous;
+        }
+        return null;
+      });
+      return;
+    }
+
+    const ongoingRequest = BREEDS_REQUESTS.get(cacheKey);
+    if (ongoingRequest) {
+      setBreedsLoading(true);
+      setBreedsError(null);
       try {
-        breedsRequestRef.current.abort();
+        const dataset = await ongoingRequest;
+        setBreeds(dataset);
+        setSelectedBreedId((previous) => {
+          if (previous != null && dataset.some((entry) => entry.id === previous)) {
+            return previous;
+          }
+          return null;
+        });
       } catch (err) {
+        if (err?.name === "AbortError") {
+          return;
+        }
         console.error(err);
+        setBreedsError(t("errors.breeds"));
+        setBreeds([BARBOFUS_DEFAULT_BREED]);
+        setSelectedBreedId((previous) =>
+          Number.isFinite(previous) && previous === BARBOFUS_DEFAULT_BREED.id ? previous : null
+        );
+      } finally {
+        setBreedsLoading(false);
       }
+      return;
     }
 
     const supportsAbort = typeof AbortController !== "undefined";
@@ -4863,7 +5145,7 @@ export default function Home({
     setBreedsLoading(true);
     setBreedsError(null);
 
-    try {
+    const requestPromise = (async () => {
       const fetchOptions = {
         headers: { Accept: "application/json" },
       };
@@ -4879,16 +5161,23 @@ export default function Home({
 
       const payload = await response.json();
 
-      if (controller?.signal?.aborted) {
-        return;
-      }
-
       const normalized = normalizeBreedsDataset(payload, {
         language,
         languagePriority,
       });
-      const dataset = normalized.length ? normalized : [BARBOFUS_DEFAULT_BREED];
+      return normalized.length ? normalized : [BARBOFUS_DEFAULT_BREED];
+    })();
 
+    BREEDS_REQUESTS.set(cacheKey, requestPromise);
+
+    try {
+      const dataset = await requestPromise;
+
+      if (controller?.signal?.aborted) {
+        return;
+      }
+
+      BREEDS_CACHE.set(cacheKey, dataset);
       setBreeds(dataset);
       setSelectedBreedId((previous) => {
         if (previous != null && dataset.some((entry) => entry.id === previous)) {
@@ -4907,6 +5196,9 @@ export default function Home({
         Number.isFinite(previous) && previous === BARBOFUS_DEFAULT_BREED.id ? previous : null
       );
     } finally {
+      if (BREEDS_REQUESTS.get(cacheKey) === requestPromise) {
+        BREEDS_REQUESTS.delete(cacheKey);
+      }
       if (controller && breedsRequestRef.current === controller) {
         setBreedsLoading(false);
         breedsRequestRef.current = null;
@@ -7224,14 +7516,49 @@ export default function Home({
 
   useEffect(() => {
     let isCancelled = false;
-    const controllers = [];
 
     const loadItems = async () => {
+      const cacheKey = buildItemsCacheKey(language, languagePriority);
+      const cachedCatalog = ITEMS_CATALOG_CACHE.get(cacheKey);
+      if (cachedCatalog) {
+        setItemsCatalog(cachedCatalog.catalog);
+        setItemsError(cachedCatalog.error ?? null);
+        setItemsLoading(false);
+        return;
+      }
+
+      const ongoingRequest = ITEMS_REQUESTS.get(cacheKey);
+      if (ongoingRequest) {
+        setItemsLoading(true);
+        setItemsError(null);
+        try {
+          const result = await ongoingRequest;
+          if (isCancelled) {
+            return;
+          }
+          setItemsCatalog(result.catalog);
+          setItemsError(result.error ?? null);
+        } catch (err) {
+          if (isCancelled) {
+            return;
+          }
+          console.error(err);
+          setItemsCatalog({});
+          setItemsError(t("errors.itemsUnavailable"));
+        } finally {
+          if (!isCancelled) {
+            setItemsLoading(false);
+          }
+        }
+        return;
+      }
+
       setItemsLoading(true);
       setItemsError(null);
-      const errors = [];
 
-      try {
+      const requestPromise = (async () => {
+        const errors = [];
+
         const entries = await Promise.all(
           ITEM_TYPES.map(async (type) => {
             try {
@@ -7251,12 +7578,8 @@ export default function Home({
                   }
                   pageUrl.searchParams.set("$skip", String(skip));
 
-                  const controller = new AbortController();
-                  controllers.push(controller);
-
                   try {
                     const response = await fetch(pageUrl.toString(), {
-                      signal: controller.signal,
                       headers: { Accept: "application/json" },
                     });
 
@@ -7304,10 +7627,6 @@ export default function Home({
                       break;
                     }
                   } catch (err) {
-                    if (err.name === "AbortError") {
-                      break;
-                    }
-
                     console.error(err);
                     errors.push({ type, error: err });
                     break;
@@ -7352,19 +7671,29 @@ export default function Home({
           })
         );
 
+        const catalog = Object.fromEntries(entries);
+        const errorMessage = errors.length
+          ? errors.length === ITEM_TYPES.length
+            ? t("errors.itemsUnavailable")
+            : t("errors.itemsPartial")
+          : null;
+
+        return { catalog, error: errorMessage };
+      })();
+
+      ITEMS_REQUESTS.set(cacheKey, requestPromise);
+
+      try {
+        const result = await requestPromise;
+
+        ITEMS_CATALOG_CACHE.set(cacheKey, result);
+
         if (isCancelled) {
           return;
         }
 
-        setItemsCatalog(Object.fromEntries(entries));
-
-        if (errors.length) {
-          const message =
-            errors.length === ITEM_TYPES.length
-              ? t("errors.itemsUnavailable")
-              : t("errors.itemsPartial");
-          setItemsError(message);
-        }
+        setItemsCatalog(result.catalog);
+        setItemsError(result.error);
       } catch (err) {
         if (isCancelled) {
           return;
@@ -7374,6 +7703,9 @@ export default function Home({
         setItemsCatalog({});
         setItemsError(t("errors.itemsUnavailable"));
       } finally {
+        if (ITEMS_REQUESTS.get(cacheKey) === requestPromise) {
+          ITEMS_REQUESTS.delete(cacheKey);
+        }
         if (!isCancelled) {
           setItemsLoading(false);
         }
@@ -7384,7 +7716,6 @@ export default function Home({
 
     return () => {
       isCancelled = true;
-      controllers.forEach((controller) => controller.abort());
     };
   }, [language, languagePriority, t]);
 
