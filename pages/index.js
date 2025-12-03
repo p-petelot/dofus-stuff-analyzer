@@ -4032,6 +4032,15 @@ export default function Home({
   const [activeItemSlot, setActiveItemSlot] = useState(null);
   const [itemSearchQuery, setItemSearchQuery] = useState("");
   const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [useCustomSkinTone, setUseCustomSkinTone] = useState(false);
+  const [showDetailedMatches, setShowDetailedMatches] = useState(false);
+  const [breeds, setBreeds] = useState(() =>
+    Array.isArray(initialBreeds) && initialBreeds.length ? initialBreeds : []
+  );
+  const [breedsLoading, setBreedsLoading] = useState(false);
+  const [breedsError, setBreedsError] = useState(null);
+  const [selectedBreedId, setSelectedBreedId] = useState(null);
+  const [selectedGender, setSelectedGender] = useState(BARBOFUS_DEFAULT_GENDER_KEY);
   const normalizedInputModes = useMemo(() => {
     const options = Array.isArray(allowedInputModes)
       ? allowedInputModes.filter((mode) => mode in INPUT_MODE_LABEL_KEYS)
@@ -4320,15 +4329,6 @@ export default function Home({
       return previous;
     });
   }, [lookAnimation]);
-  const [useCustomSkinTone, setUseCustomSkinTone] = useState(false);
-  const [showDetailedMatches, setShowDetailedMatches] = useState(false);
-  const [breeds, setBreeds] = useState(() =>
-    Array.isArray(initialBreeds) && initialBreeds.length ? initialBreeds : []
-  );
-  const [breedsLoading, setBreedsLoading] = useState(false);
-  const [breedsError, setBreedsError] = useState(null);
-  const [selectedBreedId, setSelectedBreedId] = useState(null);
-  const [selectedGender, setSelectedGender] = useState(BARBOFUS_DEFAULT_GENDER_KEY);
   const isIdentityRandom = identitySelectionMode === "random";
   const isGridLayout = proposalLayout === "grid";
   const isInspirationLayout = layoutVariant === "inspiration";
