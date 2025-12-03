@@ -175,6 +175,7 @@ const THEME_KEYS = Object.freeze({
 
 const THEME_STORAGE_KEY = "krospalette.theme";
 const SELECTION_STORAGE_KEY = "krospalette.selections.v1";
+const INSPIRATION_SELECTION_STORAGE_KEY = "krospalette.inspiration.selections.v1";
 const DEFAULT_THEME_KEY = THEME_KEYS.DARK;
 
 const THEME_OPTIONS = [
@@ -3821,6 +3822,12 @@ function sanitizeInputMode(value, allowedModes = Object.keys(INPUT_MODE_LABEL_KE
   return allowed[0];
 }
 
+function getSelectionStorageKey(layoutVariant = "default") {
+  return layoutVariant === "inspiration"
+    ? INSPIRATION_SELECTION_STORAGE_KEY
+    : SELECTION_STORAGE_KEY;
+}
+
 export default function Home({
   initialBreeds = [],
   previewBackgrounds: initialPreviewBackgrounds = [],
@@ -3933,6 +3940,7 @@ export default function Home({
   const [theme, setTheme] = useState(DEFAULT_THEME_KEY);
   const themeHydratedRef = useRef(false);
   const selectionsHydratedRef = useRef(false);
+  const selectionStorageKey = useMemo(() => getSelectionStorageKey(layoutVariant), [layoutVariant]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -4101,7 +4109,7 @@ export default function Home({
       return;
     }
 
-    const stored = window.localStorage.getItem(SELECTION_STORAGE_KEY);
+    const stored = window.localStorage.getItem(selectionStorageKey);
     if (!stored) {
       selectionsHydratedRef.current = true;
       return;
@@ -4229,7 +4237,7 @@ export default function Home({
     } finally {
       selectionsHydratedRef.current = true;
     }
-  }, [normalizedInputModes]);
+  }, [normalizedInputModes, selectionStorageKey]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !selectionsHydratedRef.current) {
@@ -4279,7 +4287,7 @@ export default function Home({
     };
 
     try {
-      window.localStorage.setItem(SELECTION_STORAGE_KEY, JSON.stringify(payload));
+      window.localStorage.setItem(selectionStorageKey, JSON.stringify(payload));
     } catch (error) {
       console.error("Unable to persist selections", error);
     }
@@ -4294,6 +4302,7 @@ export default function Home({
     itemFlagFilters,
     selectedItemsBySlot,
     normalizedInputModes,
+    selectionStorageKey,
   ]);
   const [lookAnimation, setLookAnimation] = useState(DEFAULT_LOOK_ANIMATION);
   const [lookDirection, setLookDirection] = useState(DEFAULT_LOOK_DIRECTION);
