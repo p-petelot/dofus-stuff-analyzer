@@ -1,6 +1,7 @@
 import Head from "next/head";
 import Link from "next/link";
 import PropTypes from "prop-types";
+import { useEffect, useState } from "react";
 import { fetchDofusNews } from "../lib/news/fetchNews";
 
 function formatDate(dateIso, fallback) {
@@ -67,7 +68,61 @@ NewsCard.propTypes = {
   item: newsItemPropType.isRequired,
 };
 
-export default function NouveauxCosmetiquesPage({ news, currentPage, error }) {
+export default function NouveauxCosmetiquesPage({ news: initialNews, currentPage, error }) {
+  const [news, setNews] = useState(initialNews);
+  const [clientError, setClientError] = useState(error ?? null);
+
+  useEffect(() => {
+    setNews(initialNews);
+    setClientError(error ?? null);
+  }, [currentPage, error, initialNews]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!clientError) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    async function retryFetch() {
+      try {
+        const response = await fetch(`/api/dofus-news?page=${currentPage}`, {
+          headers: {
+            Accept: "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error("Impossible de récupérer les actualités.");
+        }
+
+        const payload = await response.json();
+
+        if (cancelled) return;
+
+        setNews(payload.news ?? []);
+        setClientError(null);
+      } catch (err) {
+        if (cancelled) return;
+
+        const fallbackMessage =
+          err instanceof Error && err.message
+            ? err.message
+            : "Une erreur est survenue lors du chargement des actualités.";
+
+        setClientError(fallbackMessage);
+      }
+    }
+
+    retryFetch();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clientError, currentPage]);
+
   const previousPage = currentPage > 1 ? currentPage - 1 : null;
   const nextPage = currentPage + 1;
 
@@ -92,7 +147,7 @@ export default function NouveauxCosmetiquesPage({ news, currentPage, error }) {
           </p>
         </header>
 
-        {error ? <div className="news-page__alert">{error}</div> : null}
+        {clientError ? <div className="news-page__alert">{clientError}</div> : null}
 
         <section aria-label="Liste des actualités" className="news-grid">
           {news.length === 0 ? (
