@@ -1,4 +1,4 @@
-import { DEFAULT_LANGUAGE, normalizeLanguage } from "../../lib/i18n";
+import { DEFAULT_LANGUAGE, normalizeLanguage } from "./i18n";
 
 const DOFUS_LOOK_API_URL = "https://api.dofusdb.fr/look";
 const DOFUS_RENDERER_BASE_URL = "https://renderer.dofusdb.fr/kool";
@@ -8,7 +8,7 @@ const DEFAULT_LANG = DEFAULT_LANGUAGE;
 const MAX_RENDER_SIZE = 2048;
 const DEFAULT_RENDER_DIRECTION = 1;
 
-function coercePositiveInteger(value, fallback) {
+function coercePositiveInteger(value: unknown, fallback: number) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
     return fallback;
@@ -17,7 +17,7 @@ function coercePositiveInteger(value, fallback) {
   return rounded;
 }
 
-export function normalizeGender(input) {
+export function normalizeGender(input: unknown) {
   if (input == null) {
     return null;
   }
@@ -31,23 +31,14 @@ export function normalizeGender(input) {
     return "m";
   }
 
-  if ([
-    "f",
-    "female",
-    "femme",
-    "1",
-    "feminin",
-    "féminin",
-    "woman",
-    "femelle",
-  ].includes(normalized)) {
+  if (["f", "female", "femme", "1", "feminin", "féminin", "woman", "femelle"].includes(normalized)) {
     return "f";
   }
 
   return null;
 }
 
-export function genderToSouffSexCode(gender) {
+export function genderToSouffSexCode(gender: unknown) {
   const normalized = normalizeGender(gender);
   if (normalized === "f") {
     return 1;
@@ -58,14 +49,14 @@ export function genderToSouffSexCode(gender) {
   return null;
 }
 
-export function extractItemIdsFromQuery(query) {
+export function extractItemIdsFromQuery(query: Record<string, unknown> | null | undefined) {
   if (!query || typeof query !== "object") {
     return [];
   }
 
-  const collected = [];
+  const collected: number[] = [];
 
-  const register = (value) => {
+  const register = (value: unknown) => {
     if (value == null) {
       return;
     }
@@ -85,29 +76,29 @@ export function extractItemIdsFromQuery(query) {
     }
   };
 
-  register(query["itemIds[]"]);
-  register(query.itemIds);
-  register(query.itemId);
+  register((query as any)["itemIds[]"]);
+  register((query as any).itemIds);
+  register((query as any).itemId);
 
   const unique = Array.from(new Set(collected)).filter((value) => Number.isFinite(value));
   return unique;
 }
 
-export function extractFaceIdFromQuery(query) {
+export function extractFaceIdFromQuery(query: Record<string, unknown> | null | undefined) {
   if (!query || typeof query !== "object") {
     return null;
   }
 
   const keys = ["faceId", "head", "headId", "lookId", "face", "head_id"];
   for (const key of keys) {
-    const value = query[key];
+    const value = (query as any)[key];
     if (value == null) {
       continue;
     }
     if (Array.isArray(value)) {
       for (const entry of value) {
         const parsed = extractFaceIdFromQuery({ [key]: entry });
-        if (Number.isFinite(parsed) && parsed > 0) {
+        if (Number.isFinite(parsed) && (parsed as number) > 0) {
           return parsed;
         }
       }
@@ -123,7 +114,7 @@ export function extractFaceIdFromQuery(query) {
   return null;
 }
 
-function parseColorValue(value) {
+function parseColorValue(value: unknown) {
   if (value == null) {
     return null;
   }
@@ -163,14 +154,14 @@ function parseColorValue(value) {
   return null;
 }
 
-export function extractColorsFromQuery(query) {
+export function extractColorsFromQuery(query: Record<string, unknown> | null | undefined) {
   if (!query || typeof query !== "object") {
     return [];
   }
 
-  const collected = [];
+  const collected: number[] = [];
 
-  const register = (value) => {
+  const register = (value: unknown) => {
     if (value == null) {
       return;
     }
@@ -185,16 +176,16 @@ export function extractColorsFromQuery(query) {
     }
   };
 
-  register(query["colors[]"]);
-  register(query.colors);
-  register(query.color);
-  register(query.palette);
+  register((query as any)["colors[]"]);
+  register((query as any).colors);
+  register((query as any).color);
+  register((query as any).palette);
 
   const unique = Array.from(new Set(collected)).filter((value) => Number.isFinite(value));
   return unique;
 }
 
-export function buildRendererUrl(tokenBase64, size = DEFAULT_RENDER_SIZE) {
+export function buildRendererUrl(tokenBase64: string, size = DEFAULT_RENDER_SIZE) {
   if (!tokenBase64 || typeof tokenBase64 !== "string") {
     throw new Error("Jeton de rendu invalide");
   }
@@ -216,23 +207,6 @@ export function buildRendererUrl(tokenBase64, size = DEFAULT_RENDER_SIZE) {
   return `${DOFUS_RENDERER_BASE_URL}/${encodedHex}/full/1/${resolvedSize}_${resolvedSize}.png`;
 }
 
-async function fetchRendererImage(rendererUrl) {
-  const response = await fetch(rendererUrl);
-  if (!response.ok) {
-    throw new Error(`Le renderer a retourné ${response.status}`);
-  }
-
-  const contentType = response.headers.get("content-type") ?? "image/png";
-  const buffer = Buffer.from(await response.arrayBuffer());
-  const base64 = buffer.toString("base64");
-
-  return {
-    base64,
-    contentType,
-    byteLength: buffer.byteLength,
-  };
-}
-
 export function buildSouffLookPayload({
   breedId,
   faceId,
@@ -241,6 +215,14 @@ export function buildSouffLookPayload({
   colors,
   animation = 0,
   direction = DEFAULT_RENDER_DIRECTION,
+}: {
+  breedId: number;
+  faceId: number;
+  gender: string | null;
+  itemIds: unknown[];
+  colors: unknown[];
+  animation?: number;
+  direction?: number;
 }) {
   if (!Number.isFinite(breedId) || breedId <= 0) {
     throw new Error("Paramètre breedId invalide");
@@ -260,8 +242,8 @@ export function buildSouffLookPayload({
     new Set(
       Array.isArray(itemIds)
         ? itemIds
-            .map((value) => (Number.isFinite(value) ? Math.trunc(value) : null))
-            .filter((value) => Number.isFinite(value) && value > 0)
+            .map((value) => (Number.isFinite(value as number) ? Math.trunc(value as number) : null))
+            .filter((value) => Number.isFinite(value as number) && (value as number) > 0)
         : []
     )
   );
@@ -274,15 +256,13 @@ export function buildSouffLookPayload({
     new Set(
       Array.isArray(colors)
         ? colors
-            .map((value) => (Number.isFinite(value) ? Math.trunc(value) : null))
-            .filter((value) => Number.isFinite(value) && value >= 0)
+            .map((value) => (Number.isFinite(value as number) ? Math.trunc(value as number) : null))
+            .filter((value) => Number.isFinite(value as number) && (value as number) >= 0)
         : []
     )
   );
 
-  const animationValue = Number.isFinite(animation)
-    ? Math.max(0, Math.trunc(animation))
-    : 0;
+  const animationValue = Number.isFinite(animation) ? Math.max(0, Math.trunc(animation)) : 0;
   const directionValue = Number.isFinite(direction)
     ? Math.max(0, Math.min(7, Math.trunc(direction)))
     : DEFAULT_RENDER_DIRECTION;
@@ -298,7 +278,7 @@ export function buildSouffLookPayload({
   };
 }
 
-async function fetchSouffRenderer(payload) {
+export async function fetchSouffRenderer(payload: Record<string, unknown>) {
   const response = await fetch(SOUFF_RENDERER_ENDPOINT, {
     method: "POST",
     headers: {
@@ -328,141 +308,11 @@ async function fetchSouffRenderer(payload) {
   };
 }
 
-export default async function handler(req, res) {
-  let warnings = [];
-  if (req.method !== "GET") {
-    res.setHeader("Allow", "GET");
-    res.status(405).json({ error: "Méthode non autorisée" });
-    return;
-  }
-
-  try {
-    const { breedId, classeId, classId, sexe, gender, lang, size, animation, direction } =
-      req.query ?? {};
-
-    const numericBreedId = Number(breedId ?? classId ?? classeId);
-    if (!Number.isFinite(numericBreedId) || numericBreedId <= 0) {
-      res.status(400).json({ error: "Paramètre breedId invalide" });
-      return;
-    }
-
-    const normalizedGender = normalizeGender(sexe ?? gender);
-    if (!normalizedGender) {
-      res.status(400).json({ error: "Paramètre sexe/gender invalide" });
-      return;
-    }
-
-    const faceId = extractFaceIdFromQuery(req.query);
-    if (!Number.isFinite(faceId) || faceId <= 0) {
-      res.status(400).json({ error: "Paramètre faceId invalide" });
-      return;
-    }
-
-    const itemIds = extractItemIdsFromQuery(req.query);
-    const colors = extractColorsFromQuery(req.query);
-    const normalizedLang = normalizeLanguage(lang) ?? DEFAULT_LANG;
-    const resolvedSize = coercePositiveInteger(size, DEFAULT_RENDER_SIZE);
-    const animationValue = Number.isFinite(Number(animation))
-      ? Math.max(0, Math.trunc(Number(animation)))
-      : 0;
-    const directionValue = Number.isFinite(Number(direction))
-      ? Math.max(0, Math.min(7, Math.trunc(Number(direction))))
-      : DEFAULT_RENDER_DIRECTION;
-
-    const souffPayload = buildSouffLookPayload({
-      breedId: numericBreedId,
-      faceId,
-      gender: normalizedGender,
-      itemIds,
-      colors,
-      animation: animationValue,
-      direction: directionValue,
-    });
-
-    warnings = [];
-    const requested = {
-      breedId: numericBreedId,
-      gender: normalizedGender,
-      faceId,
-      itemIds,
-      colors,
-      lang: normalizedLang,
-      size: resolvedSize,
-      animation: animationValue,
-      direction: directionValue,
-    };
-
-    try {
-      const { base64, contentType, byteLength } = await fetchSouffRenderer(souffPayload);
-      const dataUrl = `data:${contentType};base64,${base64}`;
-
-      res.status(200).json({
-        requested,
-        renderer: "souff",
-        base64,
-        contentType,
-        byteLength,
-        dataUrl,
-        lookUrl: null,
-        rendererUrl: null,
-        token: null,
-        warnings,
-      });
-      return;
-    } catch (souffError) {
-      warnings.push(souffError instanceof Error ? souffError.message : String(souffError));
-    }
-
-    const searchParams = new URLSearchParams();
-    searchParams.set("breedId", String(numericBreedId));
-    searchParams.set("sexe", normalizedGender);
-    searchParams.set("lang", normalizedLang);
-    itemIds.forEach((id) => {
-      searchParams.append("itemIds[]", String(id));
-    });
-    colors.forEach((value) => {
-      searchParams.append("colors[]", String(value));
-    });
-    searchParams.set("animation", String(animationValue));
-    searchParams.set("direction", String(directionValue));
-
-    const lookUrl = `${DOFUS_LOOK_API_URL}?${searchParams.toString()}`;
-
-    const lookResponse = await fetch(lookUrl);
-    if (!lookResponse.ok) {
-      res
-        .status(lookResponse.status)
-        .json({ error: `L'API look a retourné ${lookResponse.status}`, warnings });
-      return;
-    }
-
-    const token = (await lookResponse.text()).trim();
-    if (!token || token.length < 4) {
-      res.status(502).json({ error: "Jeton de rendu invalide", warnings });
-      return;
-    }
-
-    const rendererUrl = buildRendererUrl(token, resolvedSize);
-    const { base64, contentType, byteLength } = await fetchRendererImage(rendererUrl);
-    const dataUrl = `data:${contentType};base64,${base64}`;
-
-    res.status(200).json({
-      requested,
-      lookUrl,
-      rendererUrl,
-      token,
-      base64,
-      contentType,
-      byteLength,
-      dataUrl,
-      renderer: "dofusdb",
-      warnings,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const payload = warnings.length ? { error: message, warnings } : { error: message };
-    res.status(502).json(payload);
-  }
-}
-
-export { DOFUS_LOOK_API_URL, DOFUS_RENDERER_BASE_URL, SOUFF_RENDERER_ENDPOINT };
+export {
+  DOFUS_LOOK_API_URL,
+  DOFUS_RENDERER_BASE_URL,
+  SOUFF_RENDERER_ENDPOINT,
+  DEFAULT_RENDER_DIRECTION,
+  DEFAULT_RENDER_SIZE,
+  DEFAULT_LANG,
+};

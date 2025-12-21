@@ -8,7 +8,7 @@ import {
   genderToSouffSexCode,
   extractFaceIdFromQuery,
   buildSouffLookPayload,
-} from "../pages/api/look-preview";
+} from "../lib/look-preview";
 
 describe("normalizeGender", () => {
   it("normalizes male-like inputs to 'm'", () => {
