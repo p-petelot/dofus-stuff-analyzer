@@ -2,20 +2,20 @@
 
 KrosPalette est un studio de palettes pour les créateurs de skins Dofus. Dépose, colle ou importe une image de référence et l'application extrait instantanément les couleurs dominantes pour guider tes compositions.
 
-## Lancer le projet
+## Lancer le projet (Vue 3 + Vite)
 
 ```bash
 npm install
 npm run dev
 ```
 
-La page est disponible sur http://localhost:3000.
+L'application est disponible sur http://localhost:5173.
 
 ## Construire pour la production
 
 ```bash
 npm run build
-npm start
+npm run preview
 ```
 
 ## Fonctionnalités principales
