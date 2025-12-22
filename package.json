@@ -2,12 +2,12 @@
   "name": "prismforge",
   "private": true,
   "scripts": {
-    "dev": "vite",
-    "dev:next": "next dev",
-    "build": "vite build",
-    "build:next": "next build",
-    "start:next": "next start",
-    "preview": "vite preview",
+    "dev": "next dev",
+    "dev:vite": "vite",
+    "build": "next build",
+    "build:vite": "vite build",
+    "start": "next start",
+    "preview:vite": "vite preview",
     "test": "vitest"
   },
   "dependencies": {
