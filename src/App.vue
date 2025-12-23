@@ -12,7 +12,7 @@ const links: NavLink[] = [
 
 <template>
   <Navbar
-    :brand="{ label: '[[NomDuSite]]', href: '/' }"
+    :brand="{ label: 'KrosPalette', href: '/' }"
     :links="links"
     enable-search
     enable-theme-toggle

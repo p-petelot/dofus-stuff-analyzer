@@ -1,17 +1,15 @@
 declare module "../../lib/i18n" {
-  export type LanguageOption = {
-    code: string;
-    label: string;
-    accessibleLabel?: string;
-    flag: string;
-  };
-
-  export type LanguageContextValue = {
-    language: string;
-    languages: LanguageOption[];
-    setLanguage: (code: string) => void;
-    t: (key: string, params?: Record<string, unknown>, fallback?: string) => string;
-  };
-
-  export function useLanguage(): LanguageContextValue;
+  export const DEFAULT_LANGUAGE: string;
+  export const SUPPORTED_LANGUAGES: Record<
+    string,
+    { label: string; locales?: string[] }
+  >;
+  export function normalizeLanguage(input?: string | null): string | null;
+  export function getLanguagePriority(language?: string): string[];
+  export function translate(
+    language: string | null | undefined,
+    key: string,
+    params?: Record<string, unknown>,
+    fallback?: string,
+  ): string;
 }
