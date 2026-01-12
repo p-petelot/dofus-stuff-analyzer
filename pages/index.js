@@ -7049,23 +7049,37 @@ export default function Home({
             const dx = x + Math.round((size - w) / 2);
             const dy = y + Math.round((size - h) / 2);
             context.drawImage(classIcon, dx, dy, w, h);
+
+            const genderBadgeSize = Math.round(size * 0.42);
+            const genderX = x + size - genderBadgeSize + 4;
+            const genderY = y + size - genderBadgeSize + 4;
+
+            context.beginPath();
+            context.arc(
+              genderX + genderBadgeSize / 2,
+              genderY + genderBadgeSize / 2,
+              genderBadgeSize / 2,
+              0,
+              Math.PI * 2
+            );
+            context.fillStyle = "rgba(11, 17, 26, 0.86)";
+            context.fill();
+            context.strokeStyle = "rgba(255, 255, 255, 0.95)";
+            context.lineWidth = 2;
+            context.stroke();
+
+            context.save();
+            context.translate(genderX + genderBadgeSize / 2, genderY + genderBadgeSize / 2);
+            const glyphScale = (genderBadgeSize * 0.58) / 24;
+            context.scale(glyphScale, glyphScale);
+            context.strokeStyle = "rgba(255, 255, 255, 0.96)";
+            context.lineWidth = 2;
+            context.lineCap = "round";
+            context.lineJoin = "round";
+            context.stroke(genderPath);
+            context.restore();
           });
         }
-        
-        /*
-        drawBadge(badgeX + badgeSize, badgeY + 2, 44, (x, y, size) => {
-          context.save();
-          context.translate(x + size / 2, y + size / 2);
-          const scale = (size * 1) / 24;
-          context.scale(scale, scale);
-          context.strokeStyle = "rgba(255, 255, 255, 0.92)";
-          context.lineWidth = 1.6;
-          context.lineCap = "round";
-          context.lineJoin = "round";
-          //context.stroke(genderPath);
-          context.restore();
-        });
-        */
 
         let blockY = badgeY + badgeSize + 26;
 
