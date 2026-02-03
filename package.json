@@ -3,24 +3,33 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "start": "next start",
+    "dev:vite": "vite",
     "build": "next build",
+    "build:vite": "vite build",
+    "start": "next start",
+    "preview:vite": "vite preview",
     "test": "vitest"
   },
   "dependencies": {
     "@tensorflow/tfjs": "4.16.0",
     "@tensorflow/tfjs-backend-wasm": "4.16.0",
+    "pinia": "^2.1.7",
     "next": "14.2.5",
     "prop-types": "15.8.1",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "sharp": "0.33.4"
+    "sharp": "0.33.4",
+    "vue": "^3.4.31",
+    "vue-router": "^4.3.2"
   },
   "devDependencies": {
     "@types/node": "20.14.2",
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",
+    "@vitejs/plugin-vue": "^5.0.5",
     "typescript": "5.4.5",
-    "vitest": "1.6.0"
+    "vite": "^5.3.5",
+    "vitest": "1.6.0",
+    "vue-tsc": "^2.0.29"
   }
 }
